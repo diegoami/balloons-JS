@@ -165,3 +165,12 @@ pip-log.txt
 
 .idea/
 data/
+
+#################
+## Node / Netlify
+#################
+node_modules/
+.netlify/
+.env
+.env.*
+npm-debug.log*

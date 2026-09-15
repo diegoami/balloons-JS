@@ -1,0 +1,25 @@
+[build]
+  publish = "public"
+  # No build step: the game is plain static files. npm install still runs so the
+  # score function gets its dependencies.
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  directory = "netlify/functions"
+
+# The game is plain static files with no build step, so JS/CSS are served with
+# Netlify's default revalidation (ETag) rather than a long max-age — there is no
+# content hashing in the filenames to make immutable caching safe.
+# Images never change, so they can be cached hard.
+
+[[headers]]
+  for = "/images/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/favicon.ico"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"

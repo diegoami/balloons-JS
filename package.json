@@ -1,0 +1,21 @@
+{
+  "name": "balloons-js",
+  "version": "1.0.0",
+  "description": "Simple JavaScript / HTML5 balloon-popping game",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/diegoami/balloons-JS.git"
+  },
+  "scripts": {
+    "dev": "netlify dev",
+    "check": "node --check public/js/game.js && node --check public/js/gameballoons.js && node --check public/js/htmlballoons.js && node --check public/js/color.js"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  },
+  "devDependencies": {
+    "@netlify/functions": "^3.0.0"
+  }
+}
