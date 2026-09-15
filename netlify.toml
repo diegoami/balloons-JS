@@ -11,13 +11,8 @@
 
 # The game is plain static files with no build step, so JS/CSS are served with
 # Netlify's default revalidation (ETag) rather than a long max-age — there is no
-# content hashing in the filenames to make immutable caching safe.
-# Images never change, so they can be cached hard.
-
-[[headers]]
-  for = "/images/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+# content hashing in the filenames to make immutable caching safe. The sky is
+# drawn rather than loaded, so there are no image assets left to cache.
 
 [[headers]]
   for = "/favicon.ico"

@@ -61,10 +61,8 @@ Game.applyCanvasSize = function () {
 
     this.ratio = this.width / 1000;
     this.fontSize = Layout.applyFont(this.ctx, this.width, this.height);
-    this.layout = Layout.compute(this.ctx, this.width, this.height);
-
-    this.is_gradient = 0;
-    this.updateGradient();
+    this.layout = Layout.compute(this.ctx, this.width, this.height, this.fontSize);
+    this.palette = Sky.paletteFor(this.diff_level);
 };
 
 /**
@@ -141,23 +139,19 @@ Game.watchPixelRatio = function () {
 
 Game.drawTitleScreen = function () {
     this.clear();
-    this.updateGradient();
-    this.ctx.fillText(Layout.INTRO_TEXT, this.layout.intro.x, this.layout.intro.y);
+    this.drawIntro(Layout.INTRO_TEXT);
     this.draw_diff_levels();
     if (this.scores) {
         this.fillscore(this.scores);
     }
 };
 
-Game.updateGradient = function () {
-    if (!this.is_gradient) {
-        var gradient = this.ctx.createLinearGradient(0, 0, this.width, 0);
-        for (var i = 0; i < 1; i += 0.05) {
-            gradient.addColorStop(i, getRandomCssColor());
-        }
-        this.ctx.fillStyle = gradient;
-        this.is_gradient = 1;
-    }
+/** The one headline line, shared by the title and game-over screens. */
+Game.drawIntro = function (text) {
+    this.ctx.font = this.layout.fonts.intro;
+    this.ctx.fillStyle = this.palette.ink;
+    this.ctx.fillText(text, this.layout.intro.x, this.layout.intro.y);
+    this.ctx.font = this.layout.fonts.menu;
 };
 
 /**
@@ -224,6 +218,7 @@ Game.restart = function (diff_level) {
         DIFF_LEVEL = "VHARD";
     }
     this.diff_level = diff_level;
+    this.palette = Sky.paletteFor(diff_level);
     this.do_click();
     if (this.tick_interval) {
         clearInterval(this.tick_interval);
@@ -306,15 +301,22 @@ Game.fillscore = function (data) {
         return;
     }
 
+    this.ctx.font = this.layout.fonts.label;
+    this.ctx.fillStyle = this.palette.inkSoft;
     this.ctx.fillText(Layout.HIGH_SCORES_TEXT + this.diff_level, scores.heading.x, scores.heading.y);
 
+    this.ctx.font = this.layout.fonts.score;
     for (var i = 0; i < scores.rows.length; i++) {
         if (data.length > i) {
+            this.ctx.fillStyle = this.palette.inkSoft;
             this.ctx.fillText(data[i]["score_day"], scores.columns.date, scores.rows[i]);
+            this.ctx.fillStyle = this.palette.ink;
             this.ctx.fillText(data[i]["name"], scores.columns.name, scores.rows[i]);
+            this.ctx.fillStyle = this.palette.accent;
             this.ctx.fillText(data[i]["score"], scores.columns.value, scores.rows[i]);
         }
     }
+    this.ctx.font = this.layout.fonts.menu;
 };
 
 Game.getScores = function () {
@@ -373,9 +375,8 @@ Game.gameover = function () {
     }
     if (this.end_time) {
         if (this.balloons.length == 0) {
-            this.updateGradient();
-        }
-        this.ctx.fillText("Game Over. Score: " + this.balloons_caught + ", Time: " + this.end_time, this.layout.intro.x, this.layout.intro.y);
+                }
+        this.drawIntro("Game Over. Score: " + this.balloons_caught + ", Time: " + this.end_time);
         this.draw_diff_levels();
         if (this.showscores) {
             this.getScores();
@@ -386,10 +387,13 @@ Game.gameover = function () {
 Game.draw_diff_levels = function () {
     var menu = this.layout.menu;
 
+    this.ctx.font = this.layout.fonts.menu;
+    this.ctx.fillStyle = this.palette.ink;
     this.ctx.fillText(Layout.MENU_TEXT, menu.x, menu.y);
 
     this.ctx.save();
-    this.ctx.lineWidth = 3 * this.ratio;
+    this.ctx.strokeStyle = this.palette.inkSoft;
+    this.ctx.lineWidth = Math.max(1, 2 * this.ratio);
     this.ctx.setLineDash([15, 3, 3, 3]);
 
     for (var i = 0; i < menu.boxes.length; i++) {
@@ -446,20 +450,23 @@ Game.draw = function () {
     for (var i = 0; i < this.balloons.length; i++) {
         this.balloons[i].draw();
     }
-    if (this.balloons.length > 0) {
-        this.is_gradient = 0;
-    }
     if (this.ctx && !this.isrestart) {
         var hud = this.layout.hud;
-        this.ctx.fillText(this.balloons_caught + "/" + this.lostBalloons, hud.caught, hud.y);
         this.time_to_show = ((Date.now() - this.start) / 1000).toFixed(2);
+
+        this.ctx.font = this.layout.fonts.hud;
+        this.ctx.fillStyle = this.palette.ink;
+        this.ctx.fillText(this.balloons_caught + "/" + this.lostBalloons, hud.caught, hud.y);
+        this.ctx.fillStyle = this.palette.inkSoft;
         this.ctx.fillText(this.diff_level, hud.level, hud.y);
+        this.ctx.fillStyle = this.palette.accent;
         this.ctx.fillText(this.time_to_show, hud.time, hud.y);
     }
 };
 
 Game.clear = function () {
-    this.ctx.clearRect(0, 0, this.width, this.height);
+    var sky = Sky.render(this.width, this.height, this.dpr, this.diff_level);
+    this.ctx.drawImage(sky, 0, 0, this.width, this.height);
 };
 
 Game.update = function () {

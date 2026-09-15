@@ -63,6 +63,19 @@ Layout.GRID = {
     minFontSize: 12,
 
     /**
+     * Type scale, as multiples of the base size. Positions stay on the base
+     * line rhythm; only the glyphs change size, so hierarchy does not disturb
+     * the composition.
+     */
+    type: {
+        intro: 1.15,
+        menu: 1,
+        label: 0.82,
+        score: 1,
+        hud: 0.92
+    },
+
+    /**
      * Smallest thing worth asking a finger to hit, in CSS pixels. Apple asks
      * for 44, Material for 48. At phone sizes the difficulty boxes came out
      * 17px tall, which is under a third of a fingertip, so aiming at one
@@ -147,7 +160,7 @@ Layout.applyFont = function (ctx, width, height) {
  * Regions that are both drawn and clicked return a single rect, so the two can
  * never drift apart the way the difficulty boxes used to.
  */
-Layout.compute = function (ctx, width, height) {
+Layout.compute = function (ctx, width, height, fontSize) {
     var G = Layout.GRID;
     var line = ctx.measureText("M").width * G.lineRatio;
     var unit = ctx.measureText(Layout.MENU_TEXT).width / Layout.MENU_TEXT.length;
@@ -196,9 +209,17 @@ Layout.compute = function (ctx, width, height) {
     });
     targets.push({ level: null, hit: scoresHit });
 
+    var fonts = {};
+    for (var role in G.type) {
+        if (Object.prototype.hasOwnProperty.call(G.type, role)) {
+            fonts[role] = Math.max(1, Math.round(fontSize * G.type[role])) + "px Verdana";
+        }
+    }
+
     return {
         line: line,
         unit: unit,
+        fonts: fonts,
 
         intro: { x: left, y: line * G.rows.intro },
 

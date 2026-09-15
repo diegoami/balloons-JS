@@ -69,12 +69,31 @@ async function newGame({ width = 1280, height = 720, name = 'TestPlayer', dpr = 
   return { context, page, errors };
 }
 
-/** Counts non-transparent pixels, i.e. anything actually drawn on the canvas. */
+/**
+ * Counts pixels that differ from a bare sky, i.e. everything the game drew on
+ * top of it. The canvas is opaque now that the sky is painted rather than left
+ * transparent, so counting non-transparent pixels would always return the lot.
+ */
 const drawnPixels = page => page.evaluate(() => {
   const c = document.getElementById('balloon_canvas');
-  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  const actual = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+
+  const bare = document.createElement('canvas');
+  bare.width = c.width;
+  bare.height = c.height;
+  const bctx = bare.getContext('2d');
+  bctx.setTransform(Game.dpr, 0, 0, Game.dpr, 0, 0);
+  Sky.paint(bctx, Game.width, Game.height, Sky.paletteFor(Game.diff_level));
+  const plain = bctx.getImageData(0, 0, bare.width, bare.height).data;
+
   let n = 0;
-  for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++;
+  for (let i = 0; i < actual.length; i += 4) {
+    if (Math.abs(actual[i] - plain[i]) > 6 ||
+        Math.abs(actual[i + 1] - plain[i + 1]) > 6 ||
+        Math.abs(actual[i + 2] - plain[i + 2]) > 6) {
+      n++;
+    }
+  }
   return n;
 });
 
@@ -453,13 +472,11 @@ await t('resizing re-sizes the canvas and repaints the title screen', async () =
   const { context, page, errors } = await newGame({ width: 1280, height: 720, dpr: 2 });
   await page.setViewportSize({ width: 640, height: 900 });
   await page.waitForTimeout(300);
-  const m = await page.evaluate(() => {
-    const c = Game.canvas;
-    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-    let painted = 0;
-    for (let i = 3; i < d.length; i += 4) if (d[i] > 0) painted++;
-    return { backingW: c.width, logicalW: Game.width, logicalH: Game.height, painted };
-  });
+  const painted = await drawnPixels(page);
+  const m = await page.evaluate(() => ({
+    backingW: Game.canvas.width, logicalW: Game.width, logicalH: Game.height
+  }));
+  m.painted = painted;
   assert.equal(m.logicalW, 640, 'logical width did not follow the viewport');
   assert.equal(m.logicalH, 900, 'logical height did not follow the viewport');
   assert.equal(m.backingW, 1280, 'backing store should be 640 x 2');
