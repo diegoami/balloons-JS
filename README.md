@@ -17,6 +17,7 @@ public/               everything served to the browser
   js/gameballoons.js  balloon entity: position, drift, collision
   js/htmlballoons.js  draws a balloon on a canvas with bezier curves
   js/color.js         lighten/darken helpers and the gradient palette
+  js/layout.js        grid, type scale and every on-screen position
 netlify/functions/
   scores.mts          high-score API, backed by Netlify Blobs
 test/                 test suite (see below)

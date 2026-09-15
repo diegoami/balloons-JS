@@ -9,33 +9,12 @@ var SPEED_INCREASE = 500;
 var SPEED_MODIFIER = 0.0015;
 var DIFF_LEVEL = "E";
 
-const START_TEXT_BEGIN_X = 0.05;
-const START_TEXT_INTRO_X = 0.05;
-const START_TEXT_INTRO_Y = 0.08;
-const START_TEXT_BEGIN_Y = 0.2;
-const HIGH_SCORE_BEGIN_X = 0.28;
-const HIGH_SCORE_BEGIN_Y = 0.37;
-
-const DIFF_0 = "Tap ", DIFF_1 = "E: Easy", DIFF_2 = "S: Standard", DIFF_3 = "H: Hard", DIFF_4 = "V: VHard";
-const HIGH_SCORES_TEXT = "High Scores - ";
-const HIGH_SCORES_LENGTH = HIGH_SCORES_TEXT.length;
-const DIFF_TOTAL = DIFF_0 + DIFF_1 + ", " + DIFF_2 + ", " + DIFF_3 + ", " + DIFF_4;
-const DIFF_OFFSET_1 = DIFF_0.length, DIFF_LENGTH_1 = DIFF_1.length;
-const DIFF_OFFSET_2 = DIFF_OFFSET_1 + DIFF_LENGTH_1 + 2, DIFF_LENGTH_2 = DIFF_2.length;
-const DIFF_OFFSET_3 = DIFF_OFFSET_2 + DIFF_LENGTH_2 + 2, DIFF_LENGTH_3 = DIFF_3.length;
-const DIFF_OFFSET_4 = DIFF_OFFSET_3 + DIFF_LENGTH_3 + 2, DIFF_LENGTH_4 = DIFF_4.length;
-const DIFFICULTY_CHOICE = DIFF_TOTAL;
-
-const DIFF_LENGTH_TOTAL = DIFF_TOTAL.length;
-const INTRO_TEXT = "Stop the balloons, before it is too late !!";
-const DEFAULT_FONT_SIZE = 30;
-const MIN_FONT_SIZE = 12;
-
 /**
- * Same origin as the page, served by netlify/functions/scores.mts. The old
- * absolute 'http://<host>:5000/...' URL was blocked as mixed content on any
- * HTTPS deploy and needed CORS on top.
+ * Screen positions, the difficulty menu and its hit regions all come from
+ * layout.js. Seventeen loose fractions and eight hand-counted string offsets
+ * used to live here.
  */
+
 const SCORE_URL = "/api/scores/";
 
 /** localStorage throws when site data is blocked, so every access is guarded. */
@@ -81,12 +60,8 @@ Game.applyCanvasSize = function () {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     this.ratio = this.width / 1000;
-
-    // Math.max() with a single argument was a no-op, and the result was then
-    // bitwise-OR'd with the default as a string: "15" | 30 === 31, so a phone
-    // got a 31px font where 15px was intended and the menu overflowed.
-    this.fontSize = Math.round(Math.max(DEFAULT_FONT_SIZE * this.ratio, MIN_FONT_SIZE));
-    this.ctx.font = this.fontSize + "px Verdana";
+    this.fontSize = Layout.applyFont(this.ctx, this.width, this.height);
+    this.layout = Layout.compute(this.ctx, this.width, this.height);
 
     this.is_gradient = 0;
     this.updateGradient();
@@ -167,7 +142,7 @@ Game.watchPixelRatio = function () {
 Game.drawTitleScreen = function () {
     this.clear();
     this.updateGradient();
-    this.ctx.fillText(INTRO_TEXT, this.width * START_TEXT_INTRO_X, this.height * START_TEXT_INTRO_Y);
+    this.ctx.fillText(Layout.INTRO_TEXT, this.layout.intro.x, this.layout.intro.y);
     this.draw_diff_levels();
     if (this.scores) {
         this.fillscore(this.scores);
@@ -204,34 +179,6 @@ Game.getCanvasPoint = function (event) {
     return {
         x: (event.clientX - rect.left) * (this.width / rect.width),
         y: (event.clientY - rect.top) * (this.height / rect.height)
-    };
-};
-
-/**
- * Single source of truth for where the difficulty boxes and high-score line
- * sit. Drawing and hit-testing used to compute this separately and disagreed
- * on the box height (1.3 vs 1.2 ems), so the clickable area was offset from
- * the box actually drawn on screen.
- */
-Game.getDiffLayout = function () {
-    var unit = this.ctx.measureText(DIFFICULTY_CHOICE).width / DIFF_LENGTH_TOTAL;
-    var em = this.ctx.measureText("M").width * 1.3;
-    var left = this.width * START_TEXT_BEGIN_X;
-
-    return {
-        unit: unit,
-        top: this.height * START_TEXT_BEGIN_Y - em * 0.75,
-        height: em * 1.25,
-        scoresLeft: this.width * HIGH_SCORE_BEGIN_X,
-        scoresTop: this.height * HIGH_SCORE_BEGIN_Y - em / 2,
-        scoresHeight: em,
-        scoresWidth: unit * (HIGH_SCORES_LENGTH + 4),
-        boxes: [
-            { level: "E", x: left + unit * (DIFF_OFFSET_1 - 0.5), width: unit * (DIFF_LENGTH_1 + 0.5) },
-            { level: "S", x: left + unit * (DIFF_OFFSET_2 - 0.5), width: unit * (DIFF_LENGTH_2 + 0.5) },
-            { level: "H", x: left + unit * (DIFF_OFFSET_3 - 0.5), width: unit * (DIFF_LENGTH_3 + 0.5) },
-            { level: "V", x: left + unit * (DIFF_OFFSET_4 - 0.5), width: unit * (DIFF_LENGTH_4 + 0.5) }
-        ]
     };
 };
 
@@ -333,22 +280,12 @@ Game.setDifficulty = function () {
 
     this.canvas.addEventListener("click", function (event) {
         var point = that.getCanvasPoint(event);
-        // Recomputed per click: a resize between binding and clicking would
-        // otherwise leave these regions where the boxes used to be.
-        var layout = that.getDiffLayout();
+        var target = Layout.pick(that.layout.targets, point);
 
-        if (point.y >= layout.top && point.y <= layout.top + layout.height) {
-            for (var i = 0; i < layout.boxes.length; i++) {
-                var box = layout.boxes[i];
-                if (point.x >= box.x && point.x <= box.x + box.width) {
-                    that.restart(box.level);
-                    return;
-                }
-            }
-        } else if (point.y >= layout.scoresTop && point.y <= layout.scoresTop + layout.scoresHeight) {
-            if (point.x >= layout.scoresLeft && point.x <= layout.scoresLeft + layout.scoresWidth) {
-                that.restart(that.diff_level);
-            }
+        if (target) {
+            // The high-score line has no level of its own; it replays the
+            // difficulty already selected.
+            that.restart(target.level || that.diff_level);
         }
     }, { signal: signal });
 
@@ -363,20 +300,19 @@ Game.setDifficulty = function () {
 };
 
 Game.fillscore = function (data) {
-    const SCORE_X_1 = 0.05, SCORE_X_2 = 0.5, SCORE_X_3 = 0.8;
-    const SCORE_Y = [0.5, 0.65, 0.8];
+    var scores = this.layout.scores;
 
     if (!data) {
         return;
     }
 
-    this.ctx.fillText(HIGH_SCORES_TEXT + this.diff_level, this.width * HIGH_SCORE_BEGIN_X, this.height * HIGH_SCORE_BEGIN_Y);
+    this.ctx.fillText(Layout.HIGH_SCORES_TEXT + this.diff_level, scores.heading.x, scores.heading.y);
 
-    for (var i = 0; i < 3; i++) {
+    for (var i = 0; i < scores.rows.length; i++) {
         if (data.length > i) {
-            this.ctx.fillText(data[i]["score_day"], this.width * SCORE_X_1, this.height * SCORE_Y[i]);
-            this.ctx.fillText(data[i]["name"], this.width * SCORE_X_2, this.height * SCORE_Y[i]);
-            this.ctx.fillText(data[i]["score"], this.width * SCORE_X_3, this.height * SCORE_Y[i]);
+            this.ctx.fillText(data[i]["score_day"], scores.columns.date, scores.rows[i]);
+            this.ctx.fillText(data[i]["name"], scores.columns.name, scores.rows[i]);
+            this.ctx.fillText(data[i]["score"], scores.columns.value, scores.rows[i]);
         }
     }
 };
@@ -439,7 +375,7 @@ Game.gameover = function () {
         if (this.balloons.length == 0) {
             this.updateGradient();
         }
-        this.ctx.fillText("Game Over. Score: " + this.balloons_caught + ", Time: " + this.end_time, this.width * START_TEXT_INTRO_X, this.height * START_TEXT_INTRO_Y);
+        this.ctx.fillText("Game Over. Score: " + this.balloons_caught + ", Time: " + this.end_time, this.layout.intro.x, this.layout.intro.y);
         this.draw_diff_levels();
         if (this.showscores) {
             this.getScores();
@@ -448,18 +384,17 @@ Game.gameover = function () {
 };
 
 Game.draw_diff_levels = function () {
-    var layout = this.getDiffLayout();
+    var menu = this.layout.menu;
 
-    this.ctx.fillText(DIFF_TOTAL, this.width * START_TEXT_BEGIN_X, this.height * START_TEXT_BEGIN_Y);
+    this.ctx.fillText(Layout.MENU_TEXT, menu.x, menu.y);
 
     this.ctx.save();
     this.ctx.lineWidth = 3 * this.ratio;
     this.ctx.setLineDash([15, 3, 3, 3]);
 
-    for (var i = 0; i < layout.boxes.length; i++) {
-        var box = layout.boxes[i];
+    for (var i = 0; i < menu.boxes.length; i++) {
         this.ctx.beginPath();
-        this.ctx.rect(box.x, layout.top, box.width, layout.height);
+        this.ctx.rect(menu.boxes[i].x, menu.top, menu.boxes[i].width, menu.height);
         this.ctx.stroke();
     }
 
@@ -469,7 +404,7 @@ Game.draw_diff_levels = function () {
 Game.randomBalloon = function () {
     var max_width = this.width;
     var max_height = this.height;
-    var xcoord = (Math.floor(Math.random() * (max_width * 0.9)) + max_width * 0.05);
+    var xcoord = Math.floor(Math.random() * this.layout.spawn.width) + this.layout.spawn.min;
     var ycoord = max_height;
     var ratioSize = RATIO_SIZE - this.balloons_caught / RATIO_DECREASE;
     var randomSize = (24 + Math.floor(Math.random() * 50)) * this.ratio * ratioSize;
@@ -515,10 +450,11 @@ Game.draw = function () {
         this.is_gradient = 0;
     }
     if (this.ctx && !this.isrestart) {
-        this.ctx.fillText(this.balloons_caught + "/" + this.lostBalloons, this.width * 0.1, this.height * 0.1);
+        var hud = this.layout.hud;
+        this.ctx.fillText(this.balloons_caught + "/" + this.lostBalloons, hud.caught, hud.y);
         this.time_to_show = ((Date.now() - this.start) / 1000).toFixed(2);
-        this.ctx.fillText(this.diff_level, this.width * 0.45, this.height * 0.1);
-        this.ctx.fillText(this.time_to_show, this.width * 0.8, this.height * 0.1);
+        this.ctx.fillText(this.diff_level, hud.level, hud.y);
+        this.ctx.fillText(this.time_to_show, hud.time, hud.y);
     }
 };
 
