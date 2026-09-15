@@ -385,24 +385,42 @@ Game.gameover = function () {
 };
 
 Game.draw_diff_levels = function () {
-    var menu = this.layout.menu;
+    var ctx = this.ctx;
+    var palette = this.palette;
+    var buttons = this.layout.menu.buttons;
 
-    this.ctx.font = this.layout.fonts.menu;
-    this.ctx.fillStyle = this.palette.ink;
-    this.ctx.fillText(Layout.MENU_TEXT, menu.x, menu.y);
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = this.layout.fonts.menu;
+    ctx.lineWidth = Math.max(1, this.layout.line * 0.045);
 
-    this.ctx.save();
-    this.ctx.strokeStyle = this.palette.inkSoft;
-    this.ctx.lineWidth = Math.max(1, 2 * this.ratio);
-    this.ctx.setLineDash([15, 3, 3, 3]);
+    for (var i = 0; i < buttons.length; i++) {
+        var button = buttons[i];
+        var active = button.level === this.diff_level;
 
-    for (var i = 0; i < menu.boxes.length; i++) {
-        this.ctx.beginPath();
-        this.ctx.rect(menu.boxes[i].x, menu.top, menu.boxes[i].width, menu.height);
-        this.ctx.stroke();
+        Layout.roundedRect(ctx, button, button.radius);
+        ctx.fillStyle = active ? palette.accent : palette.buttonFill;
+        ctx.fill();
+
+        if (!active) {
+            ctx.strokeStyle = palette.buttonBorder;
+            ctx.stroke();
+        }
+
+        ctx.fillStyle = active ? palette.onAccent : palette.ink;
+        ctx.fillText(
+            button.label,
+            button.x + button.width / 2,
+            button.y + button.height / 2
+        );
     }
 
-    this.ctx.restore();
+    ctx.restore();
+
+    ctx.font = this.layout.fonts.label;
+    ctx.fillStyle = palette.inkSoft;
+    ctx.fillText(Layout.HINT_TEXT, this.layout.hint.x, this.layout.hint.y);
 };
 
 Game.randomBalloon = function () {
@@ -456,11 +474,14 @@ Game.draw = function () {
 
         this.ctx.font = this.layout.fonts.hud;
         this.ctx.fillStyle = this.palette.ink;
-        this.ctx.fillText(this.balloons_caught + "/" + this.lostBalloons, hud.caught, hud.y);
+        this.ctx.fillText(
+            this.balloons_caught + " popped, " + this.lostBalloons + " lost",
+            hud.caught, hud.y
+        );
         this.ctx.fillStyle = this.palette.inkSoft;
-        this.ctx.fillText(this.diff_level, hud.level, hud.y);
+        this.ctx.fillText(DIFF_LEVEL, hud.level, hud.y);
         this.ctx.fillStyle = this.palette.accent;
-        this.ctx.fillText(this.time_to_show, hud.time, hud.y);
+        this.ctx.fillText(this.time_to_show + "s", hud.time, hud.y);
     }
 };
 

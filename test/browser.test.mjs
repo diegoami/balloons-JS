@@ -145,7 +145,7 @@ await t('font size is bounded by width, by height and by the menu', async () => 
 await t('menu text fits inside the canvas at phone width', async () => {
   const { context, page } = await newGame({ width: 390, height: 844 });
   const fits = await page.evaluate(() => {
-    const w = Game.ctx.measureText(Layout.MENU_TEXT).width;
+    const w = Game.ctx.measureText(Layout.HINT_TEXT).width;
     return { textWidth: w, limit: Game.width * (1 - 2 * Layout.GRID.columns.margin) };
   });
   assert.ok(fits.textWidth <= fits.limit,
@@ -157,47 +157,87 @@ await t('every drawn region lines up with its click target', async () => {
   for (const [w, h] of [[1280, 720], [390, 844], [1920, 400], [820, 1180]]) {
     const { context, page } = await newGame({ width: w, height: h });
     const m = await page.evaluate(() => {
-      const L = Game.layout;
-      const ctx = Game.ctx;
-      // Where each label is actually drawn inside the one menu string.
-      const labels = Layout.MENU_SLOTS.map(slot => {
-        const before = ctx.measureText(Layout.MENU_TEXT.slice(0, slot.offset)).width;
-        const label = ctx.measureText(Layout.MENU_TEXT.substr(slot.offset, slot.length)).width;
-        return { level: slot.level, centre: L.menu.x + before + label / 2 };
-      });
-      const headingWidth = ctx.measureText(Layout.HIGH_SCORES_TEXT + 'S').width;
+      const L = Game.layout, ctx = Game.ctx;
+      ctx.font = L.fonts.menu;
       return {
-        boxes: L.menu.boxes, labels,
-        menuTop: L.menu.top, menuHeight: L.menu.height, menuY: L.menu.y,
-        heading: L.scores.heading, headingWidth, hit: L.scores.hit
+        buttons: L.menu.buttons.map(b => ({
+          level: b.level,
+          labelWidth: ctx.measureText(b.label).width,
+          x: b.x, y: b.y, width: b.width, height: b.height,
+          hit: b.hit
+        })),
+        heading: L.scores.heading,
+        hit: L.scores.hit
       };
     });
 
-    m.labels.forEach((label, i) => {
-      const box = m.boxes[i];
-      assert.equal(box.level, label.level, `box ${i} level at ${w}x${h}`);
-      assert.ok(label.centre >= box.x && label.centre <= box.x + box.width,
-        `${label.level} label centre ${label.centre.toFixed(0)} outside its box ` +
-        `[${box.x.toFixed(0)}, ${(box.x + box.width).toFixed(0)}] at ${w}x${h}`);
+    m.buttons.forEach(button => {
+      // The button a finger hits is the button that was drawn: same rect.
+      assert.deepEqual(
+        { x: button.hit.x, y: button.hit.y, width: button.hit.width, height: button.hit.height },
+        { x: button.x, y: button.y, width: button.width, height: button.height },
+        `${button.level} hit rect differs from its drawn rect at ${w}x${h}`
+      );
+      assert.ok(button.labelWidth <= button.width,
+        `${button.level} label (${button.labelWidth.toFixed(0)}) overflows its button ` +
+        `(${button.width.toFixed(0)}) at ${w}x${h}`);
     });
-    // The menu baseline sits inside the box drawn around it.
-    assert.ok(m.menuY > m.menuTop && m.menuY < m.menuTop + m.menuHeight,
-      `menu baseline ${m.menuY.toFixed(0)} outside box band at ${w}x${h}`);
-    // The high-score line's click target covers the text it is drawn from.
+
     assert.ok(m.heading.y > m.hit.y && m.heading.y < m.hit.y + m.hit.height,
       `scores baseline outside its hit rect at ${w}x${h}`);
-    assert.ok(m.hit.width >= m.headingWidth * 0.9,
-      `scores hit rect (${m.hit.width.toFixed(0)}) much narrower than its text ` +
-      `(${m.headingWidth.toFixed(0)}) at ${w}x${h}`);
     await context.close();
   }
+});
+
+await t('buttons never overlap each other', async () => {
+  for (const [w, h] of [[1280, 720], [390, 844], [320, 568], [240, 600], [1920, 400]]) {
+    const { context, page } = await newGame({ width: w, height: h });
+    const buttons = await page.evaluate(() => Game.layout.menu.buttons.map(b => ({
+      level: b.level, x: b.x, y: b.y, width: b.width, height: b.height
+    })));
+    for (let i = 0; i < buttons.length; i++) {
+      for (let j = i + 1; j < buttons.length; j++) {
+        const a = buttons[i], z = buttons[j];
+        const overlap = a.x < z.x + z.width && z.x < a.x + a.width &&
+                        a.y < z.y + z.height && z.y < a.y + a.height;
+        assert.ok(!overlap, `${a.level} overlaps ${z.level} at ${w}x${h}`);
+      }
+    }
+    await context.close();
+  }
+});
+
+await t('the selected difficulty is drawn differently from the rest', async () => {
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => {
+    const L = Game.layout, ctx = Game.ctx;
+    Game.diff_level = 'H';
+    Game.drawTitleScreen();
+    const sample = (button) => {
+      const b = button;
+      const d = ctx.getImageData(
+        Math.round((b.x + b.width / 2) * Game.dpr),
+        Math.round((b.y + 3) * Game.dpr), 1, 1
+      ).data;
+      return [d[0], d[1], d[2]];
+    };
+    const byLevel = {};
+    L.menu.buttons.forEach(b => { byLevel[b.level] = sample(b); });
+    return byLevel;
+  });
+  const active = m.H.join(',');
+  ['E', 'S', 'V'].forEach(level => {
+    assert.notEqual(m[level].join(','), active,
+      `${level} is painted the same as the selected H button`);
+  });
+  await context.close();
 });
 
 await t('clicking a difficulty box starts that game', async () => {
   const { context, page, errors } = await newGame();
   const layout = await page.evaluate(() => Game.layout.menu);
-  const box = layout.boxes[2]; // Hard
-  await page.mouse.click(box.x + box.width / 2, layout.top + layout.height / 2);
+  const box = layout.buttons[2]; // Hard
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(2600);
   const state = await page.evaluate(() => ({ diff: Game.diff_level, lost: MAX_LOST_BALLOONS, running: !!Game.tick_interval }));
   assert.equal(state.diff, 'H');
@@ -490,8 +530,8 @@ await t('difficulty boxes stay clickable after a resize', async () => {
   await page.setViewportSize({ width: 700, height: 1000 });
   await page.waitForTimeout(300);
   const layout = await page.evaluate(() => Game.layout.menu);
-  const box = layout.boxes[2]; // Hard
-  await page.mouse.click(box.x + box.width / 2, layout.top + layout.height / 2);
+  const box = layout.buttons[2]; // Hard
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(2600);
   const state = await page.evaluate(() => ({ diff: Game.diff_level, lost: MAX_LOST_BALLOONS }));
   assert.equal(state.diff, 'H', 'hit regions went stale after resize');
@@ -586,19 +626,18 @@ const VIEWPORTS = [
   [1920, 400], [1024, 768], [320, 568], [2560, 1440], [768, 1024]
 ];
 
-await t('menu offsets are derived from the string actually drawn', async () => {
+await t('every menu item becomes a button and a target', async () => {
   const { context, page } = await newGame();
   const m = await page.evaluate(() => ({
-    text: Layout.MENU_TEXT,
-    slots: Layout.MENU_SLOTS,
-    items: Layout.MENU_ITEMS
+    items: Layout.MENU_ITEMS.map(i => i.level),
+    buttons: Game.layout.menu.buttons.map(b => b.level),
+    labels: Game.layout.menu.buttons.map(b => b.label),
+    targets: Game.layout.targets.map(t => t.level)
   }));
-  assert.equal(m.text, 'Tap E: Easy, S: Standard, H: Hard, V: VHard');
-  m.slots.forEach((slot, i) => {
-    const drawn = m.text.substr(slot.offset, slot.length);
-    assert.equal(drawn, m.items[i].label,
-      `slot ${i} points at "${drawn}" but the item is "${m.items[i].label}"`);
-  });
+  assert.deepEqual(m.buttons, m.items, 'a menu item did not become a button');
+  assert.deepEqual(m.labels, ['Easy', 'Standard', 'Hard', 'VHard']);
+  assert.deepEqual(m.targets, [...m.items, null],
+    'targets should be the buttons plus the high-score line');
   await context.close();
 });
 
@@ -610,7 +649,7 @@ await t('the whole composition stays on screen at every viewport', async () => {
       return {
         fontSize: Game.fontSize,
         deepest: L.scores.rows[L.scores.rows.length - 1],
-        menuRight: Math.max(...L.menu.boxes.map(b => b.x + b.width)),
+        menuRight: Math.max(...L.menu.buttons.map(b => b.x + b.width)),
         introRight: Game.ctx.measureText(Layout.INTRO_TEXT).width + L.intro.x,
         scoreValueX: L.scores.columns.value,
         hudTime: L.hud.time
@@ -669,7 +708,7 @@ await t('the menu never overflows, even at extreme widths', async () => {
   for (const [w, h] of [[240, 600], [280, 600], [320, 568], [360, 640], [3440, 1440]]) {
     const { context, page } = await newGame({ width: w, height: h });
     const m = await page.evaluate(() => ({
-      textWidth: Game.ctx.measureText(Layout.MENU_TEXT).width,
+      textWidth: Game.ctx.measureText(Layout.HINT_TEXT).width,
       limit: Game.width * (1 - 2 * Layout.GRID.columns.margin),
       font: Game.fontSize
     }));
@@ -694,13 +733,13 @@ await t('clicking the high-score line restarts at the current difficulty', async
 
 await t('the layout is recomputed on resize', async () => {
   const { context, page } = await newGame({ width: 1280, height: 720 });
-  const before = await page.evaluate(() => ({ x: Game.layout.intro.x, unit: Game.layout.unit }));
+  const before = await page.evaluate(() => ({ x: Game.layout.intro.x, line: Game.layout.line }));
   await page.setViewportSize({ width: 600, height: 900 });
   await page.waitForTimeout(300);
-  const after = await page.evaluate(() => ({ x: Game.layout.intro.x, unit: Game.layout.unit }));
+  const after = await page.evaluate(() => ({ x: Game.layout.intro.x, line: Game.layout.line }));
   assert.notEqual(before.x, after.x, 'layout was not recomputed after resize');
   assert.ok(Math.abs(after.x - 600 * 0.05) < 0.01, 'left margin does not track the new width');
-  assert.ok(after.unit < before.unit, 'character unit should shrink with the narrower viewport');
+  assert.ok(after.line < before.line, 'line height should shrink with the narrower viewport');
   await context.close();
 });
 
@@ -732,7 +771,7 @@ await t('the menu box stays on screen after growing to touch size', async () => 
     const { context, page } = await newGame({ width: w, height: h });
     const m = await page.evaluate(() => ({
       top: Game.layout.menu.top,
-      bottom: Game.layout.menu.top + Game.layout.menu.height,
+      bottom: Game.layout.menu.bottom,
       introY: Game.layout.intro.y,
       scoresY: Game.layout.scores.heading.y
     }));
@@ -749,12 +788,12 @@ await t('an imprecise tap still selects the difficulty aimed at', async () => {
   const outcome = await page.evaluate(() => {
     const L = Game.layout;
     const results = [];
-    for (const box of L.menu.boxes) {
+    for (const box of L.menu.buttons) {
       for (let dx = -10; dx <= 10; dx += 5) {
         for (let dy = -10; dy <= 10; dy += 5) {
           const point = {
             x: box.x + box.width / 2 + dx,
-            y: L.menu.top + L.menu.height / 2 + dy
+            y: box.y + box.height / 2 + dy
           };
           const got = Layout.pick(L.targets, point);
           results.push({ aimed: box.level, got: got ? (got.level || 'replay') : null });
@@ -786,8 +825,8 @@ await t('a real touch tap starts a game on an emulated phone', async () => {
 
     // Deliberately off-centre, the way a thumb lands.
     const point = await page.evaluate(() => {
-      const L = Game.layout, b = L.menu.boxes[3]; // VHard
-      return { x: b.x + b.width / 2 + 6, y: L.menu.top + L.menu.height / 2 - 8 };
+      const b = Game.layout.menu.buttons[3]; // VHard
+      return { x: b.x + b.width / 2 + 6, y: b.y + b.height / 2 - 8 };
     });
     await page.touchscreen.tap(point.x, point.y);
     await page.waitForTimeout(2800);
@@ -800,37 +839,40 @@ await t('a real touch tap starts a game on an emulated phone', async () => {
   }
 });
 
-await t('overlapping targets resolve to the nearest centre', async () => {
-  const { context, page } = await newGame({ width: 390, height: 664 });
-  const m = await page.evaluate(() => {
-    const L = Game.layout;
-    const menu = L.targets.find(t => t.level === 'H').hit;
-    const replay = L.targets.find(t => t.level === null).hit;
+await t('no two tap targets overlap, and each resolves to itself', async () => {
+  // Milestone 2 had to grow the difficulty boxes past what was drawn, which
+  // made them overlap the high-score line and needed nearest-centre
+  // resolution. Laid-out buttons separate cleanly, so the stronger property
+  // holds: every target is disjoint and unambiguous.
+  for (const [w, h] of [[1280, 720], [390, 664], [412, 839], [320, 568], [240, 600], [1920, 400]]) {
+    const { context, page } = await newGame({ width: w, height: h });
+    const m = await page.evaluate(() => {
+      const L = Game.layout;
+      const overlaps = [];
+      for (let i = 0; i < L.targets.length; i++) {
+        for (let j = i + 1; j < L.targets.length; j++) {
+          const a = L.targets[i].hit, z = L.targets[j].hit;
+          if (a.x < z.x + z.width && z.x < a.x + a.width &&
+              a.y < z.y + z.height && z.y < a.y + a.height) {
+            overlaps.push((L.targets[i].level || 'replay') + '/' + (L.targets[j].level || 'replay'));
+          }
+        }
+      }
+      const resolved = L.targets.map(t => {
+        const point = { x: t.hit.x + t.hit.width / 2, y: t.hit.y + t.hit.height / 2 };
+        const got = Layout.pick(L.targets, point);
+        return { want: t.level, got: got ? got.level : 'nothing' };
+      });
+      return { overlaps, resolved };
+    });
 
-    // Grown to touch size, the difficulty row and the high-score line share a
-    // horizontal band. Whichever centre is nearer should win inside it.
-    const top = Math.max(menu.y, replay.y);
-    const bottom = Math.min(menu.y + menu.height, replay.y + replay.height);
-    const x = menu.x + menu.width / 2;
-
-    return {
-      overlaps: bottom > top,
-      band: [+top.toFixed(1), +bottom.toFixed(1)],
-      justBelowMenu: Layout.pick(L.targets, { x, y: top + 0.5 }),
-      justAboveReplay: Layout.pick(L.targets, { x, y: bottom - 0.5 }),
-      menuCentreY: menu.y + menu.height / 2,
-      replayCentreY: replay.y + replay.height / 2
-    };
-  });
-
-  assert.ok(m.overlaps,
-    'expected the difficulty row and high-score line to overlap once grown to touch size');
-  assert.equal(m.justBelowMenu.level, 'H',
-    `top of the shared band (${m.band[0]}) should still be the difficulty box`);
-  assert.equal(m.justAboveReplay.level, null,
-    `bottom of the shared band (${m.band[1]}) should be the high-score line`);
-  assert.ok(m.menuCentreY < m.replayCentreY, 'centres are ordered as expected');
-  await context.close();
+    assert.deepEqual(m.overlaps, [], `targets overlap at ${w}x${h}: ${m.overlaps}`);
+    m.resolved.forEach(r => {
+      assert.equal(r.got, r.want,
+        `a tap on the centre of ${r.want || 'replay'} resolved to ${r.got} at ${w}x${h}`);
+    });
+    await context.close();
+  }
 });
 
 await browser.close();

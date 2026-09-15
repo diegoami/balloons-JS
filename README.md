@@ -2,9 +2,10 @@
 
 Simple JavaScript / HTML5 game. Pop the balloons before too many escape.
 
-Play by clicking or tapping balloons. Pick a difficulty by tapping one of the
-boxes on the title screen, or by pressing `E`, `S`, `H` or `V`. Space or Enter
-restarts at the current difficulty.
+Play by clicking or tapping balloons. Pick a difficulty from the buttons on
+the title screen, or press `E`, `S`, `H` or `V`. Space or Enter replays the
+current difficulty. The selected level is shown both by the filled button and
+by the sky, which has its own palette per difficulty.
 
 ## Layout
 

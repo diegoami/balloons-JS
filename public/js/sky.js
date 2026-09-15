@@ -28,6 +28,9 @@ Sky.PALETTES = {
         ink: "#FFFFFF",
         inkSoft: "rgba(255, 255, 255, 0.78)",
         accent: "#FFD98A",
+        onAccent: "#0B2438",
+        buttonFill: "rgba(255, 255, 255, 0.10)",
+        buttonBorder: "rgba(255, 255, 255, 0.34)",
         stars: 0
     },
     S: {
@@ -38,6 +41,9 @@ Sky.PALETTES = {
         ink: "#FFFFFF",
         inkSoft: "rgba(255, 255, 255, 0.78)",
         accent: "#FFCE73",
+        onAccent: "#2A1E08",
+        buttonFill: "rgba(255, 255, 255, 0.10)",
+        buttonBorder: "rgba(255, 255, 255, 0.34)",
         stars: 0
     },
     H: {
@@ -48,6 +54,9 @@ Sky.PALETTES = {
         ink: "#FFFFFF",
         inkSoft: "rgba(255, 255, 255, 0.76)",
         accent: "#FFB870",
+        onAccent: "#2A1206",
+        buttonFill: "rgba(255, 255, 255, 0.10)",
+        buttonBorder: "rgba(255, 255, 255, 0.34)",
         stars: 0
     },
     V: {
@@ -58,6 +67,9 @@ Sky.PALETTES = {
         ink: "#EAF0FF",
         inkSoft: "rgba(234, 240, 255, 0.72)",
         accent: "#8FB6FF",
+        onAccent: "#081226",
+        buttonFill: "rgba(255, 255, 255, 0.10)",
+        buttonBorder: "rgba(255, 255, 255, 0.34)",
         stars: 90
     }
 };
