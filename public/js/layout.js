@@ -82,7 +82,8 @@ Layout.GRID = {
         menu: 1,
         label: 0.82,
         score: 1,
-        hud: 0.92
+        hud: 0.92,
+        countdown: 2.4
     },
 
     /**
@@ -252,6 +253,8 @@ Layout.compute = function (ctx, width, height, fontSize) {
         },
 
         hint: { x: left, y: hintY },
+
+        countdown: { x: width / 2, y: headingY + line * 1.4 },
 
         scores: {
             heading: { x: width * G.columns.scoresHeading, y: headingY },

@@ -29,8 +29,12 @@ Sky.PALETTES = {
         inkSoft: "rgba(255, 255, 255, 0.78)",
         accent: "#FFD98A",
         onAccent: "#0B2438",
-        buttonFill: "rgba(255, 255, 255, 0.10)",
-        buttonBorder: "rgba(255, 255, 255, 0.34)",
+        buttonFill: "rgba(255, 255, 255, 0.18)",
+        buttonBorder: "rgba(255, 255, 255, 0.60)",
+        buttonPressOverlay: "rgba(255, 255, 255, 0.22)",
+        buttonDisabledFill: "rgba(255, 255, 255, 0.05)",
+        buttonDisabledBorder: "rgba(255, 255, 255, 0.16)",
+        inkDisabled: "rgba(255, 255, 255, 0.34)",
         stars: 0
     },
     S: {
@@ -42,8 +46,12 @@ Sky.PALETTES = {
         inkSoft: "rgba(255, 255, 255, 0.78)",
         accent: "#FFCE73",
         onAccent: "#2A1E08",
-        buttonFill: "rgba(255, 255, 255, 0.10)",
-        buttonBorder: "rgba(255, 255, 255, 0.34)",
+        buttonFill: "rgba(255, 255, 255, 0.18)",
+        buttonBorder: "rgba(255, 255, 255, 0.60)",
+        buttonPressOverlay: "rgba(255, 255, 255, 0.22)",
+        buttonDisabledFill: "rgba(255, 255, 255, 0.05)",
+        buttonDisabledBorder: "rgba(255, 255, 255, 0.16)",
+        inkDisabled: "rgba(255, 255, 255, 0.34)",
         stars: 0
     },
     H: {
@@ -55,8 +63,12 @@ Sky.PALETTES = {
         inkSoft: "rgba(255, 255, 255, 0.76)",
         accent: "#FFB870",
         onAccent: "#2A1206",
-        buttonFill: "rgba(255, 255, 255, 0.10)",
-        buttonBorder: "rgba(255, 255, 255, 0.34)",
+        buttonFill: "rgba(255, 255, 255, 0.18)",
+        buttonBorder: "rgba(255, 255, 255, 0.60)",
+        buttonPressOverlay: "rgba(255, 255, 255, 0.22)",
+        buttonDisabledFill: "rgba(255, 255, 255, 0.05)",
+        buttonDisabledBorder: "rgba(255, 255, 255, 0.16)",
+        inkDisabled: "rgba(255, 255, 255, 0.34)",
         stars: 0
     },
     V: {
@@ -68,8 +80,12 @@ Sky.PALETTES = {
         inkSoft: "rgba(234, 240, 255, 0.72)",
         accent: "#8FB6FF",
         onAccent: "#081226",
-        buttonFill: "rgba(255, 255, 255, 0.10)",
-        buttonBorder: "rgba(255, 255, 255, 0.34)",
+        buttonFill: "rgba(255, 255, 255, 0.18)",
+        buttonBorder: "rgba(255, 255, 255, 0.60)",
+        buttonPressOverlay: "rgba(255, 255, 255, 0.22)",
+        buttonDisabledFill: "rgba(255, 255, 255, 0.05)",
+        buttonDisabledBorder: "rgba(255, 255, 255, 0.16)",
+        inkDisabled: "rgba(255, 255, 255, 0.34)",
         stars: 90
     }
 };

@@ -338,21 +338,36 @@ await t('no listeners leak across repeated restarts', async () => {
   await page.goto('http://localhost:8899/', { waitUntil: 'load' });
   await page.waitForTimeout(300);
 
-  // Title screen: one canvas click + one document keydown.
-  assert.equal(await page.evaluate(() => window.__live), 2, 'unexpected title-screen listener count');
+  // The exact count depends on how many handlers a state binds, which changes
+  // as the game gains input. What must hold is that it never grows.
+  const onTitle = await page.evaluate(() => window.__live);
+  assert.ok(onTitle > 0 && onTitle < 20,
+    `implausible title-screen listener count: ${onTitle}`);
 
+  // Both binding paths have to be exercised. setDifficulty() binds the menu
+  // handlers and do_click() binds the popping handler; looping on restart()
+  // alone only ever re-runs the second, so a listener leaked by the first
+  // would go unnoticed.
   const seen = await page.evaluate(async () => {
     const sleep = ms => new Promise(r => setTimeout(r, ms));
-    const counts = [];
+    const counts = { menu: [], play: [] };
     for (let i = 0; i < 6; i++) {
+      Game.setDifficulty();
+      await sleep(20);
+      counts.menu.push(window.__live);
       Game.restart('E');
-      await sleep(30);
-      counts.push(window.__live);
+      await sleep(20);
+      counts.play.push(window.__live);
     }
     return counts;
   });
-  // Each restart drops the previous state's listeners and binds exactly one.
-  assert.deepEqual(seen, [1, 1, 1, 1, 1, 1], 'listeners accumulated across restarts: ' + seen);
+
+  assert.equal(new Set(seen.menu).size, 1,
+    'listeners accumulated across menu rebinds: ' + seen.menu);
+  assert.equal(new Set(seen.play).size, 1,
+    'listeners accumulated across restarts: ' + seen.play);
+  assert.equal(seen.menu[0], onTitle,
+    `rebinding the menu changed its listener count (${onTitle} -> ${seen.menu[0]})`);
 
   // And functionally: one click must pop exactly one balloon, not one per stacked handler.
   await page.waitForTimeout(2600);
@@ -874,6 +889,136 @@ await t('no two tap targets overlap, and each resolves to itself', async () => {
     await context.close();
   }
 });
+
+
+// ---------- button states and dead air ----------
+
+/** Average colour inside a button, so "is it painted differently" is measurable. */
+const buttonPaint = (page, index) => page.evaluate((i) => {
+  const b = Game.layout.menu.buttons[i];
+  const d = Game.ctx.getImageData(
+    Math.round((b.x + 4) * Game.dpr), Math.round((b.y + 4) * Game.dpr),
+    Math.round((b.width - 8) * Game.dpr), Math.round((b.height - 8) * Game.dpr)
+  ).data;
+  let r = 0, g = 0, bl = 0, n = 0;
+  for (let p = 0; p < d.length; p += 4) { r += d[p]; g += d[p + 1]; bl += d[p + 2]; n++; }
+  return [Math.round(r / n), Math.round(g / n), Math.round(bl / n)];
+}, index);
+
+await t('the menu is not live during the countdown, and says so', async () => {
+  const { context, page, errors } = await newGame();
+  const idle = await buttonPaint(page, 0);
+
+  await page.keyboard.press('e');
+  await page.waitForTimeout(500);
+
+  const during = await page.evaluate(() => ({
+    screen: Game.screen, live: Game.isMenuLive()
+  }));
+  assert.equal(during.screen, 'starting');
+  assert.equal(during.live, false, 'menu reported live while the game was starting');
+
+  const disabled = await buttonPaint(page, 0);
+  assert.notDeepEqual(disabled, idle,
+    'buttons look identical whether or not they can be pressed');
+
+  await page.waitForTimeout(2000);
+  assert.equal(await page.evaluate(() => Game.screen), 'playing');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the countdown counts down and then starts the game', async () => {
+  const { context, page } = await newGame();
+  await page.keyboard.press('s');
+  await page.waitForTimeout(250);
+  const first = await page.evaluate(() => Math.ceil((Game.countdownEnd - Date.now()) / 1000));
+  await page.waitForTimeout(1000);
+  const second = await page.evaluate(() => Math.ceil((Game.countdownEnd - Date.now()) / 1000));
+  assert.ok(second < first, `countdown did not advance: ${first} then ${second}`);
+
+  // Something is drawn over the sky while counting down; it used to be blank.
+  const painted = await drawnPixels(page);
+  assert.ok(painted > 500, 'the countdown screen drew nothing over the sky');
+  await context.close();
+});
+
+await t('the menu is dead briefly after a game, then live', async () => {
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press('v'); // one lost balloon ends it
+  await page.waitForTimeout(2400);
+  await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
+
+  assert.equal(await page.evaluate(() => Game.isMenuLive()), false,
+    'menu was live immediately after game over');
+
+  // A tap during the lockout must not restart.
+  const box = await page.evaluate(() => Game.layout.menu.buttons[0]);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(150);
+  assert.equal(await page.evaluate(() => Game.screen), 'gameover',
+    'a press during the lockout started a game');
+
+  await page.waitForFunction(() => Game.isMenuLive(), null, { timeout: 4000 });
+  const lockout = await page.evaluate(() => Game.MENU_LOCKOUT_MS);
+  assert.ok(lockout <= 2000, `lockout is ${lockout}ms, too long to look intentional`);
+
+  // And now it works.
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => Game.diff_level), 'E',
+    'the menu did not respond once live');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('scores are requested without waiting out the lockout', async () => {
+  boards.clear();
+  apiHits.length = 0;
+  const { context, page } = await newGame({ name: 'Diego' });
+  await page.keyboard.press('v');
+  await page.waitForTimeout(2400);
+  await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
+  await page.waitForTimeout(1500);
+  assert.ok(apiHits.some(h => h.method === 'GET'),
+    'the board was not fetched shortly after game over');
+  await context.close();
+});
+
+await t('pressing a button changes how it looks, selected or not', async () => {
+  // Index 1 is Standard, the default selection, so this covers both the
+  // selected button and an unselected one.
+  for (const [index, level] of [[0, 'E'], [1, 'S']]) {
+    const { context, page, errors } = await newGame();
+    const selected = await page.evaluate(() => Game.diff_level);
+    const before = await buttonPaint(page, index);
+    const box = await page.evaluate(i => Game.layout.menu.buttons[i], index);
+
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(120);
+    const pressed = await buttonPaint(page, index);
+    assert.equal(await page.evaluate(() => Game.pressedLevel), level);
+    assert.notDeepEqual(pressed, before,
+      `pressing ${level} did not change its paint ` +
+      `(${level === selected ? 'this is the selected button' : 'unselected'})`);
+
+    // Release over empty sky: releasing on the button would fire a click and
+    // correctly start a game, which is a different thing to test.
+    const empty = await page.evaluate(() => ({ x: Game.width / 2, y: Game.height - 20 }));
+    await page.mouse.move(empty.x, empty.y);
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+
+    assert.equal(await page.evaluate(() => Game.screen), 'title',
+      'releasing over empty sky should not start a game');
+    const released = await buttonPaint(page, index);
+    assert.deepEqual(released, before, `${level} stayed pressed after release`);
+    assert.deepEqual(errors, [], errors.join(' | '));
+    await context.close();
+  }
+});
+
 
 await browser.close();
 server.close();
