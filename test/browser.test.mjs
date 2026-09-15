@@ -97,12 +97,27 @@ await t('canvas fills the viewport', async () => {
   await context.close();
 });
 
-await t('font scales with width instead of the old bitwise-OR result', async () => {
-  for (const [width, expected] of [[1000, 30], [1920, 58], [500, 15], [320, 12]]) {
-    const { context, page } = await newGame({ width, height: 700 });
-    const font = await page.evaluate(() => Game.ctx.font);
-    const size = parseInt(font, 10);
-    assert.equal(size, expected, `at ${width}px expected ${expected}px, got ${font}`);
+await t('font size is bounded by width, by height and by the menu', async () => {
+  // Width sets the scale; height keeps the bottom row on screen; a final
+  // measurement of the menu string guarantees it fits. The old code was
+  // width-only, and bitwise-OR'd the result with the default as a string
+  // ("15" | 30 === 31), so a phone rendered a 31px font where 15 was meant.
+  const cases = [
+    { width: 1000, height: 700, expect: 30, bound: 'width' },
+    { width: 500, height: 700, expect: 15, bound: 'width' },
+    { width: 1920, height: 1080, expect: 57, bound: 'height, just' },
+    { width: 1920, height: 700, expect: 37, bound: 'height' },
+    { width: 1920, height: 400, expect: 21, bound: 'height' },
+    { width: 320, height: 700, expect: 12, bound: 'minimum' }
+  ];
+  for (const c of cases) {
+    const { context, page } = await newGame({ width: c.width, height: c.height });
+    const size = await page.evaluate(() => Game.fontSize);
+    const predicted = Math.round(Math.max(12, Math.min(30 * c.width / 1000, c.height / 19)));
+    assert.equal(size, c.expect,
+      `at ${c.width}x${c.height} (${c.bound}-bound) expected ${c.expect}px, got ${size}px`);
+    assert.equal(size, predicted,
+      `at ${c.width}x${c.height} the rule predicts ${predicted}px but got ${size}px`);
     await context.close();
   }
 });
@@ -110,37 +125,58 @@ await t('font scales with width instead of the old bitwise-OR result', async () 
 await t('menu text fits inside the canvas at phone width', async () => {
   const { context, page } = await newGame({ width: 390, height: 844 });
   const fits = await page.evaluate(() => {
-    const w = Game.ctx.measureText(DIFF_TOTAL).width;
-    return { textWidth: w, limit: Game.width * (1 - START_TEXT_BEGIN_X) };
+    const w = Game.ctx.measureText(Layout.MENU_TEXT).width;
+    return { textWidth: w, limit: Game.width * (1 - 2 * Layout.GRID.columns.margin) };
   });
   assert.ok(fits.textWidth <= fits.limit,
     `menu is ${fits.textWidth.toFixed(0)}px wide but only ${fits.limit.toFixed(0)}px available`);
   await context.close();
 });
 
-await t('drawn difficulty boxes line up with their click targets', async () => {
-  const { context, page } = await newGame();
-  const layout = await page.evaluate(() => Game.getDiffLayout());
-  // Each box must contain the centre of the label text drawn inside it.
-  const offsets = await page.evaluate(() => {
-    const unit = Game.ctx.measureText(DIFFICULTY_CHOICE).width / DIFF_LENGTH_TOTAL;
-    const left = Game.width * START_TEXT_BEGIN_X;
-    return [
-      [DIFF_OFFSET_1, DIFF_LENGTH_1], [DIFF_OFFSET_2, DIFF_LENGTH_2],
-      [DIFF_OFFSET_3, DIFF_LENGTH_3], [DIFF_OFFSET_4, DIFF_LENGTH_4]
-    ].map(([o, l]) => left + unit * (o + l / 2));
-  });
-  layout.boxes.forEach((box, i) => {
-    assert.ok(offsets[i] >= box.x && offsets[i] <= box.x + box.width,
-      `label ${i} centre ${offsets[i].toFixed(0)} outside box [${box.x.toFixed(0)}, ${(box.x + box.width).toFixed(0)}]`);
-  });
-  await context.close();
+await t('every drawn region lines up with its click target', async () => {
+  for (const [w, h] of [[1280, 720], [390, 844], [1920, 400], [820, 1180]]) {
+    const { context, page } = await newGame({ width: w, height: h });
+    const m = await page.evaluate(() => {
+      const L = Game.layout;
+      const ctx = Game.ctx;
+      // Where each label is actually drawn inside the one menu string.
+      const labels = Layout.MENU_SLOTS.map(slot => {
+        const before = ctx.measureText(Layout.MENU_TEXT.slice(0, slot.offset)).width;
+        const label = ctx.measureText(Layout.MENU_TEXT.substr(slot.offset, slot.length)).width;
+        return { level: slot.level, centre: L.menu.x + before + label / 2 };
+      });
+      const headingWidth = ctx.measureText(Layout.HIGH_SCORES_TEXT + 'S').width;
+      return {
+        boxes: L.menu.boxes, labels,
+        menuTop: L.menu.top, menuHeight: L.menu.height, menuY: L.menu.y,
+        heading: L.scores.heading, headingWidth, hit: L.scores.hit
+      };
+    });
+
+    m.labels.forEach((label, i) => {
+      const box = m.boxes[i];
+      assert.equal(box.level, label.level, `box ${i} level at ${w}x${h}`);
+      assert.ok(label.centre >= box.x && label.centre <= box.x + box.width,
+        `${label.level} label centre ${label.centre.toFixed(0)} outside its box ` +
+        `[${box.x.toFixed(0)}, ${(box.x + box.width).toFixed(0)}] at ${w}x${h}`);
+    });
+    // The menu baseline sits inside the box drawn around it.
+    assert.ok(m.menuY > m.menuTop && m.menuY < m.menuTop + m.menuHeight,
+      `menu baseline ${m.menuY.toFixed(0)} outside box band at ${w}x${h}`);
+    // The high-score line's click target covers the text it is drawn from.
+    assert.ok(m.heading.y > m.hit.y && m.heading.y < m.hit.y + m.hit.height,
+      `scores baseline outside its hit rect at ${w}x${h}`);
+    assert.ok(m.hit.width >= m.headingWidth * 0.9,
+      `scores hit rect (${m.hit.width.toFixed(0)}) much narrower than its text ` +
+      `(${m.headingWidth.toFixed(0)}) at ${w}x${h}`);
+    await context.close();
+  }
 });
 
 await t('clicking a difficulty box starts that game', async () => {
   const { context, page, errors } = await newGame();
-  const box = (await page.evaluate(() => Game.getDiffLayout())).boxes[2]; // Hard
-  const layout = await page.evaluate(() => Game.getDiffLayout());
+  const layout = await page.evaluate(() => Game.layout.menu);
+  const box = layout.boxes[2]; // Hard
   await page.mouse.click(box.x + box.width / 2, layout.top + layout.height / 2);
   await page.waitForTimeout(2600);
   const state = await page.evaluate(() => ({ diff: Game.diff_level, lost: MAX_LOST_BALLOONS, running: !!Game.tick_interval }));
@@ -435,7 +471,7 @@ await t('difficulty boxes stay clickable after a resize', async () => {
   const { context, page, errors } = await newGame({ width: 1280, height: 720 });
   await page.setViewportSize({ width: 700, height: 1000 });
   await page.waitForTimeout(300);
-  const layout = await page.evaluate(() => Game.getDiffLayout());
+  const layout = await page.evaluate(() => Game.layout.menu);
   const box = layout.boxes[2]; // Hard
   await page.mouse.click(box.x + box.width / 2, layout.top + layout.height / 2);
   await page.waitForTimeout(2600);
@@ -520,6 +556,133 @@ await t('repeated resizes do not accumulate pixel-ratio listeners', async () => 
   assert.equal(afterResizes, 1,
     `ratio listeners grew from ${afterLoad} to ${afterResizes} across 9 resizes`);
   assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+
+
+// ---------- milestone 2: the layout system ----------
+
+const VIEWPORTS = [
+  [1280, 720], [1920, 1080], [390, 844], [430, 932], [820, 1180],
+  [1920, 400], [1024, 768], [320, 568], [2560, 1440], [768, 1024]
+];
+
+await t('menu offsets are derived from the string actually drawn', async () => {
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => ({
+    text: Layout.MENU_TEXT,
+    slots: Layout.MENU_SLOTS,
+    items: Layout.MENU_ITEMS
+  }));
+  assert.equal(m.text, 'Tap E: Easy, S: Standard, H: Hard, V: VHard');
+  m.slots.forEach((slot, i) => {
+    const drawn = m.text.substr(slot.offset, slot.length);
+    assert.equal(drawn, m.items[i].label,
+      `slot ${i} points at "${drawn}" but the item is "${m.items[i].label}"`);
+  });
+  await context.close();
+});
+
+await t('the whole composition stays on screen at every viewport', async () => {
+  for (const [w, h] of VIEWPORTS) {
+    const { context, page } = await newGame({ width: w, height: h });
+    const m = await page.evaluate(() => {
+      const L = Game.layout;
+      return {
+        fontSize: Game.fontSize,
+        deepest: L.scores.rows[L.scores.rows.length - 1],
+        menuRight: Math.max(...L.menu.boxes.map(b => b.x + b.width)),
+        introRight: Game.ctx.measureText(Layout.INTRO_TEXT).width + L.intro.x,
+        scoreValueX: L.scores.columns.value,
+        hudTime: L.hud.time
+      };
+    });
+    assert.ok(m.deepest < h, `bottom score row ${m.deepest.toFixed(0)} below ${h}px screen at ${w}x${h}`);
+    assert.ok(m.menuRight <= w, `menu boxes run to ${m.menuRight.toFixed(0)} past ${w}px at ${w}x${h}`);
+    assert.ok(m.introRight <= w, `intro text runs to ${m.introRight.toFixed(0)} past ${w}px at ${w}x${h}`);
+    assert.ok(m.scoreValueX < w && m.hudTime < w, `right-hand columns off screen at ${w}x${h}`);
+    assert.ok(m.fontSize >= 1, `font collapsed to ${m.fontSize} at ${w}x${h}`);
+    await context.close();
+  }
+});
+
+await t('vertical rhythm follows the type scale, not screen height', async () => {
+  // Same width, very different heights: while the font is unchanged, the rows
+  // must land in the same place. Under the old height-fraction scheme they
+  // scaled with the screen, stranding tiny text across a tall phone.
+  const read = async (h) => {
+    const { context, page } = await newGame({ width: 800, height: h });
+    const m = await page.evaluate(() => ({
+      font: Game.fontSize,
+      rows: Game.layout.scores.rows.map(Math.round),
+      menuTop: Math.round(Game.layout.menu.top)
+    }));
+    await context.close();
+    return m;
+  };
+  const tall = await read(1200);
+  const taller = await read(1600);
+  assert.equal(tall.font, taller.font, 'font should not depend on height here');
+  assert.deepEqual(tall.rows, taller.rows,
+    `rows moved with screen height: ${tall.rows} vs ${taller.rows}`);
+  assert.equal(tall.menuTop, taller.menuTop);
+});
+
+await t('row spacing is proportional to the line height', async () => {
+  const { context, page } = await newGame({ width: 1280, height: 720 });
+  const m = await page.evaluate(() => {
+    const L = Game.layout;
+    return {
+      line: L.line,
+      gaps: L.scores.rows.slice(1).map((y, i) => y - L.scores.rows[i]),
+      step: Layout.GRID.scoreRowStep
+    };
+  });
+  m.gaps.forEach(gap => {
+    assert.ok(Math.abs(gap - m.line * m.step) < 0.01,
+      `row gap ${gap.toFixed(1)} is not ${m.step} line heights (${(m.line * m.step).toFixed(1)})`);
+  });
+  assert.equal(new Set(m.gaps.map(g => g.toFixed(4))).size, 1, 'row gaps are not even');
+  await context.close();
+});
+
+await t('the menu never overflows, even at extreme widths', async () => {
+  for (const [w, h] of [[240, 600], [280, 600], [320, 568], [360, 640], [3440, 1440]]) {
+    const { context, page } = await newGame({ width: w, height: h });
+    const m = await page.evaluate(() => ({
+      textWidth: Game.ctx.measureText(Layout.MENU_TEXT).width,
+      limit: Game.width * (1 - 2 * Layout.GRID.columns.margin),
+      font: Game.fontSize
+    }));
+    assert.ok(m.textWidth <= m.limit + 0.5,
+      `menu is ${m.textWidth.toFixed(0)}px at ${w}px wide but only ${m.limit.toFixed(0)}px is available (font ${m.font})`);
+    await context.close();
+  }
+});
+
+await t('clicking the high-score line restarts at the current difficulty', async () => {
+  const { context, page, errors } = await newGame();
+  await page.evaluate(() => { Game.diff_level = 'H'; });
+  const hit = await page.evaluate(() => Game.layout.scores.hit);
+  await page.mouse.click(hit.x + hit.width / 2, hit.y + hit.height / 2);
+  await page.waitForTimeout(2600);
+  assert.equal(await page.evaluate(() => Game.screen), 'playing',
+    'the high-score line did not start a game');
+  assert.equal(await page.evaluate(() => Game.diff_level), 'H');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the layout is recomputed on resize', async () => {
+  const { context, page } = await newGame({ width: 1280, height: 720 });
+  const before = await page.evaluate(() => ({ x: Game.layout.intro.x, unit: Game.layout.unit }));
+  await page.setViewportSize({ width: 600, height: 900 });
+  await page.waitForTimeout(300);
+  const after = await page.evaluate(() => ({ x: Game.layout.intro.x, unit: Game.layout.unit }));
+  assert.notEqual(before.x, after.x, 'layout was not recomputed after resize');
+  assert.ok(Math.abs(after.x - 600 * 0.05) < 0.01, 'left margin does not track the new width');
+  assert.ok(after.unit < before.unit, 'character unit should shrink with the narrower viewport');
   await context.close();
 });
 
