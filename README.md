@@ -19,6 +19,7 @@ public/               everything served to the browser
   js/color.js         lighten/darken helpers and the gradient palette
 netlify/functions/
   scores.mts          high-score API, backed by Netlify Blobs
+test/                 test suite (see below)
 netlify.toml          publish directory and headers
 ```
 
@@ -32,7 +33,18 @@ npm install
 npm run dev      # netlify dev, serves the site and the score function
 ```
 
-`npm run check` syntax-checks the browser scripts.
+## Tests
+
+```bash
+npm test            # syntax check, then both suites
+npm run test:scores # score function, against an in-memory blob store
+npm run test:browser # the game itself, driven in headless Chromium
+```
+
+The browser suite serves `public/` with a stub of the score API and drives the
+real game: rendering, input, scoring, the game-over round trip, device pixel
+ratios of 1x/2x/3x, resizing and rotation. It needs a Chromium; `npm install`
+fetches one, and `CHROMIUM_PATH` overrides which binary is used.
 
 ## Deploying
 

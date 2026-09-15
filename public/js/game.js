@@ -27,6 +27,7 @@ const DIFF_OFFSET_4 = DIFF_OFFSET_3 + DIFF_LENGTH_3 + 2, DIFF_LENGTH_4 = DIFF_4.
 const DIFFICULTY_CHOICE = DIFF_TOTAL;
 
 const DIFF_LENGTH_TOTAL = DIFF_TOTAL.length;
+const INTRO_TEXT = "Stop the balloons, before it is too late !!";
 const DEFAULT_FONT_SIZE = 30;
 const MIN_FONT_SIZE = 12;
 
@@ -57,9 +58,125 @@ function saveSetting(key, value) {
 var Game = {};
 Game.fps = 30;
 
+/**
+ * Sizes the canvas.
+ *
+ * Two coordinate spaces are in play. The backing store is sized in device
+ * pixels so the result is sharp on a retina display; everything the game
+ * measures and draws works in CSS pixels, held in this.width / this.height,
+ * and the context transform bridges the two. Previously the canvas was sized
+ * to innerWidth/innerHeight once at load, so on a 2x display the browser drew
+ * at 1x and upscaled, softening every glyph and balloon edge.
+ *
+ * Assigning canvas.width or canvas.height resets the whole 2D context, so the
+ * transform, font and fill style are all re-established here afterwards.
+ */
+Game.applyCanvasSize = function () {
+    this.dpr = window.devicePixelRatio || 1;
+    this.width = window.innerWidth;
+    this.height = window.innerHeight;
+
+    this.canvas.width = Math.round(this.width * this.dpr);
+    this.canvas.height = Math.round(this.height * this.dpr);
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+
+    this.ratio = this.width / 1000;
+
+    // Math.max() with a single argument was a no-op, and the result was then
+    // bitwise-OR'd with the default as a string: "15" | 30 === 31, so a phone
+    // got a 31px font where 15px was intended and the menu overflowed.
+    this.fontSize = Math.round(Math.max(DEFAULT_FONT_SIZE * this.ratio, MIN_FONT_SIZE));
+    this.ctx.font = this.fontSize + "px Verdana";
+
+    this.is_gradient = 0;
+    this.updateGradient();
+};
+
+/**
+ * Re-sizes and repaints after the viewport changes. Resize events arrive in
+ * bursts (a drag, a phone rotating, a mobile URL bar collapsing), so the work
+ * is coalesced into one frame.
+ */
+Game.handleResize = function () {
+    var that = this;
+    if (this.resizePending) {
+        return;
+    }
+    this.resizePending = true;
+
+    window.requestAnimationFrame(function () {
+        that.resizePending = false;
+        that.applyCanvasSize();
+        that.watchPixelRatio();
+
+        // Balloons captured the old width as their bounce boundary.
+        for (var i = 0; i < (that.balloons || []).length; i++) {
+            that.balloons[i].xmax = that.width;
+        }
+
+        that.redraw();
+    });
+};
+
+/**
+ * Only the title screen is painted once and left alone. Every other screen is
+ * repainted by the game loop, which keeps running through game over.
+ */
+Game.redraw = function () {
+    if (this.screen === "title") {
+        this.drawTitleScreen();
+    } else if (this.screen === "starting") {
+        this.clear();
+    }
+};
+
+Game.watchViewport = function () {
+    var that = this;
+    var onResize = function () { that.handleResize(); };
+
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    this.watchPixelRatio();
+};
+
+/**
+ * Dragging a window onto a display with a different pixel density changes
+ * devicePixelRatio without necessarily firing a resize event. The query only
+ * matches one specific ratio, so it is re-armed after each change.
+ */
+Game.watchPixelRatio = function () {
+    var that = this;
+
+    // Armed once per distinct ratio. Without this guard every ordinary resize
+    // would leave another live MediaQueryList listener behind.
+    if (!window.matchMedia || this.watchedRatio === this.dpr) {
+        return;
+    }
+    var query = window.matchMedia("(resolution: " + this.dpr + "dppx)");
+    if (!query.addEventListener) {
+        return;
+    }
+    this.watchedRatio = this.dpr;
+
+    query.addEventListener("change", function () {
+        that.watchedRatio = null;
+        that.handleResize();
+    }, { once: true });
+};
+
+Game.drawTitleScreen = function () {
+    this.clear();
+    this.updateGradient();
+    this.ctx.fillText(INTRO_TEXT, this.width * START_TEXT_INTRO_X, this.height * START_TEXT_INTRO_Y);
+    this.draw_diff_levels();
+    if (this.scores) {
+        this.fillscore(this.scores);
+    }
+};
+
 Game.updateGradient = function () {
     if (!this.is_gradient) {
-        var gradient = this.ctx.createLinearGradient(0, 0, this.canvas.width, 0);
+        var gradient = this.ctx.createLinearGradient(0, 0, this.width, 0);
         for (var i = 0; i < 1; i += 0.05) {
             gradient.addColorStop(i, getRandomCssColor());
         }
@@ -85,8 +202,8 @@ Game.resetInput = function () {
 Game.getCanvasPoint = function (event) {
     var rect = this.canvas.getBoundingClientRect();
     return {
-        x: (event.clientX - rect.left) * (this.canvas.width / rect.width),
-        y: (event.clientY - rect.top) * (this.canvas.height / rect.height)
+        x: (event.clientX - rect.left) * (this.width / rect.width),
+        y: (event.clientY - rect.top) * (this.height / rect.height)
     };
 };
 
@@ -99,14 +216,14 @@ Game.getCanvasPoint = function (event) {
 Game.getDiffLayout = function () {
     var unit = this.ctx.measureText(DIFFICULTY_CHOICE).width / DIFF_LENGTH_TOTAL;
     var em = this.ctx.measureText("M").width * 1.3;
-    var left = this.canvas.width * START_TEXT_BEGIN_X;
+    var left = this.width * START_TEXT_BEGIN_X;
 
     return {
         unit: unit,
-        top: this.canvas.height * START_TEXT_BEGIN_Y - em * 0.75,
+        top: this.height * START_TEXT_BEGIN_Y - em * 0.75,
         height: em * 1.25,
-        scoresLeft: this.canvas.width * HIGH_SCORE_BEGIN_X,
-        scoresTop: this.canvas.height * HIGH_SCORE_BEGIN_Y - em / 2,
+        scoresLeft: this.width * HIGH_SCORE_BEGIN_X,
+        scoresTop: this.height * HIGH_SCORE_BEGIN_Y - em / 2,
         scoresHeight: em,
         scoresWidth: unit * (HIGH_SCORES_LENGTH + 4),
         boxes: [
@@ -166,6 +283,7 @@ Game.restart = function (diff_level) {
     }
     this.isrestart = false;
     this.showscores = false;
+    this.screen = "starting";
     this.clear();
     this.balloons = [];
     this.balloons_caught = 0;
@@ -174,6 +292,7 @@ Game.restart = function (diff_level) {
     var that = this;
     setTimeout(function () {
         that.start = Date.now();
+        that.screen = "playing";
         that.tick_interval = setInterval(Game.run, 1000 / Game.fps);
     }, 2000);
 };
@@ -192,39 +311,31 @@ Game.init = function () {
     this.name = name || "anonymous";
 
     this.canvas = document.getElementById("balloon_canvas");
-    this.canvas.width = window.innerWidth;
-    this.canvas.height = window.innerHeight;
     this.ctx = this.canvas.getContext("2d");
-
-    this.ratio = this.canvas.width / 1000;
-
-    // Math.max() with a single argument was a no-op, and the result was then
-    // bitwise-OR'd with the default as a string: "15" | 30 === 31, so a phone
-    // got a 31px font where 15px was intended and the menu overflowed.
-    this.fontSize = Math.round(Math.max(DEFAULT_FONT_SIZE * this.ratio, MIN_FONT_SIZE));
-    this.ctx.font = this.fontSize + "px Verdana";
-    this.is_gradient = 0;
-    this.updateGradient();
-    this.ctx.fillText("Stop the balloons, before it is too late !!", this.canvas.width * START_TEXT_INTRO_X, this.canvas.height * START_TEXT_INTRO_Y);
 
     this.diff_level = loadSetting("diff_level");
     if (!this.diff_level) {
         this.diff_level = "S";
     }
 
-    this.draw_diff_levels();
+    this.applyCanvasSize();
+    this.screen = "title";
+    this.drawTitleScreen();
 
     this.getScores();
     this.setDifficulty();
+    this.watchViewport();
 };
 
 Game.setDifficulty = function () {
     var that = this;
-    var layout = this.getDiffLayout();
     var signal = this.resetInput();
 
     this.canvas.addEventListener("click", function (event) {
         var point = that.getCanvasPoint(event);
+        // Recomputed per click: a resize between binding and clicking would
+        // otherwise leave these regions where the boxes used to be.
+        var layout = that.getDiffLayout();
 
         if (point.y >= layout.top && point.y <= layout.top + layout.height) {
             for (var i = 0; i < layout.boxes.length; i++) {
@@ -259,13 +370,13 @@ Game.fillscore = function (data) {
         return;
     }
 
-    this.ctx.fillText(HIGH_SCORES_TEXT + this.diff_level, this.canvas.width * HIGH_SCORE_BEGIN_X, this.canvas.height * HIGH_SCORE_BEGIN_Y);
+    this.ctx.fillText(HIGH_SCORES_TEXT + this.diff_level, this.width * HIGH_SCORE_BEGIN_X, this.height * HIGH_SCORE_BEGIN_Y);
 
     for (var i = 0; i < 3; i++) {
         if (data.length > i) {
-            this.ctx.fillText(data[i]["score_day"], this.canvas.width * SCORE_X_1, this.canvas.height * SCORE_Y[i]);
-            this.ctx.fillText(data[i]["name"], this.canvas.width * SCORE_X_2, this.canvas.height * SCORE_Y[i]);
-            this.ctx.fillText(data[i]["score"], this.canvas.width * SCORE_X_3, this.canvas.height * SCORE_Y[i]);
+            this.ctx.fillText(data[i]["score_day"], this.width * SCORE_X_1, this.height * SCORE_Y[i]);
+            this.ctx.fillText(data[i]["name"], this.width * SCORE_X_2, this.height * SCORE_Y[i]);
+            this.ctx.fillText(data[i]["score"], this.width * SCORE_X_3, this.height * SCORE_Y[i]);
         }
     }
 };
@@ -318,6 +429,7 @@ Game.gameover = function () {
         this.resetInput();
         this.end_time = this.time_to_show;
         this.isrestart = true;
+        this.screen = "gameover";
         setTimeout(function () {
             that.setDifficulty();
             that.showscores = true;
@@ -327,7 +439,7 @@ Game.gameover = function () {
         if (this.balloons.length == 0) {
             this.updateGradient();
         }
-        this.ctx.fillText("Game Over. Score: " + this.balloons_caught + ", Time: " + this.end_time, this.canvas.width * START_TEXT_INTRO_X, this.canvas.height * START_TEXT_INTRO_Y);
+        this.ctx.fillText("Game Over. Score: " + this.balloons_caught + ", Time: " + this.end_time, this.width * START_TEXT_INTRO_X, this.height * START_TEXT_INTRO_Y);
         this.draw_diff_levels();
         if (this.showscores) {
             this.getScores();
@@ -338,7 +450,7 @@ Game.gameover = function () {
 Game.draw_diff_levels = function () {
     var layout = this.getDiffLayout();
 
-    this.ctx.fillText(DIFF_TOTAL, this.canvas.width * START_TEXT_BEGIN_X, this.canvas.height * START_TEXT_BEGIN_Y);
+    this.ctx.fillText(DIFF_TOTAL, this.width * START_TEXT_BEGIN_X, this.height * START_TEXT_BEGIN_Y);
 
     this.ctx.save();
     this.ctx.lineWidth = 3 * this.ratio;
@@ -355,8 +467,8 @@ Game.draw_diff_levels = function () {
 };
 
 Game.randomBalloon = function () {
-    var max_width = this.canvas.width;
-    var max_height = this.canvas.height;
+    var max_width = this.width;
+    var max_height = this.height;
     var xcoord = (Math.floor(Math.random() * (max_width * 0.9)) + max_width * 0.05);
     var ycoord = max_height;
     var ratioSize = RATIO_SIZE - this.balloons_caught / RATIO_DECREASE;
@@ -403,15 +515,15 @@ Game.draw = function () {
         this.is_gradient = 0;
     }
     if (this.ctx && !this.isrestart) {
-        this.ctx.fillText(this.balloons_caught + "/" + this.lostBalloons, this.canvas.width * 0.1, this.canvas.height * 0.1);
+        this.ctx.fillText(this.balloons_caught + "/" + this.lostBalloons, this.width * 0.1, this.height * 0.1);
         this.time_to_show = ((Date.now() - this.start) / 1000).toFixed(2);
-        this.ctx.fillText(this.diff_level, this.canvas.width * 0.45, this.canvas.height * 0.1);
-        this.ctx.fillText(this.time_to_show, this.canvas.width * 0.8, this.canvas.height * 0.1);
+        this.ctx.fillText(this.diff_level, this.width * 0.45, this.height * 0.1);
+        this.ctx.fillText(this.time_to_show, this.width * 0.8, this.height * 0.1);
     }
 };
 
 Game.clear = function () {
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.clearRect(0, 0, this.width, this.height);
 };
 
 Game.update = function () {
