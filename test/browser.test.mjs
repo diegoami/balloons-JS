@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
+import { devices } from 'playwright';
 import { launchBrowser } from './helpers/browser.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -686,6 +687,134 @@ await t('the layout is recomputed on resize', async () => {
   await context.close();
 });
 
+
+
+// ---------- touch targets ----------
+
+await t('every tappable target meets the 44px touch minimum', async () => {
+  for (const [w, h] of [[390, 664], [412, 839], [320, 568], [1280, 720], [820, 1180]]) {
+    const { context, page } = await newGame({ width: w, height: h });
+    const targets = await page.evaluate(() => Game.layout.targets.map(t => ({
+      level: t.level || 'replay',
+      width: +t.hit.width.toFixed(1),
+      height: +t.hit.height.toFixed(1)
+    })));
+    const min = await page.evaluate(() => Layout.GRID.minTouchTarget);
+    targets.forEach(target => {
+      assert.ok(target.width >= min,
+        `${target.level} target is ${target.width}px wide at ${w}x${h}, needs ${min}`);
+      assert.ok(target.height >= min,
+        `${target.level} target is ${target.height}px tall at ${w}x${h}, needs ${min}`);
+    });
+    await context.close();
+  }
+});
+
+await t('the menu box stays on screen after growing to touch size', async () => {
+  for (const [w, h] of [[240, 600], [320, 568], [390, 664], [1920, 400], [2560, 1440]]) {
+    const { context, page } = await newGame({ width: w, height: h });
+    const m = await page.evaluate(() => ({
+      top: Game.layout.menu.top,
+      bottom: Game.layout.menu.top + Game.layout.menu.height,
+      introY: Game.layout.intro.y,
+      scoresY: Game.layout.scores.heading.y
+    }));
+    assert.ok(m.top >= 0, `menu box starts above the canvas (${m.top.toFixed(1)}) at ${w}x${h}`);
+    assert.ok(m.bottom <= h, `menu box runs past the bottom at ${w}x${h}`);
+    assert.ok(m.top > m.introY - 2, `menu box overlaps the intro line at ${w}x${h}`);
+    await context.close();
+  }
+});
+
+await t('an imprecise tap still selects the difficulty aimed at', async () => {
+  const { context, page } = await newGame({ width: 390, height: 664 });
+  // A grid of offsets around each box centre, within a fingertip of the target.
+  const outcome = await page.evaluate(() => {
+    const L = Game.layout;
+    const results = [];
+    for (const box of L.menu.boxes) {
+      for (let dx = -10; dx <= 10; dx += 5) {
+        for (let dy = -10; dy <= 10; dy += 5) {
+          const point = {
+            x: box.x + box.width / 2 + dx,
+            y: L.menu.top + L.menu.height / 2 + dy
+          };
+          const got = Layout.pick(L.targets, point);
+          results.push({ aimed: box.level, got: got ? (got.level || 'replay') : null });
+        }
+      }
+    }
+    return results;
+  });
+  const wrong = outcome.filter(r => r.got !== r.aimed);
+  assert.equal(wrong.length, 0,
+    `${wrong.length}/${outcome.length} offset taps missed: ` +
+    JSON.stringify(wrong.slice(0, 5)));
+  await context.close();
+});
+
+await t('a real touch tap starts a game on an emulated phone', async () => {
+  const phones = ['iPhone 13', 'Pixel 7'];
+  for (const name of phones) {
+    const device = devices[name];
+    if (!device) continue;
+    const context = await browser.newContext({ ...device });
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', e => errors.push(String(e)));
+    page.on('dialog', d => d.accept('Toucher'));
+    await page.addInitScript(() => { try { localStorage.setItem('name', 'Toucher'); } catch (e) {} });
+    await page.goto('http://localhost:8899/', { waitUntil: 'load' });
+    await page.waitForTimeout(500);
+
+    // Deliberately off-centre, the way a thumb lands.
+    const point = await page.evaluate(() => {
+      const L = Game.layout, b = L.menu.boxes[3]; // VHard
+      return { x: b.x + b.width / 2 + 6, y: L.menu.top + L.menu.height / 2 - 8 };
+    });
+    await page.touchscreen.tap(point.x, point.y);
+    await page.waitForTimeout(2800);
+
+    const state = await page.evaluate(() => ({ screen: Game.screen, diff: Game.diff_level }));
+    assert.equal(state.diff, 'V', `${name}: off-centre tap selected ${state.diff}`);
+    assert.equal(state.screen, 'playing', `${name}: tap did not start the game`);
+    assert.deepEqual(errors, [], errors.join(' | '));
+    await context.close();
+  }
+});
+
+await t('overlapping targets resolve to the nearest centre', async () => {
+  const { context, page } = await newGame({ width: 390, height: 664 });
+  const m = await page.evaluate(() => {
+    const L = Game.layout;
+    const menu = L.targets.find(t => t.level === 'H').hit;
+    const replay = L.targets.find(t => t.level === null).hit;
+
+    // Grown to touch size, the difficulty row and the high-score line share a
+    // horizontal band. Whichever centre is nearer should win inside it.
+    const top = Math.max(menu.y, replay.y);
+    const bottom = Math.min(menu.y + menu.height, replay.y + replay.height);
+    const x = menu.x + menu.width / 2;
+
+    return {
+      overlaps: bottom > top,
+      band: [+top.toFixed(1), +bottom.toFixed(1)],
+      justBelowMenu: Layout.pick(L.targets, { x, y: top + 0.5 }),
+      justAboveReplay: Layout.pick(L.targets, { x, y: bottom - 0.5 }),
+      menuCentreY: menu.y + menu.height / 2,
+      replayCentreY: replay.y + replay.height / 2
+    };
+  });
+
+  assert.ok(m.overlaps,
+    'expected the difficulty row and high-score line to overlap once grown to touch size');
+  assert.equal(m.justBelowMenu.level, 'H',
+    `top of the shared band (${m.band[0]}) should still be the difficulty box`);
+  assert.equal(m.justAboveReplay.level, null,
+    `bottom of the shared band (${m.band[1]}) should be the high-score line`);
+  assert.ok(m.menuCentreY < m.replayCentreY, 'centres are ordered as expected');
+  await context.close();
+});
 
 await browser.close();
 server.close();

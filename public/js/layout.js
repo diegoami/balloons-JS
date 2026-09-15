@@ -63,12 +63,34 @@ Layout.GRID = {
     minFontSize: 12,
 
     /**
+     * Smallest thing worth asking a finger to hit, in CSS pixels. Apple asks
+     * for 44, Material for 48. At phone sizes the difficulty boxes came out
+     * 17px tall, which is under a third of a fingertip, so aiming at one
+     * missed roughly one tap in seven even with a generous error model.
+     */
+    minTouchTarget: 44,
+
+    /**
      * Font size is capped at height/heightDivisor so the deepest row still
      * lands on screen. The deepest baseline sits at about 15.6x the font size,
      * so 19 leaves the composition occupying roughly 82% of the height.
      */
     heightDivisor: 19
 };
+
+/** Grows a rect about its own centre until it meets the touch minimum. */
+function atLeastTouchSize(rect) {
+    var min = Layout.GRID.minTouchTarget;
+    var width = Math.max(rect.width, min);
+    var height = Math.max(rect.height, min);
+
+    return {
+        x: rect.x + rect.width / 2 - width / 2,
+        y: rect.y + rect.height / 2 - height / 2,
+        width: width,
+        height: height
+    };
+}
 
 /** The drawn menu string, plus where each label starts within it. */
 (function buildMenu() {
@@ -134,20 +156,45 @@ Layout.compute = function (ctx, width, height) {
     var menuY = line * G.rows.menu;
     var headingY = line * G.rows.scoresHeading;
 
+    // The box drawn around each label is grown to the touch minimum and
+    // recentred on the text, so what is drawn is what can be hit. Only the
+    // width is allowed to differ: widening the boxes would overlap them, since
+    // they bracket substrings of one drawn string. Milestone 3 turns these into
+    // laid-out buttons and that exception goes away.
+    var naturalHeight = line * 1.25;
+    var menuHeight = Math.max(naturalHeight, G.minTouchTarget);
+    var menuTop = (menuY - line * 0.75) + naturalHeight / 2 - menuHeight / 2;
+
     var boxes = [];
     for (var i = 0; i < Layout.MENU_SLOTS.length; i++) {
         var slot = Layout.MENU_SLOTS[i];
-        boxes.push({
+        var box = {
             level: slot.level,
             x: left + unit * (slot.offset - 0.5),
             width: unit * (slot.length + 0.5)
+        };
+        box.hit = atLeastTouchSize({
+            x: box.x, y: menuTop, width: box.width, height: menuHeight
         });
+        boxes.push(box);
     }
 
     var rows = [];
     for (var r = 0; r < G.scoreRowCount; r++) {
         rows.push(line * (G.rows.firstScore + r * G.scoreRowStep));
     }
+
+    var scoresHit = atLeastTouchSize({
+        x: width * G.columns.scoresHeading,
+        y: headingY - line / 2,
+        width: unit * (Layout.HIGH_SCORES_TEXT.length + 4),
+        height: line
+    });
+
+    var targets = boxes.map(function (box) {
+        return { level: box.level, hit: box.hit };
+    });
+    targets.push({ level: null, hit: scoresHit });
 
     return {
         line: line,
@@ -158,19 +205,14 @@ Layout.compute = function (ctx, width, height) {
         menu: {
             x: left,
             y: menuY,
-            top: menuY - line * 0.75,
-            height: line * 1.25,
+            top: menuTop,
+            height: menuHeight,
             boxes: boxes
         },
 
         scores: {
             heading: { x: width * G.columns.scoresHeading, y: headingY },
-            hit: {
-                x: width * G.columns.scoresHeading,
-                y: headingY - line / 2,
-                width: unit * (Layout.HIGH_SCORES_TEXT.length + 4),
-                height: line
-            },
+            hit: scoresHit,
             columns: {
                 date: width * G.columns.scoreDate,
                 name: width * G.columns.scoreName,
@@ -189,21 +231,36 @@ Layout.compute = function (ctx, width, height) {
         spawn: {
             min: width * G.spawn.inset,
             width: width * G.spawn.spread
-        }
+        },
+
+        /** Everything tappable on the title and game-over screens. */
+        targets: targets
     };
 };
 
-/** Returns the box whose rect contains the point, or null. */
-Layout.hitBox = function (boxes, top, height, point) {
-    if (point.y < top || point.y > top + height) {
-        return null;
-    }
-    for (var i = 0; i < boxes.length; i++) {
-        if (point.x >= boxes[i].x && point.x <= boxes[i].x + boxes[i].width) {
-            return boxes[i];
+/**
+ * Picks the target a tap meant. Grown targets can overlap each other, so a
+ * point inside more than one resolves to the nearest centre rather than to
+ * whichever happens to come first in the list.
+ */
+Layout.pick = function (targets, point) {
+    var best = null;
+    var bestDistance = Infinity;
+
+    for (var i = 0; i < targets.length; i++) {
+        if (!Layout.hitRect(targets[i].hit, point)) {
+            continue;
+        }
+        var centreX = targets[i].hit.x + targets[i].hit.width / 2;
+        var centreY = targets[i].hit.y + targets[i].hit.height / 2;
+        var distance = Math.pow(point.x - centreX, 2) + Math.pow(point.y - centreY, 2);
+
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = targets[i];
         }
     }
-    return null;
+    return best;
 };
 
 /** Whether a point falls inside a rect. */

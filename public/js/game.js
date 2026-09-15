@@ -280,13 +280,12 @@ Game.setDifficulty = function () {
 
     this.canvas.addEventListener("click", function (event) {
         var point = that.getCanvasPoint(event);
-        var menu = that.layout.menu;
+        var target = Layout.pick(that.layout.targets, point);
 
-        var box = Layout.hitBox(menu.boxes, menu.top, menu.height, point);
-        if (box) {
-            that.restart(box.level);
-        } else if (Layout.hitRect(that.layout.scores.hit, point)) {
-            that.restart(that.diff_level);
+        if (target) {
+            // The high-score line has no level of its own; it replays the
+            // difficulty already selected.
+            that.restart(target.level || that.diff_level);
         }
     }, { signal: signal });
 
