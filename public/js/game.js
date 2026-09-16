@@ -469,6 +469,7 @@ Game.init = function () {
     this.canvas = document.getElementById("balloon_canvas");
     this.ctx = this.canvas.getContext("2d");
     NameField.find();
+    Announce.find();
 
     this.difficulty = Difficulty.get(loadSetting("diff_level"));
     this.balloons = [];

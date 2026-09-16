@@ -17,6 +17,14 @@ body {
 #balloon_canvas {
     cursor: crosshair;
     touch-action: manipulation; /* no double-tap zoom delay when popping on mobile */
+    outline: none;
+}
+
+/* The canvas is focusable so a keyboard can reach the game. Only a keyboard
+   sees the ring: :focus-visible leaves a click on a balloon unmarked. */
+#balloon_canvas:focus-visible {
+    outline: 3px solid rgba(255, 255, 255, 0.85);
+    outline-offset: -3px;
 }
 
 /*
@@ -46,7 +54,7 @@ body {
 }
 
 /* Present to screen readers, invisible on the drawn screen. */
-#player_label {
+.visually-hidden {
     position: absolute;
     width: 1px;
     height: 1px;
