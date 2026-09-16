@@ -19,6 +19,14 @@
 
 <div id="div_canvas">
     <canvas id="balloon_canvas"></canvas>
+
+    <!-- The name field is a real input, positioned over the canvas and coloured
+         from the same palette. A canvas cannot raise a phone's keyboard, and
+         reimplementing a caret, selection, paste and IME on top of keydown
+         would be worse at all of them than the element the platform provides. -->
+    <label id="player_label" for="player_name">Your name</label>
+    <input id="player_name" type="text" maxlength="24" autocomplete="nickname"
+           autocapitalize="words" spellcheck="false" hidden>
 </div>
 
 </body>

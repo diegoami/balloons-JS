@@ -56,6 +56,21 @@ function saveSetting(key, value) {
     }
 }
 
+/**
+ * The same cleaning the score function applies, done here too so the name you
+ * see is the name that gets stored. Control characters out, 24 characters max,
+ * and an empty field means anonymous rather than a blank row on the board.
+ */
+var MAX_NAME_LENGTH = 24;
+
+function cleanName(value) {
+    if (typeof value !== "string") {
+        return "anonymous";
+    }
+    var cleaned = value.replace(/[\u0000-\u001F\u007F]/g, "").trim();
+    return cleaned.slice(0, MAX_NAME_LENGTH) || "anonymous";
+}
+
 var Game = {};
 Game.fps = 30;
 
@@ -80,7 +95,12 @@ Game.MENU_LOCKOUT_MS = 1200;
  * this is the machinery that swaps one for another.
  */
 Game.enter = function (name) {
+    var previous = Screens[this.screen];
     var screen = Screens[name];
+
+    if (previous && previous.exit) {
+        previous.exit(this);
+    }
 
     this.screen = name;
 
@@ -177,9 +197,21 @@ Game.applyCanvasSize = function () {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     this.ratio = this.width / 1000;
-    this.fontSize = Layout.applyFont(this.ctx, this.width, this.height);
-    this.layout = Layout.compute(this.ctx, this.width, this.height, this.fontSize);
+    this.measureLayout();
     this.palette = Sky.paletteFor(this.difficulty.level);
+};
+
+/**
+ * Works out where everything goes. Separate from sizing the canvas because the
+ * player's name is drawn and tapped, so changing it moves a hit region and the
+ * layout has to be measured again — without resetting the backing store.
+ */
+Game.measureLayout = function () {
+    this.fontSize = Layout.applyFont(this.ctx, this.width, this.height);
+    this.layout = Layout.compute(
+        this.ctx, this.width, this.height, this.fontSize,
+        Layout.PLAYER_PREFIX + this.name
+    );
 };
 
 /**
@@ -304,13 +336,13 @@ Game.bindMenu = function (signal) {
             return;
         }
         var target = Layout.pick(that.layout.targets, that.getCanvasPoint(event));
-        that.pressedLevel = target ? target.level : null;
+        that.pressed = target ? target.id : null;
         repaintIfStatic();
     }, { signal: signal });
 
     var releasePress = function () {
-        if (that.pressedLevel !== null) {
-            that.pressedLevel = null;
+        if (that.pressed !== null) {
+            that.pressed = null;
             repaintIfStatic();
         }
     };
@@ -319,13 +351,18 @@ Game.bindMenu = function (signal) {
     this.canvas.addEventListener("pointerleave", releasePress, { signal: signal });
 
     this.canvas.addEventListener("click", function (event) {
-        that.pressedLevel = null;
+        that.pressed = null;
         if (!that.isMenuLive()) {
             return;
         }
 
         var target = Layout.pick(that.layout.targets, that.getCanvasPoint(event));
-        if (target) {
+        if (!target) {
+            return;
+        }
+        if (target.id === "player") {
+            that.enter("name");
+        } else {
             // The high-score line has no level of its own; it replays the
             // difficulty already selected.
             that.restart(target.level || that.difficulty.level);
@@ -448,7 +485,7 @@ Game.drawMenu = function () {
     for (var i = 0; i < buttons.length; i++) {
         var button = buttons[i];
         var selected = button.level === this.difficulty.level;
-        var pressed = live && button.level === this.pressedLevel;
+        var pressed = live && button.level === this.pressed;
 
         var fill, border, label;
         if (!live) {
@@ -549,6 +586,116 @@ Game.drawCountdown = function (remaining) {
     ctx.restore();
 };
 
+/**
+ * The name line along the bottom: who the score will be posted as, and the way
+ * in to changing it. Underlined because it is the only text on the screen you
+ * can tap that is not obviously a button.
+ */
+Game.drawPlayer = function () {
+    var rect = this.layout.player;
+    var ctx = this.ctx;
+    var live = this.isMenuLive();
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = this.layout.fonts.label;
+
+    // The sky is at its brightest along the bottom edge, so the chip carries
+    // the same scrim the sky uses behind its own text rather than trusting
+    // pale ink to hold up over a lit horizon.
+    Layout.roundedRect(ctx, rect, rect.radius);
+    ctx.fillStyle = this.palette.scrim;
+    ctx.fill();
+
+    if (live && this.pressed === "player") {
+        ctx.fillStyle = this.palette.buttonPressOverlay;
+        ctx.fill();
+    }
+
+    ctx.fillStyle = live ? this.palette.ink : this.palette.inkDisabled;
+    ctx.fillText(
+        Layout.PLAYER_PREFIX + this.name,
+        rect.x + rect.width / 2,
+        rect.y + rect.height / 2
+    );
+    ctx.restore();
+};
+
+/** The name screen: a heading, the field's Save button, and how to get out. */
+Game.drawNameScreen = function () {
+    var ctx = this.ctx;
+    var save = this.layout.name.save;
+
+    this.drawIntro(Layout.NAME_TEXT);
+    this.positionNameField();
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = this.layout.fonts.menu;
+    ctx.lineWidth = Math.max(1, this.layout.line * 0.06);
+
+    Layout.roundedRect(ctx, save, save.radius);
+    ctx.fillStyle = this.pressed === "save" ? this.palette.buttonFill : this.palette.accent;
+    ctx.fill();
+    ctx.fillStyle = this.palette.onAccent;
+    ctx.fillText(save.label, save.x + save.width / 2, save.y + save.height / 2);
+    ctx.restore();
+
+    ctx.font = this.layout.fonts.label;
+    ctx.fillStyle = this.palette.inkSoft;
+    ctx.fillText(Layout.NAME_HINT, this.layout.hint.x, this.layout.hint.y);
+};
+
+/**
+ * Puts the input where the layout says the field is, in the palette's colours.
+ * Done on every paint, so a resize or a rotation moves it with everything else.
+ */
+Game.positionNameField = function () {
+    var field = this.layout.name.field;
+    var style = this.nameField.style;
+
+    style.left = field.x + "px";
+    style.top = field.y + "px";
+    style.width = field.width + "px";
+    style.height = field.height + "px";
+    style.padding = "0 " + Math.round(this.layout.line * 0.4) + "px";
+    style.borderRadius = this.layout.name.save.radius + "px";
+    style.font = this.layout.fonts.menu;
+    style.background = this.palette.buttonFill;
+    style.borderColor = this.palette.buttonBorder;
+    style.color = this.palette.ink;
+    style.caretColor = this.palette.accent;
+};
+
+Game.showNameField = function (value) {
+    this.nameField.hidden = false;
+    this.nameField.value = value;
+    this.positionNameField();
+
+    // Entered by a tap, so this call is still inside that gesture and a phone
+    // will raise its keyboard. select() means the first keystroke replaces the
+    // old name rather than appending to it.
+    this.nameField.focus();
+    this.nameField.select();
+};
+
+Game.hideNameField = function () {
+    this.nameField.blur();
+    this.nameField.hidden = true;
+};
+
+/**
+ * Takes the name, everywhere it is kept. The layout is measured again because
+ * the name is drawn, so its width is also the width of a tap target.
+ */
+Game.setName = function (value) {
+    this.name = cleanName(value);
+    saveSetting("name", this.name);
+    this.measureLayout();
+};
+
 Game.drawBalloons = function () {
     for (var i = 0; i < this.balloons.length; i++) {
         this.balloons[i].draw();
@@ -583,7 +730,7 @@ Game.elapsed = function () {
  * over from the previous game.
  */
 Game.resetRound = function () {
-    this.pressedLevel = null;
+    this.pressed = null;
     this.balloons = [];
     this.balloons_caught = 0;
     this.lostBalloons = 0;
@@ -657,27 +804,26 @@ Game.moveBalloons = function (accelerate) {
 // --------------------------------------------------------------------- boot
 
 Game.init = function () {
-    // Asked once on first visit and remembered afterwards. Previously this
-    // prompted on every single load, and fell back to a plaintext JSONP call
-    // to gd.geobytes.com just to pre-fill the field.
-    var name = loadSetting("name");
-    if (!name) {
-        name = window.prompt("Please enter your name", "anonymous");
-        if (name) {
-            saveSetting("name", name);
-        }
-    }
-    this.name = name || "anonymous";
+    // Asked once on first visit and remembered afterwards. This used to be a
+    // window.prompt(), which is a browser modal: it blocked the first paint, so
+    // the question arrived over a blank page; it could not be styled, restyled
+    // or reopened; some browsers suppress it outright; and once answered there
+    // was no way to change the answer short of clearing the site's data.
+    // Before that it prompted on every single load, and pre-filled the field
+    // from a plaintext JSONP call to gd.geobytes.com.
+    var stored = loadSetting("name");
+    this.name = cleanName(stored);
 
     this.canvas = document.getElementById("balloon_canvas");
     this.ctx = this.canvas.getContext("2d");
+    this.nameField = document.getElementById("player_name");
 
     this.difficulty = Difficulty.get(loadSetting("diff_level"));
     this.balloons = [];
-    this.pressedLevel = null;
+    this.pressed = null;
 
     this.applyCanvasSize();
-    this.enter("title");
+    this.enter(stored ? "title" : "name");
     this.watchViewport();
 };
 

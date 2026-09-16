@@ -15,6 +15,8 @@
  *
  *   enter(game)         once, on arrival. game.state is a fresh object that
  *                       belongs to this screen for as long as it is up.
+ *   exit(game)          once, on the way out, for anything a screen put on the
+ *                       page rather than on the canvas.
  *   bind(game, signal)  attaches input. The signal is aborted on the way out,
  *                       so no screen can leave a listener behind.
  *   update(game)        one frame of whatever moves. Absent on static screens.
@@ -41,10 +43,83 @@ Screens.title = {
         game.drawIntro(Layout.INTRO_TEXT);
         game.drawMenu();
         game.drawScores();
+        game.drawPlayer();
     },
 
     menuLive: function () {
         return true;
+    }
+};
+
+/**
+ * Entering a name.
+ *
+ * On a first visit this is where the game opens, and the title screen's name
+ * line comes back here any time after that. It replaces a window.prompt(),
+ * which asked once over a blank page and then never again.
+ */
+Screens.name = {
+    animated: false,
+
+    enter: function (game) {
+        game.pressed = null;
+        game.showNameField(game.name);
+    },
+
+    exit: function (game) {
+        game.hideNameField();
+    },
+
+    bind: function (game, signal) {
+        var save = function () {
+            game.setName(game.nameField.value);
+            game.enter("title");
+        };
+
+        // The field is a real input, so Enter is how a keyboard finishes and
+        // Go/Done is how a phone does. Escape leaves the name as it was.
+        game.nameField.addEventListener("keydown", function (event) {
+            if (event.key !== "Enter" && event.key !== "Escape") {
+                return;
+            }
+            event.preventDefault();
+
+            // The screen we are about to enter binds a document keydown, and
+            // this event is still on its way up: without this it would arrive
+            // at the title screen as a keypress and start a game.
+            event.stopPropagation();
+
+            if (event.key === "Enter") {
+                save();
+            } else {
+                game.enter("title");
+            }
+        }, { signal: signal });
+
+        game.canvas.addEventListener("pointerdown", function (event) {
+            var point = game.getCanvasPoint(event);
+            game.pressed = Layout.hitRect(game.layout.name.save, point) ? "save" : null;
+            game.paint();
+        }, { signal: signal });
+
+        game.canvas.addEventListener("click", function (event) {
+            var point = game.getCanvasPoint(event);
+            game.pressed = null;
+            if (Layout.hitRect(game.layout.name.save, point)) {
+                save();
+            } else {
+                game.paint();
+            }
+        }, { signal: signal });
+    },
+
+    draw: function (game) {
+        game.clear();
+        game.drawNameScreen();
+    },
+
+    menuLive: function () {
+        return false;
     }
 };
 
@@ -119,7 +194,7 @@ Screens.gameover = {
 
     enter: function (game) {
         game.end_time = game.elapsed();
-        game.pressedLevel = null;
+        game.pressed = null;
 
         // Long enough that the tap which popped the last balloon cannot also
         // restart the game, short enough to read as deliberate. The menu is
@@ -149,6 +224,7 @@ Screens.gameover = {
         );
         game.drawMenu();
         game.drawScores();
+        game.drawPlayer();
         game.drawBalloons();
     },
 
