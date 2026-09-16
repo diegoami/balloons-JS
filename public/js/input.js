@@ -20,16 +20,22 @@ Input.point = function (game, event) {
     };
 };
 
-/** Popping balloons: bound while a round is counting down or being played. */
+/**
+ * Tapping the sky: bound while a round is counting down or being played.
+ *
+ * One tap reaches at most one thing, and which thing is decided by aim rather
+ * than by list order — see Entities.pick. What the tap then means belongs to
+ * whatever was hit: a balloon pops and scores, and the kinds that come later
+ * will answer differently.
+ */
 Input.popping = function (game, signal) {
     game.canvas.addEventListener("click", function (event) {
-        var point = Input.point(game, event);
-        for (var i = game.balloons.length - 1; i >= 0; i--) {
-            if (game.balloons[i].collision(point.x, point.y)) {
-                game.balloons.splice(i, 1);
-                game.balloons_caught++;
-                break;
-            }
+        var hit = Entities.pick(game.entities, Input.point(game, event));
+        if (!hit) {
+            return;
+        }
+        if (hit.tapped(game)) {
+            game.entities.splice(game.entities.indexOf(hit), 1);
         }
     }, { signal: signal });
 };

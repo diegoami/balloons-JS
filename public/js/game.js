@@ -293,9 +293,11 @@ Game.handleResize = function () {
         that.applyCanvasSize();
         that.watchPixelRatio();
 
-        // Balloons captured the old width as their bounce boundary.
-        for (var i = 0; i < that.balloons.length; i++) {
-            that.balloons[i].xmax = that.width;
+        // Entities that care about the shape of the window are told.
+        for (var i = 0; i < that.entities.length; i++) {
+            if (that.entities[i].resized) {
+                that.entities[i].resized(that);
+            }
         }
 
         that.paint();
@@ -383,7 +385,7 @@ Game.elapsed = function () {
  */
 Game.resetRound = function () {
     this.pressed = null;
-    this.balloons = [];
+    this.entities = [];
     this.balloons_caught = 0;
     this.lostBalloons = 0;
     this.end_time = null;
@@ -421,35 +423,59 @@ Game.randomBalloon = function () {
     );
 };
 
+/** Puts something in the sky, in the order it should be drawn. */
+Game.add = function (entity) {
+    this.entities.splice(Entities.insertionPoint(this.entities, entity), 0, entity);
+};
+
+/** How many of one kind are up. The spawn throttle counts balloons, not birds. */
+Game.countOf = function (kind) {
+    var n = 0;
+    for (var i = 0; i < this.entities.length; i++) {
+        if (this.entities[i].kind === kind) {
+            n++;
+        }
+    }
+    return n;
+};
+
 /** Maybe releases one balloon. A fuller sky releases them more slowly. */
 Game.spawnBalloon = function () {
-    var frequency = this.difficulty.frequency - SPEED_MODIFIER * this.balloons.length;
+    var up = this.countOf("balloon");
+    var frequency = this.difficulty.frequency - SPEED_MODIFIER * up;
 
-    if (Math.random() < frequency && this.balloons.length < MAX_BALLOONS) {
-        this.balloons.push(this.randomBalloon());
+    if (Math.random() < frequency && up < MAX_BALLOONS) {
+        this.add(this.randomBalloon());
     }
 };
 
-/** Drops the balloons that reached the top, and says how many got away. */
-Game.removeEscaped = function () {
+/**
+ * Clears out everything that is finished with, and says how many of them got
+ * away. Each kind decides for itself why it is done: a balloon off the top has
+ * escaped and costs the player, and a thing that merely left will not.
+ */
+Game.reap = function () {
     var escaped = 0;
 
-    for (var i = this.balloons.length - 1; i >= 0; i--) {
-        if (this.balloons[i].ycoord <= ESCAPE_COORDS) {
-            this.balloons.splice(i, 1);
-            escaped++;
+    for (var i = this.entities.length - 1; i >= 0; i--) {
+        var why = this.entities[i].gone(this);
+        if (why) {
+            this.entities.splice(i, 1);
+            if (why === "escaped") {
+                escaped++;
+            }
         }
     }
     return escaped;
 };
 
 /**
- * Moves every balloon one step. Accelerating is how the board empties itself
- * once a game is over: the survivors speed up and fly off the top.
+ * Moves everything one step. `leave` is set once a round is over: it is how the
+ * board empties itself, with whatever is left speeding up and clearing off.
  */
-Game.moveBalloons = function (accelerate) {
-    for (var i = 0; i < this.balloons.length; i++) {
-        this.balloons[i].tick(accelerate);
+Game.step = function (leave) {
+    for (var i = 0; i < this.entities.length; i++) {
+        this.entities[i].step(this, leave);
     }
 };
 
@@ -472,7 +498,7 @@ Game.init = function () {
     Announce.find();
 
     this.difficulty = Difficulty.get(loadSetting("diff_level"));
-    this.balloons = [];
+    this.entities = [];
     this.pressed = null;
 
     this.applyCanvasSize();

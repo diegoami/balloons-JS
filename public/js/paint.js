@@ -246,9 +246,10 @@ Paint.nameScreen = function (game) {
     ctx.fillText(Layout.NAME_HINT, game.layout.hint.x, game.layout.hint.y);
 };
 
-Paint.balloons = function (game) {
-    for (var i = 0; i < game.balloons.length; i++) {
-        game.balloons[i].draw();
+/** Everything in the sky, in the order the list keeps: lowest layer first. */
+Paint.entities = function (game) {
+    for (var i = 0; i < game.entities.length; i++) {
+        game.entities[i].draw(game);
     }
 };
 

@@ -139,14 +139,14 @@ Screens.playing = {
     update: function (game) {
         game.ticks++;
 
-        var escaped = game.removeEscaped();
+        var escaped = game.reap();
         if (escaped > 0) {
             game.lostBalloons += escaped;
             Announce.lost(game);
         }
 
         game.spawnBalloon();
-        game.moveBalloons(false);
+        game.step(false);
 
         if (game.lostBalloons >= game.difficulty.maxLost) {
             game.enter("gameover");
@@ -155,7 +155,7 @@ Screens.playing = {
 
     draw: function (game) {
         Paint.sky(game);
-        Paint.balloons(game);
+        Paint.entities(game);
         Paint.hud(game);
     },
 
@@ -189,8 +189,8 @@ Screens.gameover = {
     // Nothing spawns any more; the balloons still in the air accelerate and
     // leave, which is how the board clears itself behind the text.
     update: function (game) {
-        game.removeEscaped();
-        game.moveBalloons(true);
+        game.reap();
+        game.step(true);
     },
 
     draw: function (game) {
@@ -203,7 +203,7 @@ Screens.gameover = {
         Paint.menu(game);
         Paint.scores(game);
         Paint.player(game);
-        Paint.balloons(game);
+        Paint.entities(game);
     },
 
     menuLive: function (game) {

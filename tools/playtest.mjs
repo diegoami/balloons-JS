@@ -68,23 +68,24 @@ const BOT = (o) => `
   window.__stats = { clicks: 0, hits: 0, lifetimes: [], sky: [] };
 
   setInterval(() => {
-    if (!Game.balloons) return;
+    if (!Game.entities) return;
+    const balloons = Game.entities.filter(e => e.kind === 'balloon');
     history.push({
       t: Date.now(),
-      balloons: Game.balloons.map(b => ({ x: b.xcoord, y: b.ycoord }))
+      balloons: balloons.map(b => ({ x: b.xcoord, y: b.ycoord }))
     });
     while (history.length > 40) history.shift();
 
     // How full the sky is. Score cannot tell an easy level from a middling
     // one, because a player who is already clicking as fast as they can pops
     // the same number either way; what changes is how much is coming at them.
-    if (Game.screen === 'playing') window.__stats.sky.push(Game.balloons.length);
+    if (Game.screen === 'playing') window.__stats.sky.push(balloons.length);
 
     // How long each balloon is actually on screen: the player's real window.
     const now = Date.now();
-    Game.balloons.forEach(b => { if (!seen.has(b)) seen.set(b, now); });
+    balloons.forEach(b => { if (!seen.has(b)) seen.set(b, now); });
     for (const [b, born] of seen) {
-      if (!Game.balloons.includes(b)) {
+      if (!Game.entities.includes(b)) {
         window.__stats.lifetimes.push((now - born) / 1000);
         seen.delete(b);
       }
@@ -92,7 +93,7 @@ const BOT = (o) => `
   }, 40);
 
   setInterval(() => {
-    if (Game.screen !== 'playing' || !Game.balloons || !Game.balloons.length) return;
+    if (Game.screen !== 'playing' || !Game.entities || !Game.entities.length) return;
 
     const cutoff = Date.now() - REACTION;
     let memory = null;
