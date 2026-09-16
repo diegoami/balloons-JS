@@ -2,9 +2,17 @@
 
 var ESCAPE_COORDS = -10;
 
+/**
+ * A balloon: the one thing in the sky that is worth points.
+ *
+ * It answers the entity contract in entities.js, so the list that holds it can
+ * hold birds and a boss alongside it without knowing what any of them are.
+ */
 var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, speedScale) {
     var that;
     that = {};
+    that.kind = "balloon";
+    that.layer = Entities.LAYERS.balloon;
     that.xcoord = xcoord ;
     that.ycoord = ycoord ;
     that.size = size;
@@ -15,8 +23,8 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
     that.xdelta = -.5+ Math.random();
     that.xmax = xmax;
 
-    that.tick = function(accelerate) {
-        if (accelerate) {
+    that.step = function(game, leave) {
+        if (leave) {
             that.delta *= 1.01
         }
         that.ycoord = that.ycoord +that.delta;
@@ -41,14 +49,31 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
         return painter;
     };
 
-    that.draw = function() {
+    that.draw = function(game) {
         if (that.ycoord > ESCAPE_COORDS) {
             place().draw();
         }
     };
 
-    that.collision = function(x,y) {
-        return place().check_hit(x,y);
+    that.hits = function (point) {
+        return place().check_hit(point.x, point.y);
     };
+
+    /** Popped, and worth a point. Nothing here yet takes more than one tap. */
+    that.tapped = function (game) {
+        game.balloons_caught++;
+        return true;
+    };
+
+    /** Off the top of the screen is an escape, and escapes cost the player. */
+    that.gone = function () {
+        return that.ycoord <= ESCAPE_COORDS ? "escaped" : null;
+    };
+
+    /** The width it bounces off is the width of the window. */
+    that.resized = function (game) {
+        that.xmax = game.width;
+    };
+
     return that;
 };

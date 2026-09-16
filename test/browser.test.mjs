@@ -271,10 +271,10 @@ await t('balloons spawn and rise during play', async () => {
   const { context, page, errors } = await newGame();
   await page.keyboard.press('e');
   await page.waitForTimeout(2500);
-  await page.waitForFunction(() => Game.balloons.length > 0, null, { timeout: 5000 });
-  const before = await page.evaluate(() => Game.balloons.map(b => b.ycoord));
+  await page.waitForFunction(() => Game.entities.length > 0, null, { timeout: 5000 });
+  const before = await page.evaluate(() => Game.entities.map(b => b.ycoord));
   await page.waitForTimeout(500);
-  const after = await page.evaluate(() => Game.balloons.map(b => b.ycoord));
+  const after = await page.evaluate(() => Game.entities.map(b => b.ycoord));
   assert.ok(before.length > 0, 'no balloons spawned');
   assert.ok(after[0] < before[0], 'balloons should rise (y decreasing)');
   assert.deepEqual(errors, [], errors.join(' | '));
@@ -285,20 +285,20 @@ await t('clicking a balloon pops it and scores a point', async () => {
   const { context, page } = await newGame();
   await page.keyboard.press('e');
   await page.waitForTimeout(2500);
-  await page.waitForFunction(() => Game.balloons.length > 0, null, { timeout: 5000 });
+  await page.waitForFunction(() => Game.entities.length > 0, null, { timeout: 5000 });
 
   const popped = await page.evaluate(async () => {
     // Freeze the loop so the balloon can't drift between reading and clicking.
     Game.stopLoop();
-    const b = Game.balloons[0];
+    const b = Game.entities[0];
     const caughtBefore = Game.balloons_caught;
-    const countBefore = Game.balloons.length;
+    const countBefore = Game.entities.length;
     Game.canvas.dispatchEvent(new MouseEvent('click', {
       clientX: b.xcoord, clientY: b.ycoord, bubbles: true
     }));
     return {
       caughtBefore, caughtAfter: Game.balloons_caught,
-      countBefore, countAfter: Game.balloons.length
+      countBefore, countAfter: Game.entities.length
     };
   });
   assert.equal(popped.caughtAfter, popped.caughtBefore + 1, 'score did not increase');
@@ -383,13 +383,13 @@ await t('no listeners leak across repeated restarts', async () => {
 
   // And functionally: one click must pop exactly one balloon, not one per stacked handler.
   await page.waitForTimeout(2600);
-  await page.waitForFunction(() => Game.balloons.length > 1, null, { timeout: 5000 });
+  await page.waitForFunction(() => Game.entities.length > 1, null, { timeout: 5000 });
   const popped = await page.evaluate(() => {
     Game.stopLoop();
-    const b = Game.balloons[0];
-    const before = Game.balloons.length;
+    const b = Game.entities[0];
+    const before = Game.entities.length;
     Game.canvas.dispatchEvent(new MouseEvent('click', { clientX: b.xcoord, clientY: b.ycoord, bubbles: true }));
-    return { before, after: Game.balloons.length };
+    return { before, after: Game.entities.length };
   });
   assert.equal(popped.after, popped.before - 1, 'one click removed more than one balloon');
   assert.deepEqual(errors, [], errors.join(' | '));
@@ -500,7 +500,7 @@ await t('game still works when the score API is unreachable', async () => {
   await page.waitForTimeout(400);
   await page.keyboard.press('e');
   await page.waitForTimeout(2600);
-  await page.waitForFunction(() => Game.balloons.length > 0, null, { timeout: 5000 });
+  await page.waitForFunction(() => Game.entities.length > 0, null, { timeout: 5000 });
   assert.deepEqual(errors, [], 'a dead leaderboard must not break the game: ' + errors.join(' | '));
   await context.close();
 });
@@ -560,10 +560,10 @@ await t('clicking a balloon still pops it at 2x (no double-applied ratio)', asyn
   const { context, page, errors } = await newGame({ dpr: 2 });
   await page.keyboard.press('e');
   await page.waitForTimeout(2500);
-  await page.waitForFunction(() => Game.balloons.length > 0, null, { timeout: 5000 });
+  await page.waitForFunction(() => Game.entities.length > 0, null, { timeout: 5000 });
   const popped = await page.evaluate(() => {
     Game.stopLoop();
-    const b = Game.balloons[0];
+    const b = Game.entities[0];
     const before = Game.balloons_caught;
     Game.canvas.dispatchEvent(new MouseEvent('click', { clientX: b.xcoord, clientY: b.ycoord, bubbles: true }));
     return { before, after: Game.balloons_caught };
@@ -609,15 +609,15 @@ await t('rotating mid-game keeps play running and balloons in bounds', async () 
   const { context, page, errors } = await newGame({ width: 900, height: 500 });
   await page.keyboard.press('e');
   await page.waitForTimeout(2500);
-  await page.waitForFunction(() => Game.balloons.length > 2, null, { timeout: 5000 });
+  await page.waitForFunction(() => Game.entities.length > 2, null, { timeout: 5000 });
   await page.setViewportSize({ width: 500, height: 900 }); // portrait
   await page.waitForTimeout(400);
   const m = await page.evaluate(() => ({
     screen: Game.screen,
     logicalW: Game.width,
     running: Game.running,
-    maxXmax: Math.max(...Game.balloons.map(b => b.xmax)),
-    count: Game.balloons.length
+    maxXmax: Math.max(...Game.entities.map(b => b.xmax)),
+    count: Game.entities.length
   }));
   assert.equal(m.logicalW, 500);
   assert.equal(m.screen, 'playing', 'game should still be in play after rotating');
@@ -1090,7 +1090,7 @@ await t('balloons stay poppable at any score', async () => {
       let poppable = false;
       for (let x = 0; x < Game.width && !poppable; x += 5) {
         for (let y = 0; y < Game.height; y += 5) {
-          if (balloon.collision(x, y)) { poppable = true; break; }
+          if (balloon.hits({ x, y })) { poppable = true; break; }
         }
       }
       return { caught, size: balloon.size, poppable };
@@ -1696,7 +1696,7 @@ await t('the game keeps the game, and nothing else', async () => {
       .filter(n => typeof window[n] !== 'object'),
     // What the game is left holding.
     kept: ['enter', 'paint', 'advance', 'restart', 'applyCanvasSize', 'randomBalloon',
-           'removeEscaped', 'moveBalloons', 'spawnBalloon', 'init']
+           'reap', 'step', 'add', 'countOf', 'spawnBalloon', 'init']
       .filter(k => typeof Game[k] !== 'function')
   }));
 
@@ -1789,7 +1789,7 @@ await t('a stall is not replayed at full speed', async () => {
     Game.lastFrame = 0;
     Game.accumulator = 0;
     Game.ticks = 0;
-    Game.balloons.length = 0;
+    Game.entities.length = 0;
     Game.lostBalloons = 0;
 
     Game.advance(60000);
@@ -1856,7 +1856,7 @@ await t('a balloon is painted by one painter, not a new one every frame', async 
   const m = await page.evaluate(() => ({
     painters: window.__built.painters,
     colours: window.__built.colours,
-    balloons: Game.balloons.length + Game.balloons_caught + Game.lostBalloons
+    balloons: Game.entities.length + Game.balloons_caught + Game.lostBalloons
   }));
 
   assert.ok(m.balloons > 3, `only ${m.balloons} balloons in three seconds, too few to judge`);
@@ -2210,6 +2210,127 @@ await t('every level still describes itself completely', async () => {
   });
   assert.deepEqual(missing, [],
     'a level is described partly somewhere else: ' + missing);
+  await context.close();
+});
+
+
+// ---------- the sky holds several kinds of thing ----------
+
+/** A stand-in entity: answers the contract, does nothing. */
+const STUB = `(kind, layer, why) => ({
+  kind, layer, xcoord: 0, ycoord: 0,
+  step() {}, draw() {}, hits() { return false; },
+  tapped() { return true; }, gone() { return why || null; }
+})`;
+
+await t('a tap goes where it was aimed, not to whatever comes first in the list', async () => {
+  // While everything in the sky was a balloon, "first one hit, walking the list
+  // backwards" was a fine answer. The moment a bird can overlap a balloon it
+  // decides which one you meant by the order they happened to spawn in.
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press('e');
+  await page.waitForTimeout(2500);
+
+  const runs = await page.evaluate(() => {
+    Game.stopLoop();
+    const out = [];
+
+    ['near last', 'near first'].forEach(order => {
+      Game.entities.length = 0;
+      const far = Game.randomBalloon();
+      const near = Game.randomBalloon();
+      far.xcoord = 300; far.ycoord = 300;
+      near.xcoord = 330; near.ycoord = 300;
+
+      // Overlapping: both contain the point, 2px from one centre and 28 from
+      // the other. Aim, not order, has to decide.
+      const pair = order === 'near last' ? [far, near] : [near, far];
+      pair.forEach(e => Game.entities.push(e));
+
+      Game.canvas.dispatchEvent(new MouseEvent('click', {
+        clientX: 328, clientY: 300, bubbles: true
+      }));
+      out.push({
+        order,
+        left: Game.entities.length,
+        tookNear: !Game.entities.includes(near),
+        bothWereHit: far.hits({ x: 328, y: 300 }) && near.hits({ x: 328, y: 300 })
+      });
+    });
+    return out;
+  });
+
+  runs.forEach(r => {
+    assert.ok(r.bothWereHit, `${r.order}: the two did not overlap, so this proves nothing`);
+    assert.equal(r.left, 1, `${r.order}: one tap removed ${2 - r.left} things`);
+    assert.ok(r.tookNear, `${r.order}: the tap landed on the far one`);
+  });
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the sky keeps its draw order however things arrive', async () => {
+  const { context, page } = await newGame();
+  const order = await page.evaluate((stub) => {
+    const make = eval(stub);
+    Game.entities.length = 0;
+    // Deliberately backwards: a boss spawning before a balloon must still end
+    // up drawn over it.
+    Game.add(make('boss', Entities.LAYERS.boss));
+    Game.add(make('balloon', Entities.LAYERS.balloon));
+    Game.add(make('shot', Entities.LAYERS.shot));
+    Game.add(make('bird', Entities.LAYERS.bird));
+    Game.add(make('balloon', Entities.LAYERS.balloon));
+    return Game.entities.map(e => e.kind);
+  }, STUB);
+
+  assert.deepEqual(order, ['balloon', 'balloon', 'bird', 'boss', 'shot'],
+    'things are not kept in the order they should be drawn');
+  await context.close();
+});
+
+await t('leaving is free, escaping is not', async () => {
+  // A bird crossing the screen and going is not a balloon getting away, and
+  // the difference is the entity's to declare.
+  const { context, page } = await newGame();
+  const m = await page.evaluate((stub) => {
+    const make = eval(stub);
+    Game.stopLoop();
+    Game.entities.length = 0;
+    Game.add(make('bird', Entities.LAYERS.bird, 'left'));
+    Game.add(make('balloon', Entities.LAYERS.balloon, 'escaped'));
+    Game.add(make('balloon', Entities.LAYERS.balloon, null));
+
+    const escaped = Game.reap();
+    return { escaped, left: Game.entities.length };
+  }, STUB);
+
+  assert.equal(m.escaped, 1, 'the thing that merely left was counted against the player');
+  assert.equal(m.left, 1, 'reaping did not clear out what was finished with');
+  await context.close();
+});
+
+await t('everything in the sky answers the same questions', async () => {
+  const { context, page } = await newGame();
+  await page.keyboard.press('s');
+  await page.waitForTimeout(2500);
+  await page.waitForFunction(() => Game.entities.length > 2, null, { timeout: 5000 });
+
+  const m = await page.evaluate(() => {
+    const contract = ['step', 'draw', 'hits', 'tapped', 'gone'];
+    const broken = [];
+    Game.entities.forEach((e, i) => {
+      if (typeof e.kind !== 'string') { broken.push(i + '.kind'); }
+      if (typeof e.layer !== 'number') { broken.push(i + '.layer'); }
+      contract.forEach(m => {
+        if (typeof e[m] !== 'function') { broken.push(i + '.' + m); }
+      });
+    });
+    return { broken, kinds: [...new Set(Game.entities.map(e => e.kind))] };
+  });
+
+  assert.deepEqual(m.broken, [], 'an entity does not answer the contract: ' + m.broken);
+  assert.deepEqual(m.kinds, ['balloon'], 'phase 1 adds no new kinds');
   await context.close();
 });
 
