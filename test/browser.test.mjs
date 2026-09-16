@@ -212,7 +212,7 @@ await t('the selected difficulty is drawn differently from the rest', async () =
   const m = await page.evaluate(() => {
     const L = Game.layout, ctx = Game.ctx;
     Game.difficulty.level = 'H';
-    Game.drawTitleScreen();
+    Game.paint();
     const sample = (button) => {
       const b = button;
       const d = ctx.getImageData(
@@ -301,7 +301,7 @@ await t('game over submits the score and shows the leaderboard', async () => {
   await page.keyboard.press('v'); // VHard: a single lost balloon ends it
   await page.waitForTimeout(2500);
   await page.evaluate(() => { Game.balloons_caught = 17; });
-  await page.waitForFunction(() => Game.isrestart === true, null, { timeout: 20000 });
+  await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
 
   await page.waitForTimeout(600);
   const posted = apiHits.find(h => h.method === 'POST');
@@ -344,15 +344,15 @@ await t('no listeners leak across repeated restarts', async () => {
   assert.ok(onTitle > 0 && onTitle < 20,
     `implausible title-screen listener count: ${onTitle}`);
 
-  // Both binding paths have to be exercised. setDifficulty() binds the menu
-  // handlers and do_click() binds the popping handler; looping on restart()
-  // alone only ever re-runs the second, so a listener leaked by the first
-  // would go unnoticed.
+  // Both binding paths have to be exercised. The title screen binds the menu
+  // handlers and a round binds the popping handler; looping on restart() alone
+  // only ever re-runs the second, so a listener leaked by the first would go
+  // unnoticed.
   const seen = await page.evaluate(async () => {
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const counts = { menu: [], play: [] };
     for (let i = 0; i < 6; i++) {
-      Game.setDifficulty();
+      Game.enter('title');
       await sleep(20);
       counts.menu.push(window.__live);
       Game.restart('E');
@@ -388,13 +388,13 @@ await t('a second game after game over still responds to input', async () => {
   const { context, page, errors } = await newGame();
   await page.keyboard.press('v');
   await page.waitForTimeout(2500);
-  await page.waitForFunction(() => Game.isrestart === true, null, { timeout: 20000 });
+  await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
   await page.waitForTimeout(5600); // difficulty input is rebound after 5s
   await page.keyboard.press('e');
   await page.waitForTimeout(2500);
-  const state = await page.evaluate(() => ({ diff: Game.difficulty.level, restart: Game.isrestart }));
+  const state = await page.evaluate(() => ({ diff: Game.difficulty.level, screen: Game.screen }));
   assert.equal(state.diff, 'E', 'could not start a new game after game over');
-  assert.equal(state.restart, false);
+  assert.equal(state.screen, 'playing');
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
@@ -932,9 +932,9 @@ await t('the countdown counts down and then starts the game', async () => {
   const { context, page } = await newGame();
   await page.keyboard.press('s');
   await page.waitForTimeout(250);
-  const first = await page.evaluate(() => Math.ceil((Game.countdownEnd - Date.now()) / 1000));
+  const first = await page.evaluate(() => Math.ceil((Game.state.endsAt - Date.now()) / 1000));
   await page.waitForTimeout(1000);
-  const second = await page.evaluate(() => Math.ceil((Game.countdownEnd - Date.now()) / 1000));
+  const second = await page.evaluate(() => Math.ceil((Game.state.endsAt - Date.now()) / 1000));
   assert.ok(second < first, `countdown did not advance: ${first} then ${second}`);
 
   // Something is drawn over the sky while counting down; it used to be blank.
@@ -1187,7 +1187,7 @@ await t('one table describes a level, and everything reads it', async () => {
   const m = await page.evaluate(() => {
     Game.difficulty = Difficulty.get('H');
     Game.palette = Sky.paletteFor('H');
-    Game.drawTitleScreen();
+    Game.paint();
     return {
       table: Difficulty.get('H'),
       buttonLabels: Game.layout.menu.buttons.map(b => b.label),
@@ -1268,6 +1268,114 @@ await t('a stored level that no longer exists falls back to the default', async 
     fallback: Difficulty.DEFAULT
   }));
   assert.equal(m.level, m.fallback, 'an unknown stored level should fall back');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+
+// ---------- screens ----------
+
+await t('each screen keeps its own state, and gets a clean one', async () => {
+  const { context, page, errors } = await newGame();
+
+  // The title screen is not counting anything down and nothing is locked out.
+  const title = await page.evaluate(() => ({ screen: Game.screen, keys: Object.keys(Game.state) }));
+  assert.equal(title.screen, 'title');
+  assert.deepEqual(title.keys, [], 'the title screen arrived holding state: ' + title.keys);
+
+  await page.keyboard.press('v');
+  await page.waitForTimeout(300);
+  const starting = await page.evaluate(() => ({ screen: Game.screen, keys: Object.keys(Game.state) }));
+  assert.equal(starting.screen, 'starting');
+  assert.deepEqual(starting.keys, ['endsAt'], 'the countdown deadline is the only state it needs');
+
+  // The deadline used to be Game.countdownEnd, a field that outlived the
+  // countdown by the whole rest of the session.
+  await page.waitForTimeout(2200);
+  const playing = await page.evaluate(() => ({ screen: Game.screen, keys: Object.keys(Game.state) }));
+  assert.equal(playing.screen, 'playing');
+  assert.deepEqual(playing.keys, [], 'play is still carrying the countdown deadline');
+
+  await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
+  const over = await page.evaluate(() => ({
+    keys: Object.keys(Game.state),
+    locked: Game.state.liveAt > Date.now()
+  }));
+  assert.deepEqual(over.keys, ['liveAt']);
+  assert.ok(over.locked, 'the menu lockout deadline was not set on arrival');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the fields a screen replaced are gone from the game', async () => {
+  const { context, page } = await newGame();
+  const leftovers = await page.evaluate(() =>
+    ['isrestart', 'showscores', 'menuLiveAt', 'countdownEnd', 'time_to_show']
+      .filter(k => k in Game));
+  assert.deepEqual(leftovers, [],
+    'state that belongs to a screen is still living on Game: ' + leftovers);
+  await context.close();
+});
+
+await t('keys and the menu do nothing while a game is being played', async () => {
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press('h');
+  await page.waitForTimeout(2400);
+  assert.equal(await page.evaluate(() => Game.screen), 'playing');
+
+  // Only the popping handler is bound during play: the difficulty keys and the
+  // menu buttons are not listening, so neither can restart the game under you.
+  const box = await page.evaluate(() => Game.layout.menu.buttons[0]);
+  await page.keyboard.press('e');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(200);
+
+  const m = await page.evaluate(() => ({ screen: Game.screen, level: Game.difficulty.level }));
+  assert.equal(m.screen, 'playing', 'input meant for the menu interrupted the game');
+  assert.equal(m.level, 'H', 'a difficulty key changed the level mid-game');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the leaderboard is fetched once, however often it is asked for', async () => {
+  boards.clear();
+  apiHits.length = 0;
+  const { context, page } = await newGame();
+  await page.waitForTimeout(300);
+  const onLoad = apiHits.filter(h => h.method === 'GET').length;
+
+  // The game-over screen asks for the board on every frame it draws. Asking
+  // used to mean fetching: until the first response landed, the game issued
+  // thirty requests a second.
+  await page.evaluate(async () => {
+    Game.scores = undefined;
+    for (let i = 0; i < 10; i++) { Game.loadScores(); }
+    await new Promise(r => setTimeout(r, 300));
+  });
+
+  const gets = apiHits.filter(h => h.method === 'GET').length - onLoad;
+  assert.equal(gets, 1, `ten requests for the board made ${gets} fetches`);
+  await context.close();
+});
+
+await t('a new score invalidates the board that was already on its way', async () => {
+  boards.clear();
+  apiHits.length = 0;
+  const { context, page, errors } = await newGame({ name: 'Diego' });
+
+  const board = await page.evaluate(async () => {
+    Game.scores = undefined;
+    Game.loadScores();            // in flight, and about to be out of date
+    Game.balloons_caught = 42;
+    Game.submitScore(42);         // supersedes it
+    Game.loadScores();
+    await new Promise(r => setTimeout(r, 600));
+    return Game.scores;
+  });
+
+  assert.ok(Array.isArray(board), 'no board was drawn after submitting a score');
+  assert.ok(board.some(entry => entry.score === 42),
+    'the board kept a version fetched before the score was submitted: ' + JSON.stringify(board));
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
