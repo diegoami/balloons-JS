@@ -16,14 +16,18 @@ can be changed any time from the `Playing as ...` chip along the bottom.
 public/               everything served to the browser
   index.html
   css/styles.css
-  js/game.js          the game: loop, input, scoring, drawing
-  js/screens.js       what the game is being: name, title, countdown, play, over
+  js/game.js          the game: the loop, the canvas, the balloons
+  js/screens.js       what it is being: name, title, countdown, play, game over
+  js/paint.js         what it draws
+  js/input.js         what it listens to
+  js/scores.js        the leaderboard client
+  js/namefield.js     the one DOM element in the game
+  js/layout.js        grid, type scale and every on-screen position
+  js/sky.js           the drawn sky: one palette per difficulty
+  js/difficulty.js    what each level is: lives, shrink and speed ramps
   js/gameballoons.js  balloon entity: position, drift, collision
   js/htmlballoons.js  draws a balloon on a canvas with bezier curves
   js/color.js         lighten/darken helpers and the gradient palette
-  js/difficulty.js    what each level is: lives, shrink and speed ramps
-  js/layout.js        grid, type scale and every on-screen position
-  js/sky.js           the drawn sky: one palette per difficulty
   favicon.svg         the tab icon; the .ico and touch icon are built from it
 netlify/functions/
   scores.mts          high-score API, backed by Netlify Blobs
@@ -32,8 +36,10 @@ netlify.toml          publish directory and headers
 ```
 
 There is no build step and no runtime dependencies in the browser: the page
-loads eight plain scripts and nothing else. The sky is drawn, not an image, so
-apart from the tab icon the game ships no images at all.
+loads twelve plain scripts and nothing else. Each one defines a namespace and
+touches nothing at parse time, so the order they load in does not matter. The
+sky is drawn, not an image, so apart from the tab icon the game ships no images
+at all.
 
 ## Running locally
 

@@ -31,19 +31,19 @@ Screens.title = {
     animated: false,
 
     enter: function (game) {
-        game.loadScores();
+        Scores.load(game);
     },
 
     bind: function (game, signal) {
-        game.bindMenu(signal);
+        Input.menu(game, signal);
     },
 
     draw: function (game) {
-        game.clear();
-        game.drawIntro(Layout.INTRO_TEXT);
-        game.drawMenu();
-        game.drawScores();
-        game.drawPlayer();
+        Paint.sky(game);
+        Paint.intro(game, Layout.INTRO_TEXT);
+        Paint.menu(game);
+        Paint.scores(game);
+        Paint.player(game);
     },
 
     menuLive: function () {
@@ -63,59 +63,20 @@ Screens.name = {
 
     enter: function (game) {
         game.pressed = null;
-        game.showNameField(game.name);
+        NameField.show(game, game.name);
     },
 
     exit: function (game) {
-        game.hideNameField();
+        NameField.hide();
     },
 
     bind: function (game, signal) {
-        var save = function () {
-            game.setName(game.nameField.value);
-            game.enter("title");
-        };
-
-        // The field is a real input, so Enter is how a keyboard finishes and
-        // Go/Done is how a phone does. Escape leaves the name as it was.
-        game.nameField.addEventListener("keydown", function (event) {
-            if (event.key !== "Enter" && event.key !== "Escape") {
-                return;
-            }
-            event.preventDefault();
-
-            // The screen we are about to enter binds a document keydown, and
-            // this event is still on its way up: without this it would arrive
-            // at the title screen as a keypress and start a game.
-            event.stopPropagation();
-
-            if (event.key === "Enter") {
-                save();
-            } else {
-                game.enter("title");
-            }
-        }, { signal: signal });
-
-        game.canvas.addEventListener("pointerdown", function (event) {
-            var point = game.getCanvasPoint(event);
-            game.pressed = Layout.hitRect(game.layout.name.save, point) ? "save" : null;
-            game.paint();
-        }, { signal: signal });
-
-        game.canvas.addEventListener("click", function (event) {
-            var point = game.getCanvasPoint(event);
-            game.pressed = null;
-            if (Layout.hitRect(game.layout.name.save, point)) {
-                save();
-            } else {
-                game.paint();
-            }
-        }, { signal: signal });
+        Input.name(game, signal);
     },
 
     draw: function (game) {
-        game.clear();
-        game.drawNameScreen();
+        Paint.sky(game);
+        Paint.nameScreen(game);
     },
 
     menuLive: function () {
@@ -137,7 +98,7 @@ Screens.starting = {
     },
 
     bind: function (game, signal) {
-        game.bindPopping(signal);
+        Input.popping(game, signal);
     },
 
     update: function (game) {
@@ -147,9 +108,9 @@ Screens.starting = {
     },
 
     draw: function (game) {
-        game.clear();
-        game.drawMenu();
-        game.drawCountdown(game.state.endsAt - Date.now());
+        Paint.sky(game);
+        Paint.menu(game);
+        Paint.countdown(game, game.state.endsAt - Date.now());
     },
 
     menuLive: function () {
@@ -165,7 +126,7 @@ Screens.playing = {
     },
 
     bind: function (game, signal) {
-        game.bindPopping(signal);
+        Input.popping(game, signal);
     },
 
     update: function (game) {
@@ -179,9 +140,9 @@ Screens.playing = {
     },
 
     draw: function (game) {
-        game.clear();
-        game.drawBalloons();
-        game.drawHud();
+        Paint.sky(game);
+        Paint.balloons(game);
+        Paint.hud(game);
     },
 
     menuLive: function () {
@@ -202,12 +163,12 @@ Screens.gameover = {
         // while nothing is listening.
         game.state.liveAt = Date.now() + Game.MENU_LOCKOUT_MS;
 
-        game.submitScore(game.balloons_caught);
-        game.loadScores();
+        Scores.submit(game, game.balloons_caught);
+        Scores.load(game);
     },
 
     bind: function (game, signal) {
-        game.bindMenu(signal);
+        Input.menu(game, signal);
     },
 
     // Nothing spawns any more; the balloons still in the air accelerate and
@@ -218,14 +179,15 @@ Screens.gameover = {
     },
 
     draw: function (game) {
-        game.clear();
-        game.drawIntro(
+        Paint.sky(game);
+        Paint.intro(
+            game,
             "Game Over. Score: " + game.balloons_caught + ", Time: " + game.end_time
         );
-        game.drawMenu();
-        game.drawScores();
-        game.drawPlayer();
-        game.drawBalloons();
+        Paint.menu(game);
+        Paint.scores(game);
+        Paint.player(game);
+        Paint.balloons(game);
     },
 
     menuLive: function (game) {
