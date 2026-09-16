@@ -2,6 +2,18 @@ var BALLOON_FREQUENCY = 0.1;
 var BALLOON_SPEED = 5.5;
 var MAX_BALLOONS = 20;
 var RATIO_SIZE = 1;
+
+/**
+ * Balloons shrink as the score climbs. Without a floor that shrink ran past
+ * zero and turned negative: at RATIO_DECREASE balloons popped the radius hits
+ * 0, and `check_hit` compares against it, so no point on the screen can pop
+ * one. Every long game ended the same way, with an unwinnable board that
+ * looked like difficulty. On VHard that was about 300 balloons, roughly two
+ * and a half minutes in.
+ *
+ * 0.4 keeps the escalation visible while leaving the balloon hittable forever.
+ */
+var MIN_RATIO_SIZE = 0.4;
 var MAX_LOST_BALLOONS = 15;
 
 var RATIO_DECREASE = 2000;
@@ -507,7 +519,7 @@ Game.randomBalloon = function () {
     var max_height = this.height;
     var xcoord = Math.floor(Math.random() * this.layout.spawn.width) + this.layout.spawn.min;
     var ycoord = max_height;
-    var ratioSize = RATIO_SIZE - this.balloons_caught / RATIO_DECREASE;
+    var ratioSize = Math.max(MIN_RATIO_SIZE, RATIO_SIZE - this.balloons_caught / RATIO_DECREASE);
     var randomSize = (24 + Math.floor(Math.random() * 50)) * this.ratio * ratioSize;
     var getRandomRGB = function () { return Math.floor(Math.random() * 255); };
     var randomColor = { r: getRandomRGB(), g: getRandomRGB(), b: getRandomRGB() };

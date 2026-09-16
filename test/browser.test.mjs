@@ -1020,6 +1020,72 @@ await t('pressing a button changes how it looks, selected or not', async () => {
 });
 
 
+
+// ---------- balloon size floor ----------
+
+await t('balloons stay poppable at any score', async () => {
+  // Without a floor the size factor ran past zero and went negative. check_hit
+  // compares against the radius, so no point on the screen could pop one, and
+  // every long game ended on an unwinnable board. On VHard that arrived after
+  // roughly 300 balloons: about two and a half minutes of play.
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press('v');
+  await page.waitForTimeout(2400);
+
+  const probed = await page.evaluate(() => {
+    const check = (caught) => {
+      Game.balloons_caught = caught;
+      const balloon = Game.randomBalloon();
+      let poppable = false;
+      for (let x = 0; x < Game.width && !poppable; x += 5) {
+        for (let y = 0; y < Game.height; y += 5) {
+          if (balloon.collision(x, y)) { poppable = true; break; }
+        }
+      }
+      return { caught, size: balloon.size, poppable };
+    };
+    // RATIO_DECREASE on VHard is 300; probe either side of it and well beyond.
+    return [0, 150, 299, 300, 400, 1000, 5000].map(check);
+  });
+
+  probed.forEach(r => {
+    assert.ok(r.size > 0, `balloon size ${r.size.toFixed(1)} at ${r.caught} popped`);
+    assert.ok(r.poppable, `no point on screen pops a balloon at ${r.caught} popped ` +
+      `(size ${r.size.toFixed(1)})`);
+  });
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('balloons still shrink as the score climbs, down to the floor', async () => {
+  const { context, page } = await newGame();
+  await page.keyboard.press('v');
+  await page.waitForTimeout(2400);
+
+  const m = await page.evaluate(() => {
+    // Average out the random size component so the trend is the only signal.
+    const mean = (caught) => {
+      Game.balloons_caught = caught;
+      let total = 0;
+      for (let i = 0; i < 400; i++) total += Game.randomBalloon().size;
+      return total / 400;
+    };
+    return {
+      floor: MIN_RATIO_SIZE,
+      at0: mean(0), at150: mean(150), at300: mean(300), at3000: mean(3000)
+    };
+  });
+
+  assert.ok(m.at150 < m.at0, 'balloons should shrink as the score climbs');
+  assert.ok(m.at300 < m.at150, 'shrink should continue toward the floor');
+  assert.ok(Math.abs(m.at3000 - m.at300) / m.at300 < 0.05,
+    `size should settle at the floor, not keep falling (${m.at300.toFixed(1)} -> ${m.at3000.toFixed(1)})`);
+  assert.ok(m.at3000 / m.at0 > m.floor * 0.9 && m.at3000 / m.at0 < m.floor * 1.1,
+    `floor should land near ${m.floor} of full size, got ${(m.at3000 / m.at0).toFixed(2)}`);
+  await context.close();
+});
+
+
 await browser.close();
 server.close();
 
