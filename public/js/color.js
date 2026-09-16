@@ -7,30 +7,6 @@
  * itself, which is what the original did, so balloons render identically.
  */
 
-/** CSS colour names with a blue channel below 200, used for the title gradient. */
-var GRADIENT_COLORS = [
-    "bisque", "black", "brown", "burlywood", "cadetblue", "chartreuse",
-    "chocolate", "coral", "crimson", "darkblue", "darkcyan", "darkgoldenrod",
-    "darkgray", "darkgreen", "darkgrey", "darkkhaki", "darkmagenta",
-    "darkolivegreen", "darkorange", "darkred", "darksalmon", "darkseagreen",
-    "darkslateblue", "darkslategray", "darkslategrey", "deeppink", "dimgray",
-    "dimgrey", "firebrick", "forestgreen", "gold", "goldenrod", "gray", "green",
-    "greenyellow", "grey", "hotpink", "indianred", "indigo", "khaki",
-    "lawngreen", "lightcoral", "lightgreen", "lightpink", "lightsalmon",
-    "lightseagreen", "lightslategray", "lightslategrey", "lime", "limegreen",
-    "maroon", "mediumaquamarine", "mediumseagreen", "mediumspringgreen",
-    "mediumvioletred", "midnightblue", "moccasin", "navajowhite", "navy",
-    "olive", "olivedrab", "orange", "orangered", "palegoldenrod", "palegreen",
-    "palevioletred", "peachpuff", "peru", "purple", "red", "rosybrown",
-    "saddlebrown", "salmon", "sandybrown", "seagreen", "sienna", "silver",
-    "slategray", "slategrey", "springgreen", "steelblue", "tan", "teal",
-    "tomato", "wheat", "yellow", "yellowgreen"
-];
-
-function getRandomCssColor() {
-    return GRADIENT_COLORS[Math.floor(Math.random() * GRADIENT_COLORS.length)];
-}
-
 /** Returns [hue 0-360, saturation 0-100, lightness 0-100]. */
 function rgbToHsl(r, g, b) {
     r /= 255;

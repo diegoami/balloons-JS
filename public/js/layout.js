@@ -15,15 +15,19 @@
 
 var Layout = {};
 
-Layout.MENU_PREFIX = "Tap ";
-
-/** The difficulty menu. Offsets into the drawn string are derived, not counted. */
+/**
+ * The difficulty menu. Each item is laid out as its own button, so the labels
+ * no longer have to be substrings of one drawn string and the boxes can be
+ * sized for a fingertip in both directions.
+ */
 Layout.MENU_ITEMS = [
-    { level: "E", label: "E: Easy" },
-    { level: "S", label: "S: Standard" },
-    { level: "H", label: "H: Hard" },
-    { level: "V", label: "V: VHard" }
+    { level: "E", label: "Easy" },
+    { level: "S", label: "Standard" },
+    { level: "H", label: "Hard" },
+    { level: "V", label: "VHard" }
 ];
+
+Layout.HINT_TEXT = "Press E S H V to choose, space to replay";
 
 Layout.INTRO_TEXT = "Stop the balloons, before it is too late !!";
 Layout.HIGH_SCORES_TEXT = "High Scores - ";
@@ -53,6 +57,12 @@ Layout.GRID = {
     scoreRowStep: 2.5,
     scoreRowCount: 3,
 
+    /** Button padding and spacing, in line heights. */
+    button: { padX: 0.55, padY: 0.28, gap: 0.34, radius: 0.28 },
+
+    /** Gaps in the vertical flow, in line heights. */
+    gaps: { afterMenu: 0.95, afterHint: 1.5, beforeScores: 1.7 },
+
     /** A line height, as a multiple of the advance width of a capital M. */
     lineRatio: 1.3,
 
@@ -61,6 +71,20 @@ Layout.GRID = {
 
     baseFontSize: 30,
     minFontSize: 12,
+
+    /**
+     * Type scale, as multiples of the base size. Positions stay on the base
+     * line rhythm; only the glyphs change size, so hierarchy does not disturb
+     * the composition.
+     */
+    type: {
+        intro: 1.15,
+        menu: 1,
+        label: 0.82,
+        score: 1,
+        hud: 0.92,
+        countdown: 2.4
+    },
 
     /**
      * Smallest thing worth asking a finger to hit, in CSS pixels. Apple asks
@@ -92,27 +116,6 @@ function atLeastTouchSize(rect) {
     };
 }
 
-/** The drawn menu string, plus where each label starts within it. */
-(function buildMenu() {
-    var text = Layout.MENU_PREFIX;
-    var items = [];
-
-    for (var i = 0; i < Layout.MENU_ITEMS.length; i++) {
-        if (i > 0) {
-            text += ", ";
-        }
-        items.push({
-            level: Layout.MENU_ITEMS[i].level,
-            offset: text.length,
-            length: Layout.MENU_ITEMS[i].label.length
-        });
-        text += Layout.MENU_ITEMS[i].label;
-    }
-
-    Layout.MENU_TEXT = text;
-    Layout.MENU_SLOTS = items;
-}());
-
 /**
  * Picks a font size for the viewport and sets it on the context.
  *
@@ -131,11 +134,13 @@ Layout.applyFont = function (ctx, width, height) {
     size = Math.round(size);
     ctx.font = size + "px Verdana";
 
+    // The hint line is the longest single run of text drawn, so it is what
+    // decides whether the composition fits the width.
     var available = width * (1 - 2 * G.columns.margin);
-    var menuWidth = ctx.measureText(Layout.MENU_TEXT).width;
+    var longest = ctx.measureText(Layout.HINT_TEXT).width;
 
-    if (menuWidth > available) {
-        size = Math.max(1, Math.floor(size * (available / menuWidth)));
+    if (longest > available) {
+        size = Math.max(1, Math.floor(size * (available / longest)));
         ctx.font = size + "px Verdana";
     }
 
@@ -147,68 +152,109 @@ Layout.applyFont = function (ctx, width, height) {
  * Regions that are both drawn and clicked return a single rect, so the two can
  * never drift apart the way the difficulty boxes used to.
  */
-Layout.compute = function (ctx, width, height) {
+Layout.compute = function (ctx, width, height, fontSize) {
     var G = Layout.GRID;
     var line = ctx.measureText("M").width * G.lineRatio;
-    var unit = ctx.measureText(Layout.MENU_TEXT).width / Layout.MENU_TEXT.length;
     var left = width * G.columns.margin;
+    var available = width * (1 - 2 * G.columns.margin);
 
-    var menuY = line * G.rows.menu;
-    var headingY = line * G.rows.scoresHeading;
-
-    // The box drawn around each label is grown to the touch minimum and
-    // recentred on the text, so what is drawn is what can be hit. Only the
-    // width is allowed to differ: widening the boxes would overlap them, since
-    // they bracket substrings of one drawn string. Milestone 3 turns these into
-    // laid-out buttons and that exception goes away.
-    var naturalHeight = line * 1.25;
-    var menuHeight = Math.max(naturalHeight, G.minTouchTarget);
-    var menuTop = (menuY - line * 0.75) + naturalHeight / 2 - menuHeight / 2;
-
-    var boxes = [];
-    for (var i = 0; i < Layout.MENU_SLOTS.length; i++) {
-        var slot = Layout.MENU_SLOTS[i];
-        var box = {
-            level: slot.level,
-            x: left + unit * (slot.offset - 0.5),
-            width: unit * (slot.length + 0.5)
-        };
-        box.hit = atLeastTouchSize({
-            x: box.x, y: menuTop, width: box.width, height: menuHeight
-        });
-        boxes.push(box);
+    var fonts = {};
+    for (var role in G.type) {
+        if (Object.prototype.hasOwnProperty.call(G.type, role)) {
+            fonts[role] = Math.max(1, Math.round(fontSize * G.type[role])) + "px Verdana";
+        }
     }
+
+    // --- difficulty buttons, flowed left to right and wrapped if they overrun
+
+    var padX = line * G.button.padX;
+    var padY = line * G.button.padY;
+    var gap = line * G.button.gap;
+    var buttonHeight = Math.max(line + padY * 2, G.minTouchTarget);
+
+    ctx.font = fonts.menu;
+    var widths = Layout.MENU_ITEMS.map(function (item) {
+        return Math.max(ctx.measureText(item.label).width + padX * 2, G.minTouchTarget);
+    });
+    ctx.font = fonts.score;
+
+    var buttons = [];
+    var rowTop = line * G.rows.menu;
+    var x = left;
+    var rowCount = 1;
+
+    for (var i = 0; i < Layout.MENU_ITEMS.length; i++) {
+        if (i > 0 && x + widths[i] - left > available) {
+            x = left;
+            rowTop += buttonHeight + gap;
+            rowCount++;
+        }
+        buttons.push({
+            level: Layout.MENU_ITEMS[i].level,
+            label: Layout.MENU_ITEMS[i].label,
+            x: x,
+            y: rowTop,
+            width: widths[i],
+            height: buttonHeight,
+            radius: line * G.button.radius
+        });
+        x += widths[i] + gap;
+    }
+
+    var menuTop = line * G.rows.menu;
+    var menuBottom = rowTop + buttonHeight;
+
+    // Drawn rect and hit rect are the same object now: buttons are laid out
+    // rather than bracketing substrings, so both directions can meet the touch
+    // minimum. The milestone 2 width exception is gone.
+    for (var b = 0; b < buttons.length; b++) {
+        buttons[b].hit = {
+            x: buttons[b].x, y: buttons[b].y,
+            width: buttons[b].width, height: buttons[b].height
+        };
+    }
+
+    // --- everything below the menu flows from its actual bottom edge
+
+    var hintY = menuBottom + line * G.gaps.afterMenu;
+    var headingY = hintY + line * G.gaps.afterHint;
+    var firstRowY = headingY + line * G.gaps.beforeScores;
 
     var rows = [];
     for (var r = 0; r < G.scoreRowCount; r++) {
-        rows.push(line * (G.rows.firstScore + r * G.scoreRowStep));
+        rows.push(firstRowY + line * r * G.scoreRowStep);
     }
 
     var scoresHit = atLeastTouchSize({
         x: width * G.columns.scoresHeading,
         y: headingY - line / 2,
-        width: unit * (Layout.HIGH_SCORES_TEXT.length + 4),
+        width: ctx.measureText(Layout.HIGH_SCORES_TEXT + "S").width,
         height: line
     });
 
-    var targets = boxes.map(function (box) {
-        return { level: box.level, hit: box.hit };
+    var targets = buttons.map(function (button) {
+        return { level: button.level, hit: button.hit };
     });
     targets.push({ level: null, hit: scoresHit });
 
     return {
         line: line,
-        unit: unit,
+        fonts: fonts,
 
         intro: { x: left, y: line * G.rows.intro },
 
         menu: {
             x: left,
-            y: menuY,
             top: menuTop,
-            height: menuHeight,
-            boxes: boxes
+            bottom: menuBottom,
+            height: menuBottom - menuTop,
+            rows: rowCount,
+            buttons: buttons
         },
+
+        hint: { x: left, y: hintY },
+
+        countdown: { x: width / 2, y: headingY + line * 1.4 },
 
         scores: {
             heading: { x: width * G.columns.scoresHeading, y: headingY },
@@ -233,9 +279,20 @@ Layout.compute = function (ctx, width, height) {
             width: width * G.spawn.spread
         },
 
-        /** Everything tappable on the title and game-over screens. */
         targets: targets
     };
+};
+
+/** Traces a rounded rectangle. Path2D.roundRect is too new to rely on. */
+Layout.roundedRect = function (ctx, rect, radius) {
+    var r = Math.min(radius, rect.width / 2, rect.height / 2);
+    ctx.beginPath();
+    ctx.moveTo(rect.x + r, rect.y);
+    ctx.arcTo(rect.x + rect.width, rect.y, rect.x + rect.width, rect.y + rect.height, r);
+    ctx.arcTo(rect.x + rect.width, rect.y + rect.height, rect.x, rect.y + rect.height, r);
+    ctx.arcTo(rect.x, rect.y + rect.height, rect.x, rect.y, r);
+    ctx.arcTo(rect.x, rect.y, rect.x + rect.width, rect.y, r);
+    ctx.closePath();
 };
 
 /**

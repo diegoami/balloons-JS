@@ -2,9 +2,10 @@
 
 Simple JavaScript / HTML5 game. Pop the balloons before too many escape.
 
-Play by clicking or tapping balloons. Pick a difficulty by tapping one of the
-boxes on the title screen, or by pressing `E`, `S`, `H` or `V`. Space or Enter
-restarts at the current difficulty.
+Play by clicking or tapping balloons. Pick a difficulty from the buttons on
+the title screen, or press `E`, `S`, `H` or `V`. Space or Enter replays the
+current difficulty. The selected level is shown both by the filled button and
+by the sky, which has its own palette per difficulty.
 
 ## Layout
 
@@ -12,12 +13,12 @@ restarts at the current difficulty.
 public/               everything served to the browser
   index.html
   css/styles.css
-  images/sky_3.jpeg
   js/game.js          game loop, input, scoring, screen drawing
   js/gameballoons.js  balloon entity: position, drift, collision
   js/htmlballoons.js  draws a balloon on a canvas with bezier curves
   js/color.js         lighten/darken helpers and the gradient palette
   js/layout.js        grid, type scale and every on-screen position
+  js/sky.js           the drawn sky: one palette per difficulty
 netlify/functions/
   scores.mts          high-score API, backed by Netlify Blobs
 test/                 test suite (see below)
@@ -25,7 +26,8 @@ netlify.toml          publish directory and headers
 ```
 
 There is no build step and no runtime dependencies in the browser: the page
-loads four plain scripts and nothing else.
+loads five plain scripts and nothing else. The sky is drawn, not an image,
+so the game ships no image assets at all beyond the favicon.
 
 ## Running locally
 

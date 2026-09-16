@@ -37,6 +37,27 @@ function saveSetting(key, value) {
 var Game = {};
 Game.fps = 30;
 
+/** How long the countdown before play runs. */
+Game.COUNTDOWN_MS = 2000;
+
+/**
+ * How long the menu stays locked after a game ends. Its only job is to stop
+ * the tap that popped the last balloon from immediately restarting; it used to
+ * be five seconds, during which the buttons were drawn as though they worked.
+ */
+Game.MENU_LOCKOUT_MS = 1200;
+
+/** Whether the difficulty buttons will actually do anything if pressed. */
+Game.isMenuLive = function () {
+    if (this.screen === "title") {
+        return true;
+    }
+    if (this.screen === "gameover") {
+        return Date.now() >= (this.menuLiveAt || 0);
+    }
+    return false;
+};
+
 /**
  * Sizes the canvas.
  *
@@ -61,10 +82,8 @@ Game.applyCanvasSize = function () {
 
     this.ratio = this.width / 1000;
     this.fontSize = Layout.applyFont(this.ctx, this.width, this.height);
-    this.layout = Layout.compute(this.ctx, this.width, this.height);
-
-    this.is_gradient = 0;
-    this.updateGradient();
+    this.layout = Layout.compute(this.ctx, this.width, this.height, this.fontSize);
+    this.palette = Sky.paletteFor(this.diff_level);
 };
 
 /**
@@ -141,23 +160,19 @@ Game.watchPixelRatio = function () {
 
 Game.drawTitleScreen = function () {
     this.clear();
-    this.updateGradient();
-    this.ctx.fillText(Layout.INTRO_TEXT, this.layout.intro.x, this.layout.intro.y);
+    this.drawIntro(Layout.INTRO_TEXT);
     this.draw_diff_levels();
     if (this.scores) {
         this.fillscore(this.scores);
     }
 };
 
-Game.updateGradient = function () {
-    if (!this.is_gradient) {
-        var gradient = this.ctx.createLinearGradient(0, 0, this.width, 0);
-        for (var i = 0; i < 1; i += 0.05) {
-            gradient.addColorStop(i, getRandomCssColor());
-        }
-        this.ctx.fillStyle = gradient;
-        this.is_gradient = 1;
-    }
+/** The one headline line, shared by the title and game-over screens. */
+Game.drawIntro = function (text) {
+    this.ctx.font = this.layout.fonts.intro;
+    this.ctx.fillStyle = this.palette.ink;
+    this.ctx.fillText(text, this.layout.intro.x, this.layout.intro.y);
+    this.ctx.font = this.layout.fonts.menu;
 };
 
 /**
@@ -224,6 +239,7 @@ Game.restart = function (diff_level) {
         DIFF_LEVEL = "VHARD";
     }
     this.diff_level = diff_level;
+    this.palette = Sky.paletteFor(diff_level);
     this.do_click();
     if (this.tick_interval) {
         clearInterval(this.tick_interval);
@@ -231,17 +247,16 @@ Game.restart = function (diff_level) {
     this.isrestart = false;
     this.showscores = false;
     this.screen = "starting";
-    this.clear();
+    this.countdownEnd = Date.now() + Game.COUNTDOWN_MS;
+    this.pressedLevel = null;
     this.balloons = [];
     this.balloons_caught = 0;
     this.lostBalloons = 0;
 
-    var that = this;
-    setTimeout(function () {
-        that.start = Date.now();
-        that.screen = "playing";
-        that.tick_interval = setInterval(Game.run, 1000 / Game.fps);
-    }, 2000);
+    // The loop starts now rather than in two seconds, so the countdown can be
+    // drawn. Previously this was a blank sky with no sign the tap had landed.
+    this.clear();
+    this.tick_interval = setInterval(Game.run, 1000 / Game.fps);
 };
 
 Game.init = function () {
@@ -267,6 +282,7 @@ Game.init = function () {
 
     this.applyCanvasSize();
     this.screen = "title";
+    this.pressedLevel = null;
     this.drawTitleScreen();
 
     this.getScores();
@@ -278,10 +294,33 @@ Game.setDifficulty = function () {
     var that = this;
     var signal = this.resetInput();
 
+    var repaintIfStatic = function () {
+        if (that.screen === "title") {
+            that.drawTitleScreen();
+        }
+    };
+
+    this.canvas.addEventListener("pointerdown", function (event) {
+        var target = Layout.pick(that.layout.targets, that.getCanvasPoint(event));
+        that.pressedLevel = target ? target.level : null;
+        repaintIfStatic();
+    }, { signal: signal });
+
+    var releasePress = function () {
+        if (that.pressedLevel !== null) {
+            that.pressedLevel = null;
+            repaintIfStatic();
+        }
+    };
+    this.canvas.addEventListener("pointerup", releasePress, { signal: signal });
+    this.canvas.addEventListener("pointercancel", releasePress, { signal: signal });
+    this.canvas.addEventListener("pointerleave", releasePress, { signal: signal });
+
     this.canvas.addEventListener("click", function (event) {
         var point = that.getCanvasPoint(event);
         var target = Layout.pick(that.layout.targets, point);
 
+        that.pressedLevel = null;
         if (target) {
             // The high-score line has no level of its own; it replays the
             // difficulty already selected.
@@ -306,15 +345,22 @@ Game.fillscore = function (data) {
         return;
     }
 
+    this.ctx.font = this.layout.fonts.label;
+    this.ctx.fillStyle = this.palette.inkSoft;
     this.ctx.fillText(Layout.HIGH_SCORES_TEXT + this.diff_level, scores.heading.x, scores.heading.y);
 
+    this.ctx.font = this.layout.fonts.score;
     for (var i = 0; i < scores.rows.length; i++) {
         if (data.length > i) {
+            this.ctx.fillStyle = this.palette.inkSoft;
             this.ctx.fillText(data[i]["score_day"], scores.columns.date, scores.rows[i]);
+            this.ctx.fillStyle = this.palette.ink;
             this.ctx.fillText(data[i]["name"], scores.columns.name, scores.rows[i]);
+            this.ctx.fillStyle = this.palette.accent;
             this.ctx.fillText(data[i]["score"], scores.columns.value, scores.rows[i]);
         }
     }
+    this.ctx.font = this.layout.fonts.menu;
 };
 
 Game.getScores = function () {
@@ -366,16 +412,14 @@ Game.gameover = function () {
         this.end_time = this.time_to_show;
         this.isrestart = true;
         this.screen = "gameover";
+        this.menuLiveAt = Date.now() + Game.MENU_LOCKOUT_MS;
+        this.showscores = true;
         setTimeout(function () {
             that.setDifficulty();
-            that.showscores = true;
-        }, 5000);
+        }, Game.MENU_LOCKOUT_MS);
     }
     if (this.end_time) {
-        if (this.balloons.length == 0) {
-            this.updateGradient();
-        }
-        this.ctx.fillText("Game Over. Score: " + this.balloons_caught + ", Time: " + this.end_time, this.layout.intro.x, this.layout.intro.y);
+        this.drawIntro("Game Over. Score: " + this.balloons_caught + ", Time: " + this.end_time);
         this.draw_diff_levels();
         if (this.showscores) {
             this.getScores();
@@ -383,22 +427,79 @@ Game.gameover = function () {
     }
 };
 
+/**
+ * Draws the difficulty buttons in whichever of four states they are in.
+ *
+ * A button used to look identical whether or not pressing it would do
+ * anything: after a game ended the menu was repainted every frame for five
+ * seconds while no input was bound at all.
+ */
 Game.draw_diff_levels = function () {
-    var menu = this.layout.menu;
+    var ctx = this.ctx;
+    var palette = this.palette;
+    var buttons = this.layout.menu.buttons;
+    var live = this.isMenuLive();
 
-    this.ctx.fillText(Layout.MENU_TEXT, menu.x, menu.y);
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = this.layout.fonts.menu;
+    ctx.lineWidth = Math.max(1, this.layout.line * 0.06);
 
-    this.ctx.save();
-    this.ctx.lineWidth = 3 * this.ratio;
-    this.ctx.setLineDash([15, 3, 3, 3]);
+    for (var i = 0; i < buttons.length; i++) {
+        var button = buttons[i];
+        var selected = button.level === this.diff_level;
+        var pressed = live && button.level === this.pressedLevel;
 
-    for (var i = 0; i < menu.boxes.length; i++) {
-        this.ctx.beginPath();
-        this.ctx.rect(menu.boxes[i].x, menu.top, menu.boxes[i].width, menu.height);
-        this.ctx.stroke();
+        var fill, border, label;
+        if (!live) {
+            fill = palette.buttonDisabledFill;
+            border = palette.buttonDisabledBorder;
+            label = palette.inkDisabled;
+        } else if (selected) {
+            fill = palette.accent;
+            border = null;
+            label = palette.onAccent;
+        } else {
+            fill = palette.buttonFill;
+            border = palette.buttonBorder;
+            label = palette.ink;
+        }
+
+        Layout.roundedRect(ctx, button, button.radius);
+        ctx.fillStyle = fill;
+        ctx.fill();
+
+        if (border) {
+            ctx.strokeStyle = border;
+            ctx.stroke();
+        }
+
+        // Layered over whatever fill the button has, so the already-selected
+        // button responds to a press too — it restarts the game, so it is just
+        // as pressable as the others.
+        if (pressed) {
+            ctx.fillStyle = palette.buttonPressOverlay;
+            ctx.fill();
+        }
+
+        ctx.fillStyle = label;
+        ctx.fillText(
+            button.label,
+            button.x + button.width / 2,
+            button.y + button.height / 2
+        );
     }
 
-    this.ctx.restore();
+    ctx.restore();
+
+    ctx.font = this.layout.fonts.label;
+    ctx.fillStyle = live ? palette.inkSoft : palette.inkDisabled;
+    ctx.fillText(
+        live ? Layout.HINT_TEXT : "Hold on...",
+        this.layout.hint.x,
+        this.layout.hint.y
+    );
 };
 
 Game.randomBalloon = function () {
@@ -446,23 +547,60 @@ Game.draw = function () {
     for (var i = 0; i < this.balloons.length; i++) {
         this.balloons[i].draw();
     }
-    if (this.balloons.length > 0) {
-        this.is_gradient = 0;
-    }
     if (this.ctx && !this.isrestart) {
         var hud = this.layout.hud;
-        this.ctx.fillText(this.balloons_caught + "/" + this.lostBalloons, hud.caught, hud.y);
         this.time_to_show = ((Date.now() - this.start) / 1000).toFixed(2);
-        this.ctx.fillText(this.diff_level, hud.level, hud.y);
-        this.ctx.fillText(this.time_to_show, hud.time, hud.y);
+
+        this.ctx.font = this.layout.fonts.hud;
+        this.ctx.fillStyle = this.palette.ink;
+        this.ctx.fillText(
+            this.balloons_caught + " popped, " + this.lostBalloons + " lost",
+            hud.caught, hud.y
+        );
+        this.ctx.fillStyle = this.palette.inkSoft;
+        this.ctx.fillText(DIFF_LEVEL, hud.level, hud.y);
+        this.ctx.fillStyle = this.palette.accent;
+        this.ctx.fillText(this.time_to_show + "s", hud.time, hud.y);
     }
 };
 
 Game.clear = function () {
-    this.ctx.clearRect(0, 0, this.width, this.height);
+    var sky = Sky.render(this.width, this.height, this.dpr, this.diff_level);
+    this.ctx.drawImage(sky, 0, 0, this.width, this.height);
+};
+
+Game.drawStarting = function () {
+    var remaining = this.countdownEnd - Date.now();
+
+    if (remaining <= 0) {
+        this.screen = "playing";
+        this.start = Date.now();
+        return;
+    }
+
+    this.clear();
+    this.draw_diff_levels();
+
+    var ctx = this.ctx;
+    ctx.save();
+    ctx.textAlign = "center";
+
+    ctx.font = this.layout.fonts.label;
+    ctx.fillStyle = this.palette.inkSoft;
+    ctx.fillText("Get ready", this.layout.countdown.x, this.layout.countdown.y - this.layout.line * 1.5);
+
+    ctx.font = this.layout.fonts.countdown;
+    ctx.fillStyle = this.palette.accent;
+    ctx.fillText(String(Math.ceil(remaining / 1000)), this.layout.countdown.x, this.layout.countdown.y);
+
+    ctx.restore();
 };
 
 Game.update = function () {
+    if (this.screen === "starting") {
+        this.drawStarting();
+        return;
+    }
     this.clear();
     this.tick();
     this.draw();
