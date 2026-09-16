@@ -1848,7 +1848,9 @@ await t('a balloon is painted by one painter, not a new one every frame', async 
     window.Color.prototype = Original.prototype;
   });
 
-  await page.keyboard.press('e');
+  // Standard rather than Easy: Easy releases balloons slowly enough that three
+  // seconds of it is too few to tell one painter each from one per frame.
+  await page.keyboard.press('s');
   await page.waitForTimeout(2400 + 3000);
 
   const m = await page.evaluate(() => ({
@@ -2122,6 +2124,92 @@ await t('the name field is readable too, in the colours it is really given', asy
   assert.ok(worst.ratio >= 4.5,
     `the name field's ${worst.what} is ${worst.ratio.toFixed(2)}:1 on ${worst.level}`);
   assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+// ---------- the difficulty curve ----------
+
+await t('a level is harder than the one before it from the first balloon', async () => {
+  // The defect this guards: speed and spawn rate were globals, so every level
+  // opened identically and only diverged as the score climbed. A bot with
+  // fixed reflexes scored 185 on Easy and 187 on Standard.
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => {
+    const levels = Difficulty.all();
+
+    // The rise of a fresh balloon, averaged, with the score at zero so the
+    // ramps cannot be what is doing the work.
+    const opening = level => {
+      Game.difficulty = level;
+      Game.balloons_caught = 0;
+      let rise = 0;
+      const n = 2000;
+      for (let i = 0; i < n; i++) { rise += Math.abs(Game.randomBalloon().delta); }
+      return rise / n;
+    };
+
+    return levels.map(level => ({
+      label: level.label,
+      lives: level.maxLost,
+      speed: level.speed,
+      frequency: level.frequency,
+      rise: opening(level)
+    }));
+  });
+
+  const ordered = (what, pick, direction) => {
+    for (let i = 1; i < m.length; i++) {
+      const before = pick(m[i - 1]), after = pick(m[i]);
+      const moved = direction > 0 ? after > before : after < before;
+      assert.ok(moved,
+        `${what}: ${m[i].label} is not past ${m[i - 1].label} (${before} then ${after})`);
+    }
+  };
+
+  ordered('balloons rise faster', l => l.speed, 1);
+  ordered('fewer mistakes allowed', l => l.lives, -1);
+
+  // Speed is the dial that carries difficulty; the spawn rate is not, and
+  // cannot be. Past about Standard's rate the sky fills faster than anyone can
+  // clear it however well they play, and the level stops being a test of skill
+  // and becomes a countdown: at 0.14 and 0.18 the bot died at 19 and 11
+  // seconds regardless of how fast the balloons themselves were rising.
+  const anchor = m.find(level => level.label === 'Standard');
+  m.forEach((level, i) => {
+    assert.ok(level.frequency <= anchor.frequency + 1e-9,
+      `${level.label} releases balloons faster than anyone can pop them ` +
+      `(${level.frequency} against ${anchor.frequency})`);
+    if (i > 0) {
+      assert.ok(level.frequency >= m[i - 1].frequency - 1e-9,
+        `${level.label} is calmer than ${m[i - 1].label}`);
+    }
+  });
+
+  // And the table's numbers reach the balloons rather than sitting unread.
+  ordered('a fresh balloon actually rises faster', l => +l.rise.toFixed(3), 1);
+
+  // The ends have to be far enough apart to feel like different games.
+  const spread = m[m.length - 1].rise / m[0].rise;
+  assert.ok(spread > 1.8,
+    `the hardest level opens only ${spread.toFixed(2)}x faster than the easiest`);
+  await context.close();
+});
+
+await t('every level still describes itself completely', async () => {
+  const { context, page } = await newGame();
+  const missing = await page.evaluate(() => {
+    const needed = ['level', 'label', 'name', 'maxLost', 'speed', 'frequency',
+                    'ratioDecrease', 'speedIncrease'];
+    const gaps = [];
+    Difficulty.all().forEach(level => {
+      needed.forEach(key => {
+        if (level[key] === undefined) { gaps.push(level.level + '.' + key); }
+      });
+    });
+    return gaps;
+  });
+  assert.deepEqual(missing, [],
+    'a level is described partly somewhere else: ' + missing);
   await context.close();
 });
 

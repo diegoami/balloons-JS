@@ -1,8 +1,5 @@
 "use strict";
 
-var BALLOON_FREQUENCY = 0.1;
-var BALLOON_SPEED = 5.5;
-
 /** Balloon radius before any scaling: a base plus a random spread. */
 var BALLOON_BASE_SIZE = 24;
 var BALLOON_SIZE_SPREAD = 50;
@@ -413,7 +410,7 @@ Game.randomBalloon = function () {
     var randomSize = baseRadius + Math.random() * BALLOON_SIZE_SPREAD * this.ratio * ratioSize;
     var getRandomRGB = function () { return Math.floor(Math.random() * 255); };
     var randomColor = { r: getRandomRGB(), g: getRandomRGB(), b: getRandomRGB() };
-    var balloonSpeed = BALLOON_SPEED + this.balloons_caught / this.difficulty.speedIncrease;
+    var balloonSpeed = this.difficulty.speed + this.balloons_caught / this.difficulty.speedIncrease;
 
     // Scaling the rise by height keeps the time to cross the screen the same
     // whatever shape the window is.
@@ -426,7 +423,7 @@ Game.randomBalloon = function () {
 
 /** Maybe releases one balloon. A fuller sky releases them more slowly. */
 Game.spawnBalloon = function () {
-    var frequency = BALLOON_FREQUENCY - SPEED_MODIFIER * this.balloons.length;
+    var frequency = this.difficulty.frequency - SPEED_MODIFIER * this.balloons.length;
 
     if (Math.random() < frequency && this.balloons.length < MAX_BALLOONS) {
         this.balloons.push(this.randomBalloon());
