@@ -65,7 +65,7 @@ const BOT = (o) => `
   const REACTION = ${o.reaction}, AIM_ERROR = ${o.aimError}, INTERVAL = ${o.interval};
   const history = [];
   const seen = new Map();
-  window.__stats = { clicks: 0, hits: 0, lifetimes: [] };
+  window.__stats = { clicks: 0, hits: 0, lifetimes: [], sky: [] };
 
   setInterval(() => {
     if (!Game.balloons) return;
@@ -74,6 +74,11 @@ const BOT = (o) => `
       balloons: Game.balloons.map(b => ({ x: b.xcoord, y: b.ycoord }))
     });
     while (history.length > 40) history.shift();
+
+    // How full the sky is. Score cannot tell an easy level from a middling
+    // one, because a player who is already clicking as fast as they can pops
+    // the same number either way; what changes is how much is coming at them.
+    if (Game.screen === 'playing') window.__stats.sky.push(Game.balloons.length);
 
     // How long each balloon is actually on screen: the player's real window.
     const now = Date.now();
@@ -187,7 +192,9 @@ console.log(
   `${Math.round(1000 / OPTIONS.interval * 10) / 10} clicks/sec ` +
   `· ${OPTIONS.width}×${OPTIONS.height} · ${OPTIONS.capMs / 1000}s cap\n`
 );
-console.log('level  lives  survived   score   accuracy   outcome');
+console.log('level  lives  survived   score   accuracy   sky    lost   outcome');
+
+const mean = list => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
 
 OPTIONS.levels.forEach((level, i) => {
   settled[i].forEach((r, j) => {
@@ -198,7 +205,9 @@ OPTIONS.levels.forEach((level, i) => {
       (round(r.time !== null ? r.time : r.wall) + 's').padEnd(10),
       String(r.score).padEnd(7),
       (round(accuracy) + '%').padEnd(10),
-      r.died ? `died, ${r.lost} escaped` : 'survived the cap'
+      round(mean(r.stats.sky)).padEnd(6),
+      String(r.lost).padEnd(6),
+      r.died ? 'died' : 'survived the cap'
     );
   });
 });

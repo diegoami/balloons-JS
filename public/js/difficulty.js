@@ -37,7 +37,7 @@ Difficulty.LEVELS = {
         /** The fastest a balloon rises at the start, before any ramp. */
         speed: 4,
         /** Chance per step that another balloon is released. */
-        frequency: 0.06,
+        frequency: 0.08,
         /** Balloons shrink by 1/this per balloon popped. */
         ratioDecrease: 2000,
         /** Balloons speed up by 1/this per balloon popped. */
@@ -50,12 +50,12 @@ Difficulty.LEVELS = {
     },
     H: {
         level: "H", label: "Hard", name: "HARD",
-        maxLost: 3, speed: 7, frequency: 0.14,
+        maxLost: 3, speed: 7, frequency: 0.1,
         ratioDecrease: 700, speedIncrease: 120
     },
     V: {
         level: "V", label: "VHard", name: "VHARD",
-        maxLost: 1, speed: 9, frequency: 0.18,
+        maxLost: 1, speed: 9, frequency: 0.1,
         ratioDecrease: 300, speedIncrease: 80
     }
 };
