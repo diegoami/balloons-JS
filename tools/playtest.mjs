@@ -167,6 +167,10 @@ async function playLevel(level) {
       lives: Game.difficulty.maxLost,
       died: Game.screen === 'gameover',
       time: Game.end_time ? parseFloat(Game.end_time) : null,
+      // How far up the ladder the run got: the number this harness exists to
+      // report now that difficulty is ten rungs climbed with time.
+      level: Game.level,
+      start: Game.difficulty.startLevel,
       stats: window.__stats
     }));
 
@@ -193,7 +197,7 @@ console.log(
   `${Math.round(1000 / OPTIONS.interval * 10) / 10} clicks/sec ` +
   `· ${OPTIONS.width}×${OPTIONS.height} · ${OPTIONS.capMs / 1000}s cap\n`
 );
-console.log('level  lives  survived   score   accuracy   sky    lost   outcome');
+console.log('level  lives  survived   score   accuracy   sky    lost   rung   outcome');
 
 const mean = list => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
 
@@ -208,6 +212,7 @@ OPTIONS.levels.forEach((level, i) => {
       (round(accuracy) + '%').padEnd(10),
       round(mean(r.stats.sky)).padEnd(6),
       String(r.lost).padEnd(6),
+      (r.start + '→' + r.level).padEnd(6),
       r.died ? 'died' : 'survived the cap'
     );
   });

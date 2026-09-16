@@ -52,13 +52,22 @@ Announce.name = function () {
 
 Announce.starting = function (game) {
     Announce.say(
-        game.difficulty.label + ". Get ready. " +
-        Announce.lives(game.difficulty.maxLost) + " to lose."
+        game.difficulty.label + ", starting at level " + game.difficulty.startLevel +
+        ". Get ready. " + Announce.lives(game.difficulty.maxLost) + " to lose."
     );
 };
 
 Announce.playing = function () {
     Announce.say("Go.");
+};
+
+/**
+ * A level arrived. This is the only thing said during a round other than a
+ * balloon getting away, and it earns that: the game just got harder and
+ * nothing else on the screen announces it.
+ */
+Announce.level = function (game) {
+    Announce.say("Level " + game.level + ".");
 };
 
 /** A balloon got away, which is the only thing in a round worth interrupting for. */

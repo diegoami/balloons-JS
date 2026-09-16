@@ -1074,18 +1074,19 @@ await t('pressing a button changes how it looks, selected or not', async () => {
 
 // ---------- balloon size floor ----------
 
-await t('balloons stay poppable at any score', async () => {
+await t('balloons stay poppable at every rung of the ladder', async () => {
   // Without a floor the size factor ran past zero and went negative. check_hit
   // compares against the radius, so no point on the screen could pop one, and
-  // every long game ended on an unwinnable board. On VHard that arrived after
-  // roughly 300 balloons: about two and a half minutes of play.
+  // every long game ended on an unwinnable board. The shrink is the ladder's
+  // now rather than the score's, and the floor still has to hold at the top of
+  // it and beyond.
   const { context, page, errors } = await newGame();
   await page.keyboard.press('v');
   await page.waitForTimeout(2400);
 
   const probed = await page.evaluate(() => {
-    const check = (caught) => {
-      Game.balloons_caught = caught;
+    const check = (level) => {
+      Game.level = level;
       const balloon = Game.randomBalloon();
       let poppable = false;
       for (let x = 0; x < Game.width && !poppable; x += 5) {
@@ -1093,53 +1094,54 @@ await t('balloons stay poppable at any score', async () => {
           if (balloon.hits({ x, y })) { poppable = true; break; }
         }
       }
-      return { caught, size: balloon.size, poppable };
+      return { level, size: balloon.size, poppable };
     };
-    // ratioDecrease on VHard is 300; probe either side of it and well beyond.
-    return [0, 150, 299, 300, 400, 1000, 5000].map(check);
+    // Every rung, and past the end of the ladder in case anything clamps badly.
+    return [1, 4, 7, 9, 10, 14, 100].map(check);
   });
 
   probed.forEach(r => {
-    assert.ok(r.size > 0, `balloon size ${r.size.toFixed(1)} at ${r.caught} popped`);
-    assert.ok(r.poppable, `no point on screen pops a balloon at ${r.caught} popped ` +
+    assert.ok(r.size > 0, `balloon size ${r.size.toFixed(1)} at level ${r.level}`);
+    assert.ok(r.poppable, `no point on screen pops a balloon at level ${r.level} ` +
       `(size ${r.size.toFixed(1)})`);
   });
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
 
-await t('balloons still shrink as the score climbs, down to the floor', async () => {
+await t('balloons shrink as the ladder climbs, down to the floor', async () => {
   const { context, page } = await newGame();
   await page.keyboard.press('v');
   await page.waitForTimeout(2400);
 
   const m = await page.evaluate(() => {
     // Average out the random size component so the trend is the only signal.
-    const mean = (caught) => {
-      Game.balloons_caught = caught;
+    const mean = (level) => {
+      Game.level = level;
       let total = 0;
       for (let i = 0; i < 400; i++) total += Game.randomBalloon().size;
       return total / 400;
     };
     return {
       floor: MIN_RATIO_SIZE,
-      at0: mean(0), at150: mean(150), at300: mean(300), at3000: mean(3000)
+      top: Ladder.MAX,
+      at1: mean(1), at5: mean(5), at10: mean(10), past: mean(40)
     };
   });
 
-  assert.ok(m.at150 < m.at0, 'balloons should shrink as the score climbs');
-  assert.ok(m.at300 < m.at150, 'shrink should continue toward the floor');
-  assert.ok(Math.abs(m.at3000 - m.at300) / m.at300 < 0.05,
-    `size should settle at the floor, not keep falling (${m.at300.toFixed(1)} -> ${m.at3000.toFixed(1)})`);
+  assert.ok(m.at5 < m.at1, 'balloons should shrink as the ladder climbs');
+  assert.ok(m.at10 < m.at5, 'shrink should continue toward the top of the ladder');
+  assert.ok(Math.abs(m.past - m.at10) / m.at10 < 0.05,
+    `past the last rung the size should hold, not keep falling (${m.at10.toFixed(1)} -> ${m.past.toFixed(1)})`);
   // Two floors apply: MIN_RATIO_SIZE bounds the shrink, and an absolute
   // minimum keeps the balloon tappable. Whichever is larger wins, so the
   // settled size is at least the ratio floor and never below the touch
   // minimum — which 'a balloon is never smaller than the touch minimum'
   // checks directly, across every screen.
-  assert.ok(m.at3000 / m.at0 >= m.floor * 0.9,
-    `settled size fell below the ratio floor: ${(m.at3000 / m.at0).toFixed(2)} of full`);
-  assert.ok(m.at3000 < m.at0,
-    'balloons should still end up smaller than they started');
+  assert.ok(m.at10 / m.at1 >= m.floor * 0.9,
+    `the top of the ladder fell below the ratio floor: ${(m.at10 / m.at1).toFixed(2)} of full`);
+  assert.ok(m.at10 < m.at1,
+    'balloons at the top of the ladder should be smaller than at the bottom');
   await context.close();
 });
 
@@ -1251,8 +1253,8 @@ await t('one table describes a level, and everything reads it', async () => {
     'buttons and the table disagree about the labels');
   assert.equal(m.hudName, 'HARD');
   assert.equal(m.table.maxLost, 3);
-  assert.equal(m.table.ratioDecrease, 700);
-  assert.equal(m.table.speedIncrease, 120);
+  assert.equal(m.table.startLevel, 3);
+  assert.equal(m.table.climbEvery, 22);
   await context.close();
 });
 
@@ -1848,9 +1850,10 @@ await t('a balloon is painted by one painter, not a new one every frame', async 
     window.Color.prototype = Original.prototype;
   });
 
-  // Standard rather than Easy: Easy releases balloons slowly enough that three
-  // seconds of it is too few to tell one painter each from one per frame.
-  await page.keyboard.press('s');
+  // VHard rather than Standard: every difficulty now opens on the ladder, and
+  // the lower rungs release too few balloons in three seconds to tell one
+  // painter each from one per frame. VHard starts at rung 5.
+  await page.keyboard.press('v');
   await page.waitForTimeout(2400 + 3000);
 
   const m = await page.evaluate(() => ({
@@ -2129,87 +2132,108 @@ await t('the name field is readable too, in the colours it is really given', asy
 
 // ---------- the difficulty curve ----------
 
-await t('a level is harder than the one before it from the first balloon', async () => {
-  // The defect this guards: speed and spawn rate were globals, so every level
-  // opened identically and only diverged as the score climbed. A bot with
-  // fixed reflexes scored 185 on Easy and 187 on Standard.
+await t('the ladder gets harder every rung, and asks more than a player has', async () => {
+  // The defect this guards: difficulty used to be two ramps keyed to the score,
+  // so a level's opening was fixed and the escalation was invisible. It is ten
+  // rows now, and the rows have to actually rise.
   const { context, page } = await newGame();
-  const m = await page.evaluate(() => {
-    const levels = Difficulty.all();
+  const m = await page.evaluate(() => ({
+    rungs: Ladder.LEVELS.map(r => ({
+      level: r.level, speed: r.speed, frequency: r.frequency, size: r.size,
+      demand: Ladder.demand(r)
+    })),
+    max: Ladder.MAX
+  }));
 
-    // The rise of a fresh balloon, averaged, with the score at zero so the
-    // ramps cannot be what is doing the work.
-    const opening = level => {
-      Game.difficulty = level;
-      Game.balloons_caught = 0;
-      let rise = 0;
-      const n = 2000;
-      for (let i = 0; i < n; i++) { rise += Math.abs(Game.randomBalloon().delta); }
-      return rise / n;
-    };
-
-    return levels.map(level => ({
-      label: level.label,
-      lives: level.maxLost,
-      speed: level.speed,
-      frequency: level.frequency,
-      rise: opening(level)
-    }));
+  assert.equal(m.rungs.length, 10, 'the ladder is not ten levels');
+  assert.equal(m.max, 10);
+  m.rungs.forEach((r, i) => {
+    assert.equal(r.level, i + 1, 'a rung is out of order or mislabelled');
+    if (i === 0) { return; }
+    const under = m.rungs[i - 1];
+    assert.ok(r.speed > under.speed,
+      `level ${r.level} is no faster than ${under.level} (${under.speed} then ${r.speed})`);
+    assert.ok(r.frequency >= under.frequency,
+      `level ${r.level} is calmer than ${under.level}`);
+    assert.ok(r.size < under.size,
+      `level ${r.level} is no smaller than ${under.level}`);
+    assert.ok(r.demand > under.demand,
+      `level ${r.level} asks no more than ${under.level}`);
   });
 
-  const ordered = (what, pick, direction) => {
-    for (let i = 1; i < m.length; i++) {
-      const before = pick(m[i - 1]), after = pick(m[i]);
-      const moved = direction > 0 ? after > before : after < before;
-      assert.ok(moved,
-        `${what}: ${m[i].label} is not past ${m[i - 1].label} (${before} then ${after})`);
-    }
-  };
-
-  ordered('balloons rise faster', l => l.speed, 1);
-  ordered('fewer mistakes allowed', l => l.lives, -1);
-
-  // Speed is the dial that carries difficulty; the spawn rate is not, and
-  // cannot be. Past about Standard's rate the sky fills faster than anyone can
-  // clear it however well they play, and the level stops being a test of skill
-  // and becomes a countdown: at 0.14 and 0.18 the bot died at 19 and 11
-  // seconds regardless of how fast the balloons themselves were rising.
-  const anchor = m.find(level => level.label === 'Standard');
-  m.forEach((level, i) => {
-    assert.ok(level.frequency <= anchor.frequency + 1e-9,
-      `${level.label} releases balloons faster than anyone can pop them ` +
-      `(${level.frequency} against ${anchor.frequency})`);
-    if (i > 0) {
-      assert.ok(level.frequency >= m[i - 1].frequency - 1e-9,
-        `${level.label} is calmer than ${m[i - 1].label}`);
-    }
-  });
-
-  // And the table's numbers reach the balloons rather than sitting unread.
-  ordered('a fresh balloon actually rises faster', l => +l.rise.toFixed(3), 1);
-
-  // The ends have to be far enough apart to feel like different games.
-  const spread = m[m.length - 1].rise / m[0].rise;
-  assert.ok(spread > 1.8,
-    `the hardest level opens only ${spread.toFixed(2)}x faster than the easiest`);
+  // A player supplies about 2.1 taps a second. The ladder has to pass that:
+  // not at the second rung, which would be a countdown rather than a game, and
+  // not never, which would be a game that no longer ends.
+  const crossing = m.rungs.findIndex(r => r.demand > 2.1) + 1;
+  assert.ok(crossing >= 4 && crossing <= 7,
+    `demand passes a player's 2.1 taps a second at level ${crossing || 'never'}, ` +
+    'which should happen between 4 and 7');
+  assert.ok(m.rungs[0].demand < 1.5,
+    `the first rung already asks ${m.rungs[0].demand.toFixed(2)} taps a second`);
   await context.close();
 });
 
-await t('every level still describes itself completely', async () => {
+await t('a difficulty says where you start, how fast you climb, and what it costs', async () => {
   const { context, page } = await newGame();
-  const missing = await page.evaluate(() => {
-    const needed = ['level', 'label', 'name', 'maxLost', 'speed', 'frequency',
-                    'ratioDecrease', 'speedIncrease'];
+  const m = await page.evaluate(() => {
+    const needed = ['level', 'label', 'name', 'maxLost', 'startLevel', 'climbEvery'];
     const gaps = [];
+    const retired = [];
     Difficulty.all().forEach(level => {
       needed.forEach(key => {
         if (level[key] === undefined) { gaps.push(level.level + '.' + key); }
       });
+      // These moved to the ladder; a copy left behind is a copy that drifts.
+      ['speed', 'frequency', 'ratioDecrease', 'speedIncrease'].forEach(key => {
+        if (level[key] !== undefined) { retired.push(level.level + '.' + key); }
+      });
     });
-    return gaps;
+    return { gaps, retired, order: Difficulty.all() };
   });
-  assert.deepEqual(missing, [],
-    'a level is described partly somewhere else: ' + missing);
+
+  assert.deepEqual(m.gaps, [], 'a difficulty is described partly somewhere else: ' + m.gaps);
+  assert.deepEqual(m.retired, [], 'the ladder owns these now: ' + m.retired);
+
+  m.order.forEach((d, i) => {
+    if (i === 0) { return; }
+    const under = m.order[i - 1];
+    assert.ok(d.maxLost < under.maxLost,
+      `${d.label} forgives as much as ${under.label}`);
+    assert.ok(d.startLevel >= under.startLevel,
+      `${d.label} starts lower down the ladder than ${under.label}`);
+    assert.ok(d.climbEvery <= under.climbEvery,
+      `${d.label} climbs slower than ${under.label}`);
+  });
+  assert.ok(m.order[m.order.length - 1].startLevel > m.order[0].startLevel,
+    'the hardest difficulty starts no further up the ladder than the easiest');
+  await context.close();
+});
+
+await t('the level climbs with time played, and stops at the top', async () => {
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press('s');
+  await page.waitForTimeout(2400);
+
+  const m = await page.evaluate(() => {
+    const perLevel = Game.difficulty.climbEvery;
+    const stepsFor = seconds => Math.ceil(seconds * 1000 / Game.STEP_MS);
+    return {
+      start: Game.level,
+      configured: Game.difficulty.startLevel,
+      justBefore: Game.levelFor(stepsFor(perLevel) - 2),
+      justAfter: Game.levelFor(stepsFor(perLevel) + 2),
+      halfway: Game.levelFor(stepsFor(perLevel * 4.5)),
+      farPast: Game.levelFor(stepsFor(perLevel * 400)),
+      top: Ladder.MAX
+    };
+  });
+
+  assert.equal(m.start, m.configured, 'a round does not open where its difficulty says');
+  assert.equal(m.justBefore, m.configured, 'the level climbed early');
+  assert.equal(m.justAfter, m.configured + 1, 'the level did not climb on time');
+  assert.equal(m.halfway, m.configured + 4);
+  assert.equal(m.farPast, m.top, 'the ladder does not stop at the top');
+  assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
 
