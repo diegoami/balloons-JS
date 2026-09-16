@@ -17,6 +17,7 @@ public/               everything served to the browser
   js/gameballoons.js  balloon entity: position, drift, collision
   js/htmlballoons.js  draws a balloon on a canvas with bezier curves
   js/color.js         lighten/darken helpers and the gradient palette
+  js/difficulty.js    what each level is: lives, shrink and speed ramps
   js/layout.js        grid, type scale and every on-screen position
   js/sky.js           the drawn sky: one palette per difficulty
 netlify/functions/
@@ -26,7 +27,7 @@ netlify.toml          publish directory and headers
 ```
 
 There is no build step and no runtime dependencies in the browser: the page
-loads five plain scripts and nothing else. The sky is drawn, not an image,
+loads six plain scripts and nothing else. The sky is drawn, not an image,
 so the game ships no image assets at all beyond the favicon.
 
 ## Running locally

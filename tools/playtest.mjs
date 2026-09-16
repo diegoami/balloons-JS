@@ -17,7 +17,8 @@
  *
  * What it found on first use, against master at the time:
  *   - All four difficulties played identically. BALLOON_FREQUENCY and
- *     BALLOON_SPEED are shared globals, so only lives and a slow ramp differ.
+ *     BALLOON_SPEED are shared, not per-level, so only lives and a slow ramp
+ *     differ between them.
  *   - 11 of 12 games survived a 70 second cap, VHard included, and that level
  *     ends on one escaped balloon.
  *   - Balloon speed spans 23:1, so the slowest balloon takes 97 seconds to
@@ -156,7 +157,7 @@ async function playLevel(level) {
     const result = await page.evaluate(() => ({
       score: Game.balloons_caught,
       lost: Game.lostBalloons,
-      lives: MAX_LOST_BALLOONS,
+      lives: Game.difficulty.maxLost,
       died: Game.screen === 'gameover',
       time: Game.end_time ? parseFloat(Game.end_time) : null,
       stats: window.__stats

@@ -29,12 +29,7 @@ var RATIO_SIZE = 1;
  * 0.4 keeps the escalation visible while leaving the balloon hittable forever.
  */
 var MIN_RATIO_SIZE = 0.4;
-var MAX_LOST_BALLOONS = 15;
-
-var RATIO_DECREASE = 2000;
-var SPEED_INCREASE = 500;
 var SPEED_MODIFIER = 0.0015;
-var DIFF_LEVEL = "E";
 
 /**
  * Screen positions, the difficulty menu and its hit regions all come from
@@ -110,7 +105,7 @@ Game.applyCanvasSize = function () {
     this.ratio = this.width / 1000;
     this.fontSize = Layout.applyFont(this.ctx, this.width, this.height);
     this.layout = Layout.compute(this.ctx, this.width, this.height, this.fontSize);
-    this.palette = Sky.paletteFor(this.diff_level);
+    this.palette = Sky.paletteFor(this.difficulty.level);
 };
 
 /**
@@ -242,31 +237,10 @@ Game.do_click = function () {
     }, { signal: signal });
 };
 
-Game.restart = function (diff_level) {
-    saveSetting("diff_level", diff_level);
-    if (diff_level == "E") {
-        MAX_LOST_BALLOONS = 15;
-        RATIO_DECREASE = 2000;
-        SPEED_INCREASE = 500;
-        DIFF_LEVEL = "EASY";
-    } else if (diff_level == "S") {
-        MAX_LOST_BALLOONS = 7;
-        RATIO_DECREASE = 1200;
-        SPEED_INCREASE = 200;
-        DIFF_LEVEL = "STANDARD";
-    } else if (diff_level == "H") {
-        MAX_LOST_BALLOONS = 3;
-        RATIO_DECREASE = 700;
-        SPEED_INCREASE = 120;
-        DIFF_LEVEL = "HARD";
-    } else if (diff_level == "V") {
-        MAX_LOST_BALLOONS = 1;
-        RATIO_DECREASE = 300;
-        SPEED_INCREASE = 80;
-        DIFF_LEVEL = "VHARD";
-    }
-    this.diff_level = diff_level;
-    this.palette = Sky.paletteFor(diff_level);
+Game.restart = function (level) {
+    saveSetting("diff_level", level);
+    this.difficulty = Difficulty.get(level);
+    this.palette = Sky.paletteFor(this.difficulty.level);
     this.do_click();
     if (this.tick_interval) {
         clearInterval(this.tick_interval);
@@ -302,10 +276,7 @@ Game.init = function () {
     this.canvas = document.getElementById("balloon_canvas");
     this.ctx = this.canvas.getContext("2d");
 
-    this.diff_level = loadSetting("diff_level");
-    if (!this.diff_level) {
-        this.diff_level = "S";
-    }
+    this.difficulty = Difficulty.get(loadSetting("diff_level"));
 
     this.applyCanvasSize();
     this.screen = "title";
@@ -351,14 +322,14 @@ Game.setDifficulty = function () {
         if (target) {
             // The high-score line has no level of its own; it replays the
             // difficulty already selected.
-            that.restart(target.level || that.diff_level);
+            that.restart(target.level || that.difficulty.level);
         }
     }, { signal: signal });
 
     document.addEventListener("keydown", function (event) {
         var key = event.key.toUpperCase();
         if (event.key === " " || event.key === "Enter") {
-            that.restart(that.diff_level);
+            that.restart(that.difficulty.level);
         } else if (key === "E" || key === "S" || key === "H" || key === "V") {
             that.restart(key);
         }
@@ -374,7 +345,7 @@ Game.fillscore = function (data) {
 
     this.ctx.font = this.layout.fonts.label;
     this.ctx.fillStyle = this.palette.inkSoft;
-    this.ctx.fillText(Layout.HIGH_SCORES_TEXT + this.diff_level, scores.heading.x, scores.heading.y);
+    this.ctx.fillText(Layout.HIGH_SCORES_TEXT + this.difficulty.level, scores.heading.x, scores.heading.y);
 
     this.ctx.font = this.layout.fonts.score;
     for (var i = 0; i < scores.rows.length; i++) {
@@ -403,7 +374,7 @@ Game.getScores = function () {
 
     ready
         .then(function () {
-            return fetch(SCORE_URL + that.diff_level.toLowerCase());
+            return fetch(SCORE_URL + that.difficulty.level.toLowerCase());
         })
         .then(function (response) {
             return response.ok ? response.json() : [];
@@ -421,7 +392,7 @@ Game.addscore = function (score) {
     var that = this;
     this.scores = undefined;
 
-    this.pendingScore = fetch(SCORE_URL + this.diff_level.toLowerCase(), {
+    this.pendingScore = fetch(SCORE_URL + this.difficulty.level.toLowerCase(), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ score: score, name: that.name })
@@ -475,7 +446,7 @@ Game.draw_diff_levels = function () {
 
     for (var i = 0; i < buttons.length; i++) {
         var button = buttons[i];
-        var selected = button.level === this.diff_level;
+        var selected = button.level === this.difficulty.level;
         var pressed = live && button.level === this.pressedLevel;
 
         var fill, border, label;
@@ -534,7 +505,7 @@ Game.randomBalloon = function () {
     var max_height = this.height;
     var xcoord = Math.floor(Math.random() * this.layout.spawn.width) + this.layout.spawn.min;
     var ycoord = max_height;
-    var ratioSize = Math.max(MIN_RATIO_SIZE, RATIO_SIZE - this.balloons_caught / RATIO_DECREASE);
+    var ratioSize = Math.max(MIN_RATIO_SIZE, RATIO_SIZE - this.balloons_caught / this.difficulty.ratioDecrease);
 
     // A fingertip is the same size whatever the screen, but radius scaled with
     // width alone: on a 390px phone the smallest balloon was a 19px target,
@@ -549,7 +520,7 @@ Game.randomBalloon = function () {
     var randomSize = baseRadius + Math.random() * BALLOON_SIZE_SPREAD * this.ratio * ratioSize;
     var getRandomRGB = function () { return Math.floor(Math.random() * 255); };
     var randomColor = { r: getRandomRGB(), g: getRandomRGB(), b: getRandomRGB() };
-    var balloonSpeed = BALLOON_SPEED + this.balloons_caught / SPEED_INCREASE;
+    var balloonSpeed = BALLOON_SPEED + this.balloons_caught / this.difficulty.speedIncrease;
 
     // Scaling the rise by height keeps the time to cross the screen the same
     // whatever shape the window is.
@@ -582,7 +553,7 @@ Game.tick = function () {
     for (i = 0; i < this.balloons.length; i++) {
         this.balloons[i].tick(this.isrestart);
     }
-    if (this.lostBalloons >= MAX_LOST_BALLOONS) {
+    if (this.lostBalloons >= this.difficulty.maxLost) {
         this.gameover();
     }
 };
@@ -602,14 +573,14 @@ Game.draw = function () {
             hud.caught, hud.y
         );
         this.ctx.fillStyle = this.palette.inkSoft;
-        this.ctx.fillText(DIFF_LEVEL, hud.level, hud.y);
+        this.ctx.fillText(this.difficulty.name, hud.level, hud.y);
         this.ctx.fillStyle = this.palette.accent;
         this.ctx.fillText(this.time_to_show + "s", hud.time, hud.y);
     }
 };
 
 Game.clear = function () {
-    var sky = Sky.render(this.width, this.height, this.dpr, this.diff_level);
+    var sky = Sky.render(this.width, this.height, this.dpr, this.difficulty.level);
     this.ctx.drawImage(sky, 0, 0, this.width, this.height);
 };
 

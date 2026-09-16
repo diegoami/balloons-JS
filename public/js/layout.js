@@ -15,18 +15,6 @@
 
 var Layout = {};
 
-/**
- * The difficulty menu. Each item is laid out as its own button, so the labels
- * no longer have to be substrings of one drawn string and the boxes can be
- * sized for a fingertip in both directions.
- */
-Layout.MENU_ITEMS = [
-    { level: "E", label: "Easy" },
-    { level: "S", label: "Standard" },
-    { level: "H", label: "Hard" },
-    { level: "V", label: "VHard" }
-];
-
 Layout.HINT_TEXT = "Press E S H V to choose, space to replay";
 
 Layout.INTRO_TEXT = "Stop the balloons, before it is too late !!";
@@ -172,8 +160,12 @@ Layout.compute = function (ctx, width, height, fontSize) {
     var gap = line * G.button.gap;
     var buttonHeight = Math.max(line + padY * 2, G.minTouchTarget);
 
+    // Read from the difficulty table each time rather than captured at parse
+    // time, so there is no load-order dependency between the two files.
+    var items = Difficulty.all();
+
     ctx.font = fonts.menu;
-    var widths = Layout.MENU_ITEMS.map(function (item) {
+    var widths = items.map(function (item) {
         return Math.max(ctx.measureText(item.label).width + padX * 2, G.minTouchTarget);
     });
     ctx.font = fonts.score;
@@ -183,15 +175,15 @@ Layout.compute = function (ctx, width, height, fontSize) {
     var x = left;
     var rowCount = 1;
 
-    for (var i = 0; i < Layout.MENU_ITEMS.length; i++) {
+    for (var i = 0; i < items.length; i++) {
         if (i > 0 && x + widths[i] - left > available) {
             x = left;
             rowTop += buttonHeight + gap;
             rowCount++;
         }
         buttons.push({
-            level: Layout.MENU_ITEMS[i].level,
-            label: Layout.MENU_ITEMS[i].label,
+            level: items[i].level,
+            label: items[i].label,
             x: x,
             y: rowTop,
             width: widths[i],
