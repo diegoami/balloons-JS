@@ -34,7 +34,7 @@ var SPEED_MODIFIER = 0.0015;
 /**
  * Screen positions, the difficulty menu and its hit regions all come from
  * layout.js. Seventeen loose fractions and eight hand-counted string offsets
- * used to live here.
+ * used to live here. What each screen *is* comes from screens.js.
  */
 
 const SCORE_URL = "/api/scores/";
@@ -56,6 +56,21 @@ function saveSetting(key, value) {
     }
 }
 
+/**
+ * The same cleaning the score function applies, done here too so the name you
+ * see is the name that gets stored. Control characters out, 24 characters max,
+ * and an empty field means anonymous rather than a blank row on the board.
+ */
+var MAX_NAME_LENGTH = 24;
+
+function cleanName(value) {
+    if (typeof value !== "string") {
+        return "anonymous";
+    }
+    var cleaned = value.replace(/[\u0000-\u001F\u007F]/g, "").trim();
+    return cleaned.slice(0, MAX_NAME_LENGTH) || "anonymous";
+}
+
 var Game = {};
 Game.fps = 30;
 
@@ -69,16 +84,95 @@ Game.COUNTDOWN_MS = 2000;
  */
 Game.MENU_LOCKOUT_MS = 1200;
 
+// ------------------------------------------------------------------ screens
+
+/**
+ * Moves to a screen, which is the only way the game changes state.
+ *
+ * Everything a transition needed used to be spread across its caller: restart
+ * set five fields and started a timer, gameover set four more and scheduled a
+ * rebind 1.2 seconds out. Now each screen says what it is (screens.js) and
+ * this is the machinery that swaps one for another.
+ */
+Game.enter = function (name) {
+    var previous = Screens[this.screen];
+    var screen = Screens[name];
+
+    if (previous && previous.exit) {
+        previous.exit(this);
+    }
+
+    this.screen = name;
+
+    // Whatever the incoming screen needs to remember. Deadlines used to live
+    // on the game forever, meaning something outside the screen that set them
+    // could read them long after they stopped meaning anything.
+    this.state = {};
+
+    var signal = this.resetInput();
+
+    if (screen.enter) {
+        screen.enter(this);
+    }
+    if (screen.bind) {
+        screen.bind(this, signal);
+    }
+
+    if (screen.animated) {
+        this.startLoop();
+    } else {
+        this.stopLoop();
+    }
+
+    // Painted on arrival rather than left to the next frame, so a transition
+    // is visible the moment it happens whether or not a loop is running.
+    this.paint();
+};
+
+/** Paints whichever screen is up. */
+Game.paint = function () {
+    Screens[this.screen].draw(this);
+};
+
 /** Whether the difficulty buttons will actually do anything if pressed. */
 Game.isMenuLive = function () {
-    if (this.screen === "title") {
-        return true;
-    }
-    if (this.screen === "gameover") {
-        return Date.now() >= (this.menuLiveAt || 0);
-    }
-    return false;
+    var screen = Screens[this.screen];
+    return screen.menuLive ? screen.menuLive(this) : false;
 };
+
+/** One frame: move what moves, then paint what is on screen by then. */
+Game.frame = function () {
+    var screen = Screens[this.screen];
+
+    if (screen.update) {
+        screen.update(this);
+    }
+    this.paint();
+};
+
+Game.startLoop = function () {
+    var that = this;
+    if (this.tick_interval) {
+        return;
+    }
+    this.tick_interval = setInterval(function () { that.frame(); }, 1000 / Game.fps);
+};
+
+Game.stopLoop = function () {
+    if (this.tick_interval) {
+        clearInterval(this.tick_interval);
+        this.tick_interval = null;
+    }
+};
+
+Game.restart = function (level) {
+    saveSetting("diff_level", level);
+    this.difficulty = Difficulty.get(level);
+    this.palette = Sky.paletteFor(this.difficulty.level);
+    this.enter("starting");
+};
+
+// ------------------------------------------------------------------- canvas
 
 /**
  * Sizes the canvas.
@@ -103,9 +197,21 @@ Game.applyCanvasSize = function () {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     this.ratio = this.width / 1000;
-    this.fontSize = Layout.applyFont(this.ctx, this.width, this.height);
-    this.layout = Layout.compute(this.ctx, this.width, this.height, this.fontSize);
+    this.measureLayout();
     this.palette = Sky.paletteFor(this.difficulty.level);
+};
+
+/**
+ * Works out where everything goes. Separate from sizing the canvas because the
+ * player's name is drawn and tapped, so changing it moves a hit region and the
+ * layout has to be measured again — without resetting the backing store.
+ */
+Game.measureLayout = function () {
+    this.fontSize = Layout.applyFont(this.ctx, this.width, this.height);
+    this.layout = Layout.compute(
+        this.ctx, this.width, this.height, this.fontSize,
+        Layout.PLAYER_PREFIX + this.name
+    );
 };
 
 /**
@@ -126,24 +232,12 @@ Game.handleResize = function () {
         that.watchPixelRatio();
 
         // Balloons captured the old width as their bounce boundary.
-        for (var i = 0; i < (that.balloons || []).length; i++) {
+        for (var i = 0; i < that.balloons.length; i++) {
             that.balloons[i].xmax = that.width;
         }
 
-        that.redraw();
+        that.paint();
     });
-};
-
-/**
- * Only the title screen is painted once and left alone. Every other screen is
- * repainted by the game loop, which keeps running through game over.
- */
-Game.redraw = function () {
-    if (this.screen === "title") {
-        this.drawTitleScreen();
-    } else if (this.screen === "starting") {
-        this.clear();
-    }
 };
 
 Game.watchViewport = function () {
@@ -180,27 +274,12 @@ Game.watchPixelRatio = function () {
     }, { once: true });
 };
 
-Game.drawTitleScreen = function () {
-    this.clear();
-    this.drawIntro(Layout.INTRO_TEXT);
-    this.draw_diff_levels();
-    if (this.scores) {
-        this.fillscore(this.scores);
-    }
-};
-
-/** The one headline line, shared by the title and game-over screens. */
-Game.drawIntro = function (text) {
-    this.ctx.font = this.layout.fonts.intro;
-    this.ctx.fillStyle = this.palette.ink;
-    this.ctx.fillText(text, this.layout.intro.x, this.layout.intro.y);
-    this.ctx.font = this.layout.fonts.menu;
-};
+// -------------------------------------------------------------------- input
 
 /**
- * Drops every listener bound for the previous game state and returns a signal
- * for the next set. Replaces jQuery's .unbind(), which removed *all* handlers
- * on document as a way to reset input.
+ * Drops every listener the outgoing screen bound and returns a signal for the
+ * incoming one. Replaces jQuery's .unbind(), which removed *all* handlers on
+ * document as a way to reset input.
  */
 Game.resetInput = function () {
     if (this.inputAbort) {
@@ -219,94 +298,51 @@ Game.getCanvasPoint = function (event) {
     };
 };
 
-Game.do_click = function () {
+/** Popping balloons: bound while a round is counting down or being played. */
+Game.bindPopping = function (signal) {
     var that = this;
-    var signal = this.resetInput();
 
     this.canvas.addEventListener("click", function (event) {
         var point = that.getCanvasPoint(event);
         for (var i = that.balloons.length - 1; i >= 0; i--) {
             if (that.balloons[i].collision(point.x, point.y)) {
                 that.balloons.splice(i, 1);
-                if (!that.isrestart) {
-                    that.balloons_caught++;
-                }
+                that.balloons_caught++;
                 break;
             }
         }
     }, { signal: signal });
 };
 
-Game.restart = function (level) {
-    saveSetting("diff_level", level);
-    this.difficulty = Difficulty.get(level);
-    this.palette = Sky.paletteFor(this.difficulty.level);
-    this.do_click();
-    if (this.tick_interval) {
-        clearInterval(this.tick_interval);
-    }
-    this.isrestart = false;
-    this.showscores = false;
-    this.screen = "starting";
-    this.countdownEnd = Date.now() + Game.COUNTDOWN_MS;
-    this.pressedLevel = null;
-    this.balloons = [];
-    this.balloons_caught = 0;
-    this.lostBalloons = 0;
-
-    // The loop starts now rather than in two seconds, so the countdown can be
-    // drawn. Previously this was a blank sky with no sign the tap had landed.
-    this.clear();
-    this.tick_interval = setInterval(Game.run, 1000 / Game.fps);
-};
-
-Game.init = function () {
-    // Asked once on first visit and remembered afterwards. Previously this
-    // prompted on every single load, and fell back to a plaintext JSONP call
-    // to gd.geobytes.com just to pre-fill the field.
-    var name = loadSetting("name");
-    if (!name) {
-        name = window.prompt("Please enter your name", "anonymous");
-        if (name) {
-            saveSetting("name", name);
-        }
-    }
-    this.name = name || "anonymous";
-
-    this.canvas = document.getElementById("balloon_canvas");
-    this.ctx = this.canvas.getContext("2d");
-
-    this.difficulty = Difficulty.get(loadSetting("diff_level"));
-
-    this.applyCanvasSize();
-    this.screen = "title";
-    this.pressedLevel = null;
-    this.drawTitleScreen();
-
-    this.getScores();
-    this.setDifficulty();
-    this.watchViewport();
-};
-
-Game.setDifficulty = function () {
+/**
+ * The difficulty menu: bound on the screens that show it.
+ *
+ * A locked menu is a live binding that declines, rather than the old absence
+ * of any binding at all — so the lockout is one condition, checked in the same
+ * place that decides how the buttons are drawn.
+ */
+Game.bindMenu = function (signal) {
     var that = this;
-    var signal = this.resetInput();
 
+    // Animated screens are repainted by the loop; a static one has to be told.
     var repaintIfStatic = function () {
-        if (that.screen === "title") {
-            that.drawTitleScreen();
+        if (!Screens[that.screen].animated) {
+            that.paint();
         }
     };
 
     this.canvas.addEventListener("pointerdown", function (event) {
+        if (!that.isMenuLive()) {
+            return;
+        }
         var target = Layout.pick(that.layout.targets, that.getCanvasPoint(event));
-        that.pressedLevel = target ? target.level : null;
+        that.pressed = target ? target.id : null;
         repaintIfStatic();
     }, { signal: signal });
 
     var releasePress = function () {
-        if (that.pressedLevel !== null) {
-            that.pressedLevel = null;
+        if (that.pressed !== null) {
+            that.pressed = null;
             repaintIfStatic();
         }
     };
@@ -315,11 +351,18 @@ Game.setDifficulty = function () {
     this.canvas.addEventListener("pointerleave", releasePress, { signal: signal });
 
     this.canvas.addEventListener("click", function (event) {
-        var point = that.getCanvasPoint(event);
-        var target = Layout.pick(that.layout.targets, point);
+        that.pressed = null;
+        if (!that.isMenuLive()) {
+            return;
+        }
 
-        that.pressedLevel = null;
-        if (target) {
+        var target = Layout.pick(that.layout.targets, that.getCanvasPoint(event));
+        if (!target) {
+            return;
+        }
+        if (target.id === "player") {
+            that.enter("name");
+        } else {
             // The high-score line has no level of its own; it replays the
             // difficulty already selected.
             that.restart(target.level || that.difficulty.level);
@@ -327,6 +370,9 @@ Game.setDifficulty = function () {
     }, { signal: signal });
 
     document.addEventListener("keydown", function (event) {
+        if (!that.isMenuLive()) {
+            return;
+        }
         var key = event.key.toUpperCase();
         if (event.key === " " || event.key === "Enter") {
             that.restart(that.difficulty.level);
@@ -336,43 +382,24 @@ Game.setDifficulty = function () {
     }, { signal: signal });
 };
 
-Game.fillscore = function (data) {
-    var scores = this.layout.scores;
+// ------------------------------------------------------------------- scores
 
-    if (!data) {
-        return;
-    }
-
-    this.ctx.font = this.layout.fonts.label;
-    this.ctx.fillStyle = this.palette.inkSoft;
-    this.ctx.fillText(Layout.HIGH_SCORES_TEXT + this.difficulty.level, scores.heading.x, scores.heading.y);
-
-    this.ctx.font = this.layout.fonts.score;
-    for (var i = 0; i < scores.rows.length; i++) {
-        if (data.length > i) {
-            this.ctx.fillStyle = this.palette.inkSoft;
-            this.ctx.fillText(data[i]["score_day"], scores.columns.date, scores.rows[i]);
-            this.ctx.fillStyle = this.palette.ink;
-            this.ctx.fillText(data[i]["name"], scores.columns.name, scores.rows[i]);
-            this.ctx.fillStyle = this.palette.accent;
-            this.ctx.fillText(data[i]["score"], scores.columns.value, scores.rows[i]);
-        }
-    }
-    this.ctx.font = this.layout.fonts.menu;
-};
-
-Game.getScores = function () {
+/**
+ * Fetches the leaderboard, once.
+ *
+ * The game-over screen asks for the board on every frame it draws, and the old
+ * version issued a fresh request each time until one came back: thirty requests
+ * a second for as long as the network took. The in-flight promise is the lock.
+ */
+Game.loadScores = function () {
     var that = this;
 
-    if (this.scores) {
-        this.fillscore(this.scores);
+    if (this.scores || this.scoresPending) {
         return;
     }
 
     // Wait on any score still being submitted, so the board we draw includes it.
-    var ready = this.pendingScore || Promise.resolve();
-
-    ready
+    var mine = (this.pendingScore || Promise.resolve())
         .then(function () {
             return fetch(SCORE_URL + that.difficulty.level.toLowerCase());
         })
@@ -380,17 +407,37 @@ Game.getScores = function () {
             return response.ok ? response.json() : [];
         })
         .then(function (data) {
+            // A score submitted while this was in flight supersedes it, or the
+            // board we are holding is already out of date.
+            if (that.scoresPending !== mine) {
+                return;
+            }
+            that.scoresPending = null;
             that.scores = data;
-            that.fillscore(data);
+
+            // A static screen drew before the board arrived, so it has to be
+            // drawn again — as a whole screen, not by painting text over
+            // whatever happens to be on the canvas by now.
+            if (!Screens[that.screen].animated) {
+                that.paint();
+            }
         })
         .catch(function () {
             /* The leaderboard is a nicety; the game plays fine without it. */
+            if (that.scoresPending === mine) {
+                that.scoresPending = null;
+            }
         });
+
+    this.scoresPending = mine;
 };
 
-Game.addscore = function (score) {
+Game.submitScore = function (score) {
     var that = this;
+
+    // The board on screen predates this score, and so does any request for it.
     this.scores = undefined;
+    this.scoresPending = null;
 
     this.pendingScore = fetch(SCORE_URL + this.difficulty.level.toLowerCase(), {
         method: "POST",
@@ -401,28 +448,19 @@ Game.addscore = function (score) {
     });
 };
 
-Game.gameover = function () {
-    var that = this;
+// ------------------------------------------------------------------ drawing
 
-    if (!this.isrestart) {
-        this.addscore(this.balloons_caught);
-        this.resetInput();
-        this.end_time = this.time_to_show;
-        this.isrestart = true;
-        this.screen = "gameover";
-        this.menuLiveAt = Date.now() + Game.MENU_LOCKOUT_MS;
-        this.showscores = true;
-        setTimeout(function () {
-            that.setDifficulty();
-        }, Game.MENU_LOCKOUT_MS);
-    }
-    if (this.end_time) {
-        this.drawIntro("Game Over. Score: " + this.balloons_caught + ", Time: " + this.end_time);
-        this.draw_diff_levels();
-        if (this.showscores) {
-            this.getScores();
-        }
-    }
+Game.clear = function () {
+    var sky = Sky.render(this.width, this.height, this.dpr, this.difficulty.level);
+    this.ctx.drawImage(sky, 0, 0, this.width, this.height);
+};
+
+/** The one headline line, shared by the title and game-over screens. */
+Game.drawIntro = function (text) {
+    this.ctx.font = this.layout.fonts.intro;
+    this.ctx.fillStyle = this.palette.ink;
+    this.ctx.fillText(text, this.layout.intro.x, this.layout.intro.y);
+    this.ctx.font = this.layout.fonts.menu;
 };
 
 /**
@@ -432,7 +470,7 @@ Game.gameover = function () {
  * anything: after a game ended the menu was repainted every frame for five
  * seconds while no input was bound at all.
  */
-Game.draw_diff_levels = function () {
+Game.drawMenu = function () {
     var ctx = this.ctx;
     var palette = this.palette;
     var buttons = this.layout.menu.buttons;
@@ -447,7 +485,7 @@ Game.draw_diff_levels = function () {
     for (var i = 0; i < buttons.length; i++) {
         var button = buttons[i];
         var selected = button.level === this.difficulty.level;
-        var pressed = live && button.level === this.pressedLevel;
+        var pressed = live && button.level === this.pressed;
 
         var fill, border, label;
         if (!live) {
@@ -500,6 +538,206 @@ Game.draw_diff_levels = function () {
     );
 };
 
+/** The board, if one has arrived. Nothing is drawn before then. */
+Game.drawScores = function () {
+    var scores = this.layout.scores;
+    var data = this.scores;
+
+    if (!data) {
+        return;
+    }
+
+    this.ctx.font = this.layout.fonts.label;
+    this.ctx.fillStyle = this.palette.inkSoft;
+    this.ctx.fillText(Layout.HIGH_SCORES_TEXT + this.difficulty.level, scores.heading.x, scores.heading.y);
+
+    this.ctx.font = this.layout.fonts.score;
+    for (var i = 0; i < scores.rows.length; i++) {
+        if (data.length > i) {
+            this.ctx.fillStyle = this.palette.inkSoft;
+            this.ctx.fillText(data[i]["score_day"], scores.columns.date, scores.rows[i]);
+            this.ctx.fillStyle = this.palette.ink;
+            this.ctx.fillText(data[i]["name"], scores.columns.name, scores.rows[i]);
+            this.ctx.fillStyle = this.palette.accent;
+            this.ctx.fillText(data[i]["score"], scores.columns.value, scores.rows[i]);
+        }
+    }
+    this.ctx.font = this.layout.fonts.menu;
+};
+
+Game.drawCountdown = function (remaining) {
+    var ctx = this.ctx;
+
+    ctx.save();
+    ctx.textAlign = "center";
+
+    ctx.font = this.layout.fonts.label;
+    ctx.fillStyle = this.palette.inkSoft;
+    ctx.fillText("Get ready", this.layout.countdown.x, this.layout.countdown.y - this.layout.line * 1.5);
+
+    ctx.font = this.layout.fonts.countdown;
+    ctx.fillStyle = this.palette.accent;
+    ctx.fillText(
+        String(Math.ceil(Math.max(remaining, 0) / 1000)),
+        this.layout.countdown.x,
+        this.layout.countdown.y
+    );
+
+    ctx.restore();
+};
+
+/**
+ * The name line along the bottom: who the score will be posted as, and the way
+ * in to changing it. Underlined because it is the only text on the screen you
+ * can tap that is not obviously a button.
+ */
+Game.drawPlayer = function () {
+    var rect = this.layout.player;
+    var ctx = this.ctx;
+    var live = this.isMenuLive();
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = this.layout.fonts.label;
+
+    // The sky is at its brightest along the bottom edge, so the chip carries
+    // the same scrim the sky uses behind its own text rather than trusting
+    // pale ink to hold up over a lit horizon.
+    Layout.roundedRect(ctx, rect, rect.radius);
+    ctx.fillStyle = this.palette.scrim;
+    ctx.fill();
+
+    if (live && this.pressed === "player") {
+        ctx.fillStyle = this.palette.buttonPressOverlay;
+        ctx.fill();
+    }
+
+    ctx.fillStyle = live ? this.palette.ink : this.palette.inkDisabled;
+    ctx.fillText(
+        Layout.PLAYER_PREFIX + this.name,
+        rect.x + rect.width / 2,
+        rect.y + rect.height / 2
+    );
+    ctx.restore();
+};
+
+/** The name screen: a heading, the field's Save button, and how to get out. */
+Game.drawNameScreen = function () {
+    var ctx = this.ctx;
+    var save = this.layout.name.save;
+
+    this.drawIntro(Layout.NAME_TEXT);
+    this.positionNameField();
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = this.layout.fonts.menu;
+    ctx.lineWidth = Math.max(1, this.layout.line * 0.06);
+
+    Layout.roundedRect(ctx, save, save.radius);
+    ctx.fillStyle = this.pressed === "save" ? this.palette.buttonFill : this.palette.accent;
+    ctx.fill();
+    ctx.fillStyle = this.palette.onAccent;
+    ctx.fillText(save.label, save.x + save.width / 2, save.y + save.height / 2);
+    ctx.restore();
+
+    ctx.font = this.layout.fonts.label;
+    ctx.fillStyle = this.palette.inkSoft;
+    ctx.fillText(Layout.NAME_HINT, this.layout.hint.x, this.layout.hint.y);
+};
+
+/**
+ * Puts the input where the layout says the field is, in the palette's colours.
+ * Done on every paint, so a resize or a rotation moves it with everything else.
+ */
+Game.positionNameField = function () {
+    var field = this.layout.name.field;
+    var style = this.nameField.style;
+
+    style.left = field.x + "px";
+    style.top = field.y + "px";
+    style.width = field.width + "px";
+    style.height = field.height + "px";
+    style.padding = "0 " + Math.round(this.layout.line * 0.4) + "px";
+    style.borderRadius = this.layout.name.save.radius + "px";
+    style.font = this.layout.fonts.menu;
+    style.background = this.palette.buttonFill;
+    style.borderColor = this.palette.buttonBorder;
+    style.color = this.palette.ink;
+    style.caretColor = this.palette.accent;
+};
+
+Game.showNameField = function (value) {
+    this.nameField.hidden = false;
+    this.nameField.value = value;
+    this.positionNameField();
+
+    // Entered by a tap, so this call is still inside that gesture and a phone
+    // will raise its keyboard. select() means the first keystroke replaces the
+    // old name rather than appending to it.
+    this.nameField.focus();
+    this.nameField.select();
+};
+
+Game.hideNameField = function () {
+    this.nameField.blur();
+    this.nameField.hidden = true;
+};
+
+/**
+ * Takes the name, everywhere it is kept. The layout is measured again because
+ * the name is drawn, so its width is also the width of a tap target.
+ */
+Game.setName = function (value) {
+    this.name = cleanName(value);
+    saveSetting("name", this.name);
+    this.measureLayout();
+};
+
+Game.drawBalloons = function () {
+    for (var i = 0; i < this.balloons.length; i++) {
+        this.balloons[i].draw();
+    }
+};
+
+Game.drawHud = function () {
+    var hud = this.layout.hud;
+
+    this.ctx.font = this.layout.fonts.hud;
+    this.ctx.fillStyle = this.palette.ink;
+    this.ctx.fillText(
+        this.balloons_caught + " popped, " + this.lostBalloons + " lost",
+        hud.caught, hud.y
+    );
+    this.ctx.fillStyle = this.palette.inkSoft;
+    this.ctx.fillText(this.difficulty.name, hud.level, hud.y);
+    this.ctx.fillStyle = this.palette.accent;
+    this.ctx.fillText(this.elapsed() + "s", hud.time, hud.y);
+};
+
+// -------------------------------------------------------------------- world
+
+/** How long the current round has been running, as a fixed-point string. */
+Game.elapsed = function () {
+    return ((Date.now() - this.start) / 1000).toFixed(2);
+};
+
+/**
+ * Clears the board for a new round. The clock is set here and again when play
+ * actually begins, so nothing drawn during the countdown can read a time left
+ * over from the previous game.
+ */
+Game.resetRound = function () {
+    this.pressed = null;
+    this.balloons = [];
+    this.balloons_caught = 0;
+    this.lostBalloons = 0;
+    this.end_time = null;
+    this.start = Date.now();
+};
+
 Game.randomBalloon = function () {
     var max_width = this.width;
     var max_height = this.height;
@@ -531,100 +769,62 @@ Game.randomBalloon = function () {
     );
 };
 
-Game.tick = function () {
-    var i;
+/** Maybe releases one balloon. A fuller sky releases them more slowly. */
+Game.spawnBalloon = function () {
+    var frequency = BALLOON_FREQUENCY - SPEED_MODIFIER * this.balloons.length;
 
-    for (i = this.balloons.length - 1; i >= 0; i--) {
+    if (Math.random() < frequency && this.balloons.length < MAX_BALLOONS) {
+        this.balloons.push(this.randomBalloon());
+    }
+};
+
+/** Drops the balloons that reached the top, and says how many got away. */
+Game.removeEscaped = function () {
+    var escaped = 0;
+
+    for (var i = this.balloons.length - 1; i >= 0; i--) {
         if (this.balloons[i].ycoord <= ESCAPE_COORDS) {
             this.balloons.splice(i, 1);
-            if (!this.isrestart) {
-                this.lostBalloons++;
-            }
+            escaped++;
         }
     }
-
-    var balloonFrequency = BALLOON_FREQUENCY - SPEED_MODIFIER * this.balloons.length;
-    if (!this.isrestart) {
-        if (Math.random() < balloonFrequency && this.balloons.length < MAX_BALLOONS) {
-            this.balloons.push(this.randomBalloon());
-        }
-    }
-
-    for (i = 0; i < this.balloons.length; i++) {
-        this.balloons[i].tick(this.isrestart);
-    }
-    if (this.lostBalloons >= this.difficulty.maxLost) {
-        this.gameover();
-    }
+    return escaped;
 };
 
-Game.draw = function () {
+/**
+ * Moves every balloon one step. Accelerating is how the board empties itself
+ * once a game is over: the survivors speed up and fly off the top.
+ */
+Game.moveBalloons = function (accelerate) {
     for (var i = 0; i < this.balloons.length; i++) {
-        this.balloons[i].draw();
-    }
-    if (this.ctx && !this.isrestart) {
-        var hud = this.layout.hud;
-        this.time_to_show = ((Date.now() - this.start) / 1000).toFixed(2);
-
-        this.ctx.font = this.layout.fonts.hud;
-        this.ctx.fillStyle = this.palette.ink;
-        this.ctx.fillText(
-            this.balloons_caught + " popped, " + this.lostBalloons + " lost",
-            hud.caught, hud.y
-        );
-        this.ctx.fillStyle = this.palette.inkSoft;
-        this.ctx.fillText(this.difficulty.name, hud.level, hud.y);
-        this.ctx.fillStyle = this.palette.accent;
-        this.ctx.fillText(this.time_to_show + "s", hud.time, hud.y);
+        this.balloons[i].tick(accelerate);
     }
 };
 
-Game.clear = function () {
-    var sky = Sky.render(this.width, this.height, this.dpr, this.difficulty.level);
-    this.ctx.drawImage(sky, 0, 0, this.width, this.height);
-};
+// --------------------------------------------------------------------- boot
 
-Game.drawStarting = function () {
-    var remaining = this.countdownEnd - Date.now();
+Game.init = function () {
+    // Asked once on first visit and remembered afterwards. This used to be a
+    // window.prompt(), which is a browser modal: it blocked the first paint, so
+    // the question arrived over a blank page; it could not be styled, restyled
+    // or reopened; some browsers suppress it outright; and once answered there
+    // was no way to change the answer short of clearing the site's data.
+    // Before that it prompted on every single load, and pre-filled the field
+    // from a plaintext JSONP call to gd.geobytes.com.
+    var stored = loadSetting("name");
+    this.name = cleanName(stored);
 
-    if (remaining <= 0) {
-        this.screen = "playing";
-        this.start = Date.now();
-        return;
-    }
+    this.canvas = document.getElementById("balloon_canvas");
+    this.ctx = this.canvas.getContext("2d");
+    this.nameField = document.getElementById("player_name");
 
-    this.clear();
-    this.draw_diff_levels();
+    this.difficulty = Difficulty.get(loadSetting("diff_level"));
+    this.balloons = [];
+    this.pressed = null;
 
-    var ctx = this.ctx;
-    ctx.save();
-    ctx.textAlign = "center";
-
-    ctx.font = this.layout.fonts.label;
-    ctx.fillStyle = this.palette.inkSoft;
-    ctx.fillText("Get ready", this.layout.countdown.x, this.layout.countdown.y - this.layout.line * 1.5);
-
-    ctx.font = this.layout.fonts.countdown;
-    ctx.fillStyle = this.palette.accent;
-    ctx.fillText(String(Math.ceil(remaining / 1000)), this.layout.countdown.x, this.layout.countdown.y);
-
-    ctx.restore();
-};
-
-Game.update = function () {
-    if (this.screen === "starting") {
-        this.drawStarting();
-        return;
-    }
-    this.clear();
-    this.tick();
-    this.draw();
-};
-
-Game.run = function () {
-    if (!Game.stopped) {
-        Game.update();
-    }
+    this.applyCanvasSize();
+    this.enter(stored ? "title" : "name");
+    this.watchViewport();
 };
 
 window.addEventListener("load", function () {

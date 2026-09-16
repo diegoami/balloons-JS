@@ -20,6 +20,12 @@ Layout.HINT_TEXT = "Press E S H V to choose, space to replay";
 Layout.INTRO_TEXT = "Stop the balloons, before it is too late !!";
 Layout.HIGH_SCORES_TEXT = "High Scores - ";
 
+/** The name line along the bottom, and the screen it opens. */
+Layout.PLAYER_PREFIX = "Playing as ";
+Layout.NAME_TEXT = "Who is playing?";
+Layout.NAME_HINT = "Enter to save, Escape to cancel";
+Layout.SAVE_TEXT = "Save";
+
 Layout.GRID = {
     /** Fractions of canvas width. */
     columns: {
@@ -50,6 +56,21 @@ Layout.GRID = {
 
     /** Gaps in the vertical flow, in line heights. */
     gaps: { afterMenu: 0.95, afterHint: 1.5, beforeScores: 1.7 },
+
+    /**
+     * The name line, anchored to the bottom edge rather than placed in the
+     * flow, so adding it cannot push the composition off a short screen.
+     *
+     * It is a chip rather than plain text for two reasons: it sits on the
+     * brightest part of the sky, where pale ink alone is hard to read, and a
+     * thing you can tap should look like one. Height is a line and a half,
+     * floored at the touch minimum and capped so a large window does not get
+     * an enormous footer. Everything but maxHeight is in line heights.
+     */
+    footer: { padX: 0.5, height: 1.5, maxHeight: 64, inset: 0.4, radius: 0.28 },
+
+    /** The name field is capped, because a name is not screen-width long. */
+    fieldMax: 16,
 
     /** A line height, as a multiple of the advance width of a capital M. */
     lineRatio: 1.3,
@@ -83,11 +104,17 @@ Layout.GRID = {
     minTouchTarget: 44,
 
     /**
-     * Font size is capped at height/heightDivisor so the deepest row still
-     * lands on screen. The deepest baseline sits at about 15.6x the font size,
-     * so 19 leaves the composition occupying roughly 82% of the height.
+     * Font size is capped so the deepest row still lands on screen: the
+     * deepest baseline sits at about 15.6x the font size, so 19 leaves the
+     * composition occupying roughly 82% of the height it is given.
+     *
+     * What it is given is the height less the name line, which sits on the
+     * bottom edge outside the flow and takes a touch target plus a little air.
+     * Without that reservation the flow ran into the footer on a letterboxed
+     * window: at 1920x400 the last score row landed 5px below the name line.
      */
-    heightDivisor: 19
+    heightDivisor: 19,
+    footerReserve: 56
 };
 
 /** Grows a rect about its own centre until it meets the touch minimum. */
@@ -116,7 +143,10 @@ Layout.applyFont = function (ctx, width, height) {
     var G = Layout.GRID;
     var size = Math.max(
         G.minFontSize,
-        Math.min(G.baseFontSize * (width / 1000), height / G.heightDivisor)
+        Math.min(
+            G.baseFontSize * (width / 1000),
+            (height - G.footerReserve) / G.heightDivisor
+        )
     );
 
     size = Math.round(size);
@@ -140,7 +170,7 @@ Layout.applyFont = function (ctx, width, height) {
  * Regions that are both drawn and clicked return a single rect, so the two can
  * never drift apart the way the difficulty boxes used to.
  */
-Layout.compute = function (ctx, width, height, fontSize) {
+Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
     var G = Layout.GRID;
     var line = ctx.measureText("M").width * G.lineRatio;
     var left = width * G.columns.margin;
@@ -224,10 +254,57 @@ Layout.compute = function (ctx, width, height, fontSize) {
         height: line
     });
 
+    // --- the name line, anchored to the bottom edge rather than to the flow
+
+    ctx.font = fonts.label;
+    var footerHeight = Math.max(
+        Math.min(line * G.footer.height, G.footer.maxHeight),
+        G.minTouchTarget
+    );
+    var player = {
+        x: left,
+        y: Math.max(0, height - footerHeight - line * G.footer.inset),
+        width: Math.max(
+            ctx.measureText(playerLabel || "").width + line * G.footer.padX * 2,
+            G.minTouchTarget
+        ),
+        height: footerHeight,
+        radius: line * G.footer.radius,
+        label: playerLabel || ""
+    };
+
+    // --- the name screen, on the row the difficulty buttons occupy elsewhere
+
+    ctx.font = fonts.menu;
+    var saveWidth = Math.max(ctx.measureText(Layout.SAVE_TEXT).width + padX * 2, G.minTouchTarget);
+    ctx.font = fonts.score;
+
+    var field = {
+        x: left,
+        y: menuTop,
+        width: Math.max(
+            Math.min(available - saveWidth - gap, line * G.fieldMax),
+            G.minTouchTarget
+        ),
+        height: buttonHeight
+    };
+    var save = {
+        x: left + field.width + gap,
+        y: menuTop,
+        width: saveWidth,
+        height: buttonHeight,
+        radius: line * G.button.radius,
+        label: Layout.SAVE_TEXT
+    };
+
+    // Every tappable thing carries an id, because two of them have no
+    // difficulty of their own: the high-score line replays whatever is
+    // selected, and the name line opens the name screen.
     var targets = buttons.map(function (button) {
-        return { level: button.level, hit: button.hit };
+        return { id: button.level, level: button.level, hit: button.hit };
     });
-    targets.push({ level: null, hit: scoresHit });
+    targets.push({ id: "replay", level: null, hit: scoresHit });
+    targets.push({ id: "player", level: null, hit: player });
 
     return {
         line: line,
@@ -245,6 +322,10 @@ Layout.compute = function (ctx, width, height, fontSize) {
         },
 
         hint: { x: left, y: hintY },
+
+        player: player,
+
+        name: { field: field, save: save },
 
         countdown: { x: width / 2, y: headingY + line * 1.4 },
 

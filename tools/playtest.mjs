@@ -137,7 +137,6 @@ async function playLevel(level) {
       viewport: { width: OPTIONS.width, height: OPTIONS.height }
     });
     const page = await context.newPage();
-    page.on('dialog', d => d.accept('Bot'));
     await page.addInitScript(l => {
       try {
         localStorage.setItem('name', 'Bot');
