@@ -17,8 +17,9 @@
  *
  * What it found on first use, against master at the time:
  *   - All four difficulties played identically. BALLOON_FREQUENCY and
- *     BALLOON_SPEED are shared, not per-level, so only lives and a slow ramp
- *     differ between them.
+ *     BALLOON_SPEED were shared globals rather than per-level, so only lives
+ *     and a slow ramp differed between them. Both now live in the difficulty
+ *     table, and this harness is what says whether that was enough.
  *   - 11 of 12 games survived a 70 second cap, VHard included, and that level
  *     ends on one escaped balloon.
  *   - Balloon speed spans 23:1, so the slowest balloon takes 97 seconds to
