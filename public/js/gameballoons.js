@@ -1,13 +1,15 @@
 var ESCAPE_COORDS = -10;
 
-var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed) {
+var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, speedScale) {
     var that;
     that = {};
     that.xcoord = xcoord ;
     that.ycoord = ycoord ;
     that.size = size;
     that.color = color;
-    that.delta = -1 * ((Math.random()*speed)+0.25);
+    // speedScale makes the rise proportional to screen height, so the time a
+    // balloon takes to cross does not depend on how tall the window is.
+    that.delta = -1 * ((Math.random()*speed)+0.25) * (speedScale || 1);
     that.xdelta = -.5+ Math.random();
     that.xmax = xmax;
 

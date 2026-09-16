@@ -1,5 +1,20 @@
 var BALLOON_FREQUENCY = 0.1;
 var BALLOON_SPEED = 5.5;
+
+/** Balloon radius before any scaling: a base plus a random spread. */
+var BALLOON_BASE_SIZE = 24;
+var BALLOON_SIZE_SPREAD = 50;
+
+/**
+ * Balloon speed is expressed for a screen this tall and scaled from there.
+ *
+ * Speed was absolute pixels per tick while the distance a balloon had to cross
+ * was the screen height, so the time available to react was set by how tall
+ * your window happened to be. Measured with the playtest harness, a 1920x400
+ * window gave 2.4 seconds of median reaction time against a phone's 4.2, and
+ * it was the only viewport where the bot lost a game.
+ */
+var REFERENCE_HEIGHT = 720;
 var MAX_BALLOONS = 20;
 var RATIO_SIZE = 1;
 
@@ -520,12 +535,29 @@ Game.randomBalloon = function () {
     var xcoord = Math.floor(Math.random() * this.layout.spawn.width) + this.layout.spawn.min;
     var ycoord = max_height;
     var ratioSize = Math.max(MIN_RATIO_SIZE, RATIO_SIZE - this.balloons_caught / RATIO_DECREASE);
-    var randomSize = (24 + Math.floor(Math.random() * 50)) * this.ratio * ratioSize;
+
+    // A fingertip is the same size whatever the screen, but radius scaled with
+    // width alone: on a 390px phone the smallest balloon was a 19px target,
+    // and 7px once the shrink floor applied. MIN_RATIO_SIZE stopped the radius
+    // reaching zero; it did not make the result hittable.
+    //
+    // The smallest balloon now never falls below the same touch minimum the
+    // menu buttons respect, and the random spread rides on top of that floor,
+    // so a balloon keeps some variety and a desktop game is unchanged.
+    var minRadius = Layout.GRID.minTouchTarget / 2;
+    var baseRadius = Math.max(BALLOON_BASE_SIZE * this.ratio * ratioSize, minRadius);
+    var randomSize = baseRadius + Math.random() * BALLOON_SIZE_SPREAD * this.ratio * ratioSize;
     var getRandomRGB = function () { return Math.floor(Math.random() * 255); };
     var randomColor = { r: getRandomRGB(), g: getRandomRGB(), b: getRandomRGB() };
     var balloonSpeed = BALLOON_SPEED + this.balloons_caught / SPEED_INCREASE;
 
-    return balloonConstructor(xcoord, ycoord, randomSize, randomColor, max_width, balloonSpeed);
+    // Scaling the rise by height keeps the time to cross the screen the same
+    // whatever shape the window is.
+    var heightScale = this.height / REFERENCE_HEIGHT;
+
+    return balloonConstructor(
+        xcoord, ycoord, randomSize, randomColor, max_width, balloonSpeed, heightScale
+    );
 };
 
 Game.tick = function () {

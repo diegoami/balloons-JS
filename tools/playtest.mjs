@@ -13,6 +13,7 @@
  *
  *   npm run playtest
  *   npm run playtest -- --runs=5 --cap=120 --reaction=200 --levels=H,V
+ *   npm run playtest -- --width=390 --height=844 --port=8911
  *
  * What it found on first use, against master at the time:
  *   - All four difficulties played identically. BALLOON_FREQUENCY and
@@ -46,6 +47,8 @@ const OPTIONS = {
   levels: String(flag('levels', 'E,S,H,V')).split(','),
   width: Number(flag('width', 1280)),
   height: Number(flag('height', 720)),
+  // So several viewport sizes can be measured concurrently.
+  port: Number(flag('port', 8910)),
   // A person needs about this long to see a balloon and act on it.
   reaction: Number(flag('reaction', 250)),
   // Pointing is not pixel perfect.
@@ -120,7 +123,7 @@ function serve(port) {
   return new Promise(resolve => server.listen(port, () => resolve(server)));
 }
 
-const server = await serve(8910);
+const server = await serve(OPTIONS.port);
 const browser = await launchBrowser();
 
 /** One difficulty, played OPTIONS.runs times. Levels run in parallel. */
@@ -140,7 +143,7 @@ async function playLevel(level) {
       } catch (e) { /* storage blocked; the game copes */ }
     }, level);
 
-    await page.goto('http://localhost:8910/', { waitUntil: 'load' });
+    await page.goto(`http://localhost:${OPTIONS.port}/`, { waitUntil: 'load' });
     await page.waitForTimeout(400);
     await page.evaluate(BOT(OPTIONS));
     await page.keyboard.press(level.toLowerCase());
