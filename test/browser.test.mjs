@@ -1080,9 +1080,102 @@ await t('balloons still shrink as the score climbs, down to the floor', async ()
   assert.ok(m.at300 < m.at150, 'shrink should continue toward the floor');
   assert.ok(Math.abs(m.at3000 - m.at300) / m.at300 < 0.05,
     `size should settle at the floor, not keep falling (${m.at300.toFixed(1)} -> ${m.at3000.toFixed(1)})`);
-  assert.ok(m.at3000 / m.at0 > m.floor * 0.9 && m.at3000 / m.at0 < m.floor * 1.1,
-    `floor should land near ${m.floor} of full size, got ${(m.at3000 / m.at0).toFixed(2)}`);
+  // Two floors apply: MIN_RATIO_SIZE bounds the shrink, and an absolute
+  // minimum keeps the balloon tappable. Whichever is larger wins, so the
+  // settled size is at least the ratio floor and never below the touch
+  // minimum — which 'a balloon is never smaller than the touch minimum'
+  // checks directly, across every screen.
+  assert.ok(m.at3000 / m.at0 >= m.floor * 0.9,
+    `settled size fell below the ratio floor: ${(m.at3000 / m.at0).toFixed(2)} of full`);
+  assert.ok(m.at3000 < m.at0,
+    'balloons should still end up smaller than they started');
   await context.close();
+});
+
+
+
+// ---------- the same game on every screen ----------
+
+const SCREENS = [[390, 844], [412, 915], [768, 1024], [1280, 720], [1920, 1080], [1920, 400]];
+
+await t('a balloon is never smaller than the touch minimum', async () => {
+  // MIN_RATIO_SIZE stopped the radius reaching zero, but 40% of an already
+  // tiny balloon is still untappable: on a 390px phone that was a 7px target.
+  // The menu buttons have respected 44px since milestone 2; the balloons,
+  // which are the actual game, did not.
+  for (const [w, h] of SCREENS) {
+    const { context, page } = await newGame({ width: w, height: h });
+    const m = await page.evaluate(() => {
+      const smallest = (caught) => {
+        Game.balloons_caught = caught;
+        let min = Infinity;
+        for (let i = 0; i < 2000; i++) {
+          const width = Game.randomBalloon().size * 2;  // check_hit spans +/- radius
+          if (width < min) min = width;
+        }
+        return min;
+      };
+      return {
+        min: Layout.GRID.minTouchTarget,
+        fresh: smallest(0),
+        late: smallest(100000)
+      };
+    });
+    assert.ok(m.fresh >= m.min - 0.5,
+      `fresh balloon is only ${m.fresh.toFixed(0)}px wide at ${w}x${h}, under ${m.min}`);
+    assert.ok(m.late >= m.min - 0.5,
+      `late-game balloon is only ${m.late.toFixed(0)}px wide at ${w}x${h}, under ${m.min}`);
+    await context.close();
+  }
+});
+
+await t('a desktop game keeps the balloon sizes it always had', async () => {
+  // The floor should lift only what was too small. At 1280 wide a fresh
+  // balloon already cleared it, so nothing there should move.
+  const { context, page } = await newGame({ width: 1280, height: 720 });
+  const m = await page.evaluate(() => {
+    Game.balloons_caught = 0;
+    let min = Infinity, max = 0;
+    for (let i = 0; i < 4000; i++) {
+      const r = Game.randomBalloon().size;
+      if (r < min) min = r;
+      if (r > max) max = r;
+    }
+    return { min, max, ratio: Game.ratio };
+  });
+  // Historic formula: (24 + rand*50) * ratio, so 30.7 to 94.7 at this width.
+  assert.ok(Math.abs(m.min - 24 * m.ratio) < 1,
+    `smallest desktop balloon moved: ${m.min.toFixed(1)} vs ${(24 * m.ratio).toFixed(1)}`);
+  assert.ok(Math.abs(m.max - 74 * m.ratio) < 2,
+    `largest desktop balloon moved: ${m.max.toFixed(1)} vs ${(74 * m.ratio).toFixed(1)}`);
+  await context.close();
+});
+
+await t('a balloon takes the same time to cross any shaped screen', async () => {
+  // Speed was absolute pixels per tick while the distance was the screen
+  // height, so a short window gave far less time to react than a tall one.
+  const crossings = [];
+  for (const [w, h] of SCREENS) {
+    const { context, page } = await newGame({ width: w, height: h });
+    const seconds = await page.evaluate(() => {
+      Game.balloons_caught = 0;
+      let total = 0;
+      const n = 3000;
+      for (let i = 0; i < n; i++) {
+        const b = Game.randomBalloon();
+        total += Game.height / (Math.abs(b.delta) * Game.fps);
+      }
+      return total / n;
+    });
+    crossings.push({ size: `${w}x${h}`, seconds });
+    await context.close();
+  }
+
+  const values = crossings.map(c => c.seconds);
+  const spread = Math.max(...values) / Math.min(...values);
+  assert.ok(spread < 1.1,
+    'time to cross still depends on screen shape: ' +
+    crossings.map(c => `${c.size} ${c.seconds.toFixed(1)}s`).join(', '));
 });
 
 
