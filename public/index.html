@@ -5,7 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Baloncelli !!!!!!</title>
     <link href="css/styles.css" rel="stylesheet" type="text/css">
-    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <!-- The .ico is the fallback: Safari before 16, and anything that asks for
+         /favicon.ico without reading the page. Everything current takes the SVG.
+         Both are built from favicon.svg by tools/make-favicon.mjs. -->
+    <link rel="icon" href="favicon.ico" sizes="32x32">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <script src="js/difficulty.js" defer></script>
     <script src="js/color.js" defer></script>
     <script src="js/layout.js" defer></script>

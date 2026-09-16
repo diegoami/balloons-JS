@@ -34,7 +34,8 @@ import { launchBrowser } from '../test/helpers/browser.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const TYPES = {
   '.html': 'text/html', '.js': 'text/javascript',
-  '.css': 'text/css', '.ico': 'image/x-icon'
+  '.css': 'text/css', '.ico': 'image/x-icon',
+  '.svg': 'image/svg+xml', '.png': 'image/png'
 };
 
 function flag(name, fallback) {
