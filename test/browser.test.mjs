@@ -424,9 +424,9 @@ await t('a first visit asks for a name on the page, not in a browser modal', asy
   assert.equal(prompts, 0, 'a browser modal still interrupts the first visit');
   const opened = await page.evaluate(() => ({
     screen: Game.screen,
-    shown: !Game.nameField.hidden,
-    focused: document.activeElement === Game.nameField,
-    value: Game.nameField.value
+    shown: !NameField.element.hidden,
+    focused: document.activeElement === NameField.element,
+    value: NameField.element.value
   }));
   assert.equal(opened.screen, 'name', 'a first visit should open the name screen');
   assert.ok(opened.shown, 'the name field was not shown');
@@ -438,7 +438,7 @@ await t('a first visit asks for a name on the page, not in a browser modal', asy
   await page.waitForTimeout(200);
 
   const saved = await page.evaluate(() => ({
-    screen: Game.screen, name: Game.name, hidden: Game.nameField.hidden
+    screen: Game.screen, name: Game.name, hidden: NameField.element.hidden
   }));
   assert.equal(saved.screen, 'title', 'saving a name should land on the title screen');
   assert.equal(saved.name, 'Persisted');
@@ -1398,8 +1398,8 @@ await t('the leaderboard is fetched once, however often it is asked for', async 
   // used to mean fetching: until the first response landed, the game issued
   // thirty requests a second.
   await page.evaluate(async () => {
-    Game.scores = undefined;
-    for (let i = 0; i < 10; i++) { Game.loadScores(); }
+    Scores.board = null;
+    for (let i = 0; i < 10; i++) { Scores.load(Game); }
     await new Promise(r => setTimeout(r, 300));
   });
 
@@ -1414,13 +1414,13 @@ await t('a new score invalidates the board that was already on its way', async (
   const { context, page, errors } = await newGame({ name: 'Diego' });
 
   const board = await page.evaluate(async () => {
-    Game.scores = undefined;
-    Game.loadScores();            // in flight, and about to be out of date
+    Scores.board = null;
+    Scores.load(Game);            // in flight, and about to be out of date
     Game.balloons_caught = 42;
-    Game.submitScore(42);         // supersedes it
-    Game.loadScores();
+    Scores.submit(Game, 42);         // supersedes it
+    Scores.load(Game);
     await new Promise(r => setTimeout(r, 600));
-    return Game.scores;
+    return Scores.board;
   });
 
   assert.ok(Array.isArray(board), 'no board was drawn after submitting a score');
@@ -1449,9 +1449,9 @@ await t('the name line opens the name screen and the new name sticks', async () 
   await page.waitForTimeout(150);
   const opened = await page.evaluate(() => ({
     screen: Game.screen,
-    shown: !Game.nameField.hidden,
-    focused: document.activeElement === Game.nameField,
-    value: Game.nameField.value
+    shown: !NameField.element.hidden,
+    focused: document.activeElement === NameField.element,
+    value: NameField.element.value
   }));
   assert.equal(opened.screen, 'name', 'tapping the name line did not open the name screen');
   assert.ok(opened.shown && opened.focused, 'the field was not ready to type into');
@@ -1530,7 +1530,7 @@ await t('the game cleans a name the same way the score function does', async () 
     control: cleanName('Die\u0000go\u007F'),
     long: cleanName('x'.repeat(40)).length,
     max: MAX_NAME_LENGTH,
-    field: Game.nameField.maxLength
+    field: NameField.element.maxLength
   }));
   assert.equal(m.blank, 'anonymous', 'an empty field should not post a blank row');
   assert.equal(m.missing, 'anonymous');
@@ -1543,15 +1543,15 @@ await t('the game cleans a name the same way the score function does', async () 
 
 await t('the field is only on the page while the name screen is up', async () => {
   const { context, page, errors } = await newGame({ name: 'Hidden' });
-  assert.equal(await page.evaluate(() => Game.nameField.hidden), true,
+  assert.equal(await page.evaluate(() => NameField.element.hidden), true,
     'the field is on the title screen, where it is not asked for');
 
   await page.keyboard.press('e');
   await page.waitForTimeout(2400);
   const playing = await page.evaluate(() => ({
     screen: Game.screen,
-    hidden: Game.nameField.hidden,
-    focused: document.activeElement === Game.nameField
+    hidden: NameField.element.hidden,
+    focused: document.activeElement === NameField.element
   }));
   assert.equal(playing.screen, 'playing');
   assert.ok(playing.hidden, 'the field is live during play, where it would swallow keys');
@@ -1567,7 +1567,7 @@ await t('the field sits exactly where the layout puts it, before and after a res
   await page.waitForTimeout(150);
 
   const measure = () => page.evaluate(() => {
-    const box = Game.nameField.getBoundingClientRect();
+    const box = NameField.element.getBoundingClientRect();
     const field = Game.layout.name.field;
     return {
       dx: Math.abs(box.x - field.x), dy: Math.abs(box.y - field.y),
@@ -1662,6 +1662,49 @@ await t('the icons are not the largest thing the site serves', async () => {
     `the tab icons are ${tab} bytes against ${code} bytes of game`);
   assert.ok(sizeOf('favicon.ico') < 10 * 1024,
     `the .ico fallback is ${sizeOf('favicon.ico')} bytes`);
+});
+
+
+// ---------- one file, one job ----------
+
+await t('every script the page asks for is served', async () => {
+  const { context, page, errors } = await newGame();
+  const scripts = await page.evaluate(() =>
+    [...document.querySelectorAll('script[src]')].map(s => s.getAttribute('src')));
+
+  assert.ok(scripts.length > 1, 'the page loads no scripts at all');
+  for (const src of scripts) {
+    const res = await fetch('http://localhost:8899/' + src);
+    assert.equal(res.status, 200, `${src} is linked but not served`);
+  }
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the game keeps the game, and nothing else', async () => {
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => ({
+    // Drawing, input, the leaderboard and the one DOM element moved out.
+    leftovers: [
+      'clear', 'drawIntro', 'drawMenu', 'drawScores', 'drawCountdown',
+      'drawPlayer', 'drawNameScreen', 'drawBalloons', 'drawHud',
+      'bindMenu', 'bindPopping', 'getCanvasPoint',
+      'loadScores', 'submitScore', 'scores', 'pendingScore',
+      'nameField', 'showNameField', 'hideNameField', 'positionNameField'
+    ].filter(k => k in Game),
+    namespaces: ['Paint', 'Input', 'Scores', 'NameField', 'Screens', 'Layout', 'Sky', 'Difficulty']
+      .filter(n => typeof window[n] !== 'object'),
+    // What the game is left holding.
+    kept: ['enter', 'paint', 'frame', 'restart', 'applyCanvasSize', 'randomBalloon',
+           'removeEscaped', 'moveBalloons', 'spawnBalloon', 'init']
+      .filter(k => typeof Game[k] !== 'function')
+  }));
+
+  assert.deepEqual(m.leftovers, [],
+    'these moved out of game.js but are still on Game: ' + m.leftovers);
+  assert.deepEqual(m.namespaces, [], 'missing namespace: ' + m.namespaces);
+  assert.deepEqual(m.kept, [], 'the game lost something that is its own: ' + m.kept);
+  await context.close();
 });
 
 
