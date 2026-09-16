@@ -49,6 +49,22 @@ real game: rendering, input, scoring, the game-over round trip, device pixel
 ratios of 1x/2x/3x, resizing and rotation. It needs a Chromium; `npm install`
 fetches one, and `CHROMIUM_PATH` overrides which binary is used.
 
+## Playtesting
+
+```bash
+npm run playtest
+npm run playtest -- --runs=5 --cap=120 --reaction=200 --levels=H,V
+```
+
+`tools/playtest.mjs` plays the game with a bot under human limits — a reaction
+delay, aim error and a realistic click rate — and reports how each difficulty
+went. It asserts nothing and is not part of `npm test`; it exists to answer
+questions about tuning that reading the code does not. Because the player is
+held constant, any difference between levels is the game's.
+
+It aims where a balloon *was* one reaction-time ago, which is the error a person
+makes against a rising target.
+
 ## Deploying
 
 The site is a Netlify project. `netlify.toml` publishes `public/` and picks up
