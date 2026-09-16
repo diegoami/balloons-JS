@@ -2065,6 +2065,67 @@ await t('every colour the game draws text in is readable on its ground', async (
 });
 
 
+await t('the name field is readable too, in the colours it is really given', async () => {
+  // Everything else on the screen is drawn, so measuring the canvas covers it.
+  // The field is an element whose colours are set from the same palette in
+  // JavaScript, which is exactly the kind of second copy that drifts.
+  const { context, page, errors } = await newGame({ name: 'Readable' });
+  const point = await playerLine(page);
+  await page.mouse.click(point.x, point.y);
+  await page.waitForTimeout(200);
+
+  const worst = await page.evaluate(() => {
+    const channel = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    const lum = c => 0.2126 * channel(c[0]) + 0.7152 * channel(c[1]) + 0.0722 * channel(c[2]);
+    const ratio = (a, b) => {
+      const pair = [lum(a), lum(b)].sort((m, n) => n - m);
+      return (pair[0] + 0.05) / (pair[1] + 0.05);
+    };
+    const parse = css => {
+      const m = css.match(/rgba?\(([^)]+)\)/);
+      const p = m[1].split(',').map(Number);
+      return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1];
+    };
+    const over = (fg, bg) => [0, 1, 2].map(i => Math.round(fg[i] * fg[3] + bg[i] * (1 - fg[3])));
+
+    let lowest = { level: null, ratio: Infinity };
+    Difficulty.ORDER.forEach(level => {
+      Game.difficulty = Difficulty.get(level);
+      Game.palette = Sky.paletteFor(level);
+      Game.measureLayout();
+      Game.paint();
+
+      const field = Game.layout.name.field;
+      const style = getComputedStyle(NameField.element);
+
+      // What the canvas is showing underneath the field, where it sits.
+      const under = (() => {
+        Paint.sky(Game);
+        Paint.panel(Game);
+        const d = Game.ctx.getImageData(
+          Math.round((field.x + 4) * Game.dpr),
+          Math.round((field.y + field.height / 2) * Game.dpr), 1, 1).data;
+        return [d[0], d[1], d[2]];
+      })();
+
+      const background = over(parse(style.backgroundColor), under);
+      const text = ratio(over(parse(style.color), background), background);
+      const border = ratio(over(parse(style.borderColor), background), background);
+
+      if (text < lowest.ratio) { lowest = { level, ratio: text, what: 'text' }; }
+      // A border only has to be visible, which WCAG puts at 3:1.
+      if (border < 3) { lowest = { level, ratio: border, what: 'border' }; }
+    });
+    return lowest;
+  });
+
+  assert.ok(worst.ratio >= 4.5,
+    `the name field's ${worst.what} is ${worst.ratio.toFixed(2)}:1 on ${worst.level}`);
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+
 await browser.close();
 server.close();
 
