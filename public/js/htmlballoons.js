@@ -36,14 +36,33 @@ CANVASBALLOON.Balloon = function(canvasElementID, centerX, centerY, radius, colo
     this.centerX = centerX;
     this.centerY = centerY;
     this.radius = radius;
+    this.rgb = color;
     this.baseColor = new Color(color);
     this.darkColor = (new Color(color)).darken(CANVASBALLOON.GRADIENT_FACTOR);
     this.lightColor = (new Color(color)).lighten(CANVASBALLOON.GRADIENT_FACTOR);
 
     // The gradient is rebuilt every frame because it moves with the balloon,
-    // but its two colours never change, so they are worked out once here.
+    // but its two colours only change when the balloon is hit, so they are
+    // worked out here and again on a hit rather than on every frame.
     this.darkString = this.darkColor.rgbString();
     this.lightString = this.lightColor.rgbString();
+
+    // A balloon with more than one skin wears a rim. Nothing draws one unless
+    // it is set, so an ordinary balloon is untouched.
+    this.rimWidth = 0;
+    this.rimColor = "rgba(0, 0, 0, 0.45)";
+};
+
+/**
+ * Re-mixes the gradient, for a balloon that has been hit and is thinning.
+ * Lightening towards the sky is what makes a skin coming off legible without a
+ * meter: the balloon looks progressively emptier.
+ */
+CANVASBALLOON.Balloon.prototype.thin = function (amount) {
+    this.darkString = (new Color(this.rgb))
+        .darken(Math.max(0, CANVASBALLOON.GRADIENT_FACTOR - amount)).rgbString();
+    this.lightString = (new Color(this.rgb))
+        .lighten(CANVASBALLOON.GRADIENT_FACTOR + amount).rgbString();
 };
 
 CANVASBALLOON.Balloon.prototype.check_hit = function(last_x, last_y) {
@@ -155,6 +174,14 @@ CANVASBALLOON.Balloon.prototype.draw = function() {
 
     gfxContext.fillStyle = balloonGradient;
     gfxContext.fill();
+
+    // The rim, for a balloon that takes more than one tap. Drawn on the path
+    // that is already traced, so it costs a stroke and nothing else.
+    if (this.rimWidth > 0) {
+        gfxContext.lineWidth = this.rimWidth;
+        gfxContext.strokeStyle = this.rimColor;
+        gfxContext.stroke();
+    }
 
     // End balloon path
 

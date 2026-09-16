@@ -404,7 +404,7 @@ Game.rung = function () {
 Game.resetRound = function () {
     this.pressed = null;
     this.entities = [];
-    this.balloons_caught = 0;
+    this.score = 0;
     this.lostBalloons = 0;
     this.end_time = null;
     this.ticks = 0;
@@ -439,7 +439,8 @@ Game.randomBalloon = function () {
     var heightScale = this.height / REFERENCE_HEIGHT;
 
     return balloonConstructor(
-        xcoord, ycoord, randomSize, randomColor, max_width, balloonSpeed, heightScale
+        xcoord, ycoord, randomSize, randomColor, max_width, balloonSpeed, heightScale,
+        Ladder.rollSkin(rung)
     );
 };
 

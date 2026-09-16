@@ -291,13 +291,13 @@ await t('clicking a balloon pops it and scores a point', async () => {
     // Freeze the loop so the balloon can't drift between reading and clicking.
     Game.stopLoop();
     const b = Game.entities[0];
-    const caughtBefore = Game.balloons_caught;
+    const caughtBefore = Game.score;
     const countBefore = Game.entities.length;
     Game.canvas.dispatchEvent(new MouseEvent('click', {
       clientX: b.xcoord, clientY: b.ycoord, bubbles: true
     }));
     return {
-      caughtBefore, caughtAfter: Game.balloons_caught,
+      caughtBefore, caughtAfter: Game.score,
       countBefore, countAfter: Game.entities.length
     };
   });
@@ -312,7 +312,7 @@ await t('game over submits the score and shows the leaderboard', async () => {
   const { context, page, errors } = await newGame({ name: 'Diego' });
   await page.keyboard.press('v'); // VHard: a single lost balloon ends it
   await page.waitForTimeout(2500);
-  await page.evaluate(() => { Game.balloons_caught = 17; });
+  await page.evaluate(() => { Game.score = 17; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
 
   await page.waitForTimeout(600);
@@ -564,9 +564,9 @@ await t('clicking a balloon still pops it at 2x (no double-applied ratio)', asyn
   const popped = await page.evaluate(() => {
     Game.stopLoop();
     const b = Game.entities[0];
-    const before = Game.balloons_caught;
+    const before = Game.score;
     Game.canvas.dispatchEvent(new MouseEvent('click', { clientX: b.xcoord, clientY: b.ycoord, bubbles: true }));
-    return { before, after: Game.balloons_caught };
+    return { before, after: Game.score };
   });
   assert.equal(popped.after, popped.before + 1, 'hit-testing broke at 2x');
   assert.deepEqual(errors, [], errors.join(' | '));
@@ -1165,7 +1165,7 @@ await t('a balloon is never smaller than the touch minimum', async () => {
     const { context, page } = await newGame({ width: w, height: h });
     const m = await page.evaluate(() => {
       const smallest = (caught) => {
-        Game.balloons_caught = caught;
+        Game.score = caught;
         let min = Infinity;
         for (let i = 0; i < 2000; i++) {
           const width = Game.randomBalloon().size * 2;  // check_hit spans +/- radius
@@ -1192,7 +1192,7 @@ await t('a desktop game keeps the balloon sizes it always had', async () => {
   // balloon already cleared it, so nothing there should move.
   const { context, page } = await newGame({ width: 1280, height: 720 });
   const m = await page.evaluate(() => {
-    Game.balloons_caught = 0;
+    Game.score = 0;
     let min = Infinity, max = 0;
     for (let i = 0; i < 4000; i++) {
       const r = Game.randomBalloon().size;
@@ -1216,7 +1216,7 @@ await t('a balloon takes the same time to cross any shaped screen', async () => 
   for (const [w, h] of SCREENS) {
     const { context, page } = await newGame({ width: w, height: h });
     const seconds = await page.evaluate(() => {
-      Game.balloons_caught = 0;
+      Game.score = 0;
       let total = 0;
       const n = 3000;
       for (let i = 0; i < n; i++) {
@@ -1423,7 +1423,7 @@ await t('a new score invalidates the board that was already on its way', async (
   const board = await page.evaluate(async () => {
     Scores.board = null;
     Scores.load(Game);            // in flight, and about to be out of date
-    Game.balloons_caught = 42;
+    Game.score = 42;
     Scores.submit(Game, 42);         // supersedes it
     Scores.load(Game);
     await new Promise(r => setTimeout(r, 600));
@@ -1864,7 +1864,7 @@ await t('a balloon is painted by one painter, not a new one every frame', async 
   const m = await page.evaluate(() => ({
     painters: window.__built.painters,
     colours: window.__built.colours,
-    balloons: Game.entities.length + Game.balloons_caught + Game.lostBalloons
+    balloons: Game.entities.length + Game.score + Game.lostBalloons
   }));
 
   assert.ok(m.balloons > 3, `only ${m.balloons} balloons in three seconds, too few to judge`);
@@ -1928,7 +1928,7 @@ await t('the game says what screen it is on, and what happened', async () => {
   assert.match(heard, /Get ready/, 'the countdown is silent: ' + heard);
   assert.match(heard, /VHard/, 'the difficulty is never said: ' + heard);
   assert.match(heard, /\d+ of 1 lost/, 'losing a balloon is silent: ' + heard);
-  assert.match(heard, /Game over\. \d+ popped in [\d.]+ seconds/,
+  assert.match(heard, /Game over\. \d+ points in [\d.]+ seconds/,
     'the result is never said: ' + heard);
 
   // The last thing said is the thing that just happened.
@@ -2145,7 +2145,8 @@ await t('the ladder gets harder every rung, and asks more than a player has', as
   const m = await page.evaluate(() => ({
     rungs: Ladder.LEVELS.map(r => ({
       level: r.level, speed: r.speed, frequency: r.frequency, size: r.size,
-      demand: Ladder.demand(r)
+      demand: Ladder.demand(r), taps: Ladder.meanTaps(r),
+      arrivals: Ladder.arrivals(r)
     })),
     max: Ladder.MAX
   }));
@@ -2158,8 +2159,15 @@ await t('the ladder gets harder every rung, and asks more than a player has', as
     const under = m.rungs[i - 1];
     assert.ok(r.speed > under.speed,
       `level ${r.level} is no faster than ${under.level} (${under.speed} then ${r.speed})`);
-    assert.ok(r.frequency >= under.frequency,
-      `level ${r.level} is calmer than ${under.level}`);
+    // The spawn rate may FALL where heavier balloons arrive, and that is the
+    // design: a three-tap balloon costs three of the two taps a second anyone
+    // has, so the sky thins as what is in it gets heavier. What may never fall
+    // is what the rung asks of the player.
+    if (r.frequency < under.frequency) {
+      assert.ok(r.taps > under.taps,
+        `level ${r.level} releases fewer balloons than ${under.level} without ` +
+        'making them any heavier');
+    }
     assert.ok(r.size < under.size,
       `level ${r.level} is no smaller than ${under.level}`);
     assert.ok(r.demand > under.demand,
@@ -2360,6 +2368,216 @@ await t('everything in the sky answers the same questions', async () => {
 
   assert.deepEqual(m.broken, [], 'an entity does not answer the contract: ' + m.broken);
   assert.deepEqual(m.kinds, ['balloon'], 'phase 1 adds no new kinds');
+  await context.close();
+});
+
+
+// ---------- balloons that take more than one tap ----------
+
+/** Builds a balloon of a given thickness, wherever we want it. */
+const THICK = `(skin, x, y) => {
+  const b = balloonConstructor(x, y, 60, { r: 200, g: 60, b: 60 }, Game.width, 5, 1, skin);
+  b.xcoord = x; b.ycoord = y;
+  return b;
+}`;
+
+await t('a thick balloon takes a tap per skin, and scores when the last comes off', async () => {
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press('e');
+  await page.waitForTimeout(2500);
+
+  const runs = await page.evaluate((thick) => {
+    const make = eval(thick);
+    Game.stopLoop();
+    return [1, 2, 3].map(skin => {
+      Game.entities.length = 0;
+      Game.score = 0;
+      const b = make(skin, 400, 300);
+      Game.add(b);
+
+      const taps = [];
+      for (let i = 0; i < skin + 1; i++) {
+        const before = Game.score;
+        Game.canvas.dispatchEvent(new MouseEvent('click', {
+          clientX: 400, clientY: 300, bubbles: true
+        }));
+        taps.push({ scored: Game.score - before, up: Game.entities.length });
+      }
+      return { skin, taps, worth: b.points, score: Game.score };
+    });
+  }, THICK);
+
+  runs.forEach(r => {
+    // Every tap but the last takes a skin off and scores nothing.
+    for (let i = 0; i < r.skin - 1; i++) {
+      assert.equal(r.taps[i].scored, 0,
+        `skin ${r.skin}: tap ${i + 1} scored before the balloon popped`);
+      assert.equal(r.taps[i].up, 1,
+        `skin ${r.skin}: tap ${i + 1} removed a balloon that should have survived it`);
+    }
+    const last = r.taps[r.skin - 1];
+    assert.equal(last.up, 0, `skin ${r.skin}: the last tap did not pop it`);
+    assert.equal(last.scored, r.worth,
+      `skin ${r.skin}: popping scored ${last.scored}, not the ${r.worth} it was worth`);
+    // And a tap into the empty space it left does nothing at all.
+    assert.equal(r.taps[r.skin].scored, 0, `skin ${r.skin}: scored after it was gone`);
+  });
+
+  const worths = runs.map(r => r.worth);
+  assert.deepEqual(worths, [1, 3, 6], 'a thicker balloon is not worth more');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('a thick balloon is bigger, slower, and looks different before you touch it', async () => {
+  const { context, page } = await newGame();
+  await page.keyboard.press('e');
+  await page.waitForTimeout(2500);
+
+  const m = await page.evaluate((thick) => {
+    const make = eval(thick);
+    Game.stopLoop();
+    const of = skin => {
+      // Average the random rise so the trend is the only signal.
+      let rise = 0;
+      const n = 300;
+      for (let i = 0; i < n; i++) { rise += Math.abs(make(skin, 400, 300).delta); }
+      const one = make(skin, 400, 300);
+      return { size: one.size, rise: rise / n, points: one.points };
+    };
+    return { thin: of(1), mid: of(2), fat: of(3) };
+  }, THICK);
+
+  assert.ok(m.mid.size > m.thin.size, 'a reinforced balloon is no bigger than an ordinary one');
+  assert.ok(m.fat.size > m.mid.size, 'an armoured balloon is no bigger than a reinforced one');
+  assert.ok(m.mid.rise < m.thin.rise, 'a reinforced balloon rises as fast as an ordinary one');
+  assert.ok(m.fat.rise < m.mid.rise, 'an armoured balloon rises as fast as a reinforced one');
+
+  // The taps have to fit in the time it is on screen: roughly a skin's worth
+  // of extra seconds per extra skin.
+  assert.ok(m.thin.rise / m.fat.rise > 1.5,
+    `an armoured balloon is only ${(m.thin.rise / m.fat.rise).toFixed(2)}x slower, ` +
+    'which is not enough time for three taps');
+  await context.close();
+});
+
+await t('a tap that does not pop answers within a frame', async () => {
+  // The highest-risk detail in the feature: a balloon that takes a tap and
+  // does nothing visible reads as having ignored you.
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press('e');
+  await page.waitForTimeout(2500);
+
+  const m = await page.evaluate((thick) => {
+    const make = eval(thick);
+    Game.stopLoop();
+    Game.entities.length = 0;
+    const b = make(3, 400, 300);
+    Game.add(b);
+
+    const shot = () => {
+      Paint.sky(Game);
+      Paint.entities(Game);
+      const d = Game.ctx.getImageData(
+        Math.round((400 - 90) * Game.dpr), Math.round((300 - 90) * Game.dpr),
+        Math.round(180 * Game.dpr), Math.round(180 * Game.dpr)).data;
+      return Array.from(d);
+    };
+    const differs = (a, b) => {
+      let n = 0;
+      for (let i = 0; i < a.length; i += 4) {
+        if (Math.abs(a[i] - b[i]) > 6 || Math.abs(a[i + 1] - b[i + 1]) > 6 ||
+            Math.abs(a[i + 2] - b[i + 2]) > 6) { n++; }
+      }
+      return n;
+    };
+
+    const before = shot();
+    b.tapped(Game);
+    const afterTap = shot();      // the same frame the tap landed in
+    for (let i = 0; i < 6; i++) { b.step(Game, false); }
+    const settled = shot();
+
+    return {
+      answered: differs(before, afterTap),
+      stillDifferent: differs(before, settled),
+      skinLeft: b.skin
+    };
+  }, THICK);
+
+  assert.equal(m.skinLeft, 2, 'the tap did not take a skin off');
+  assert.ok(m.answered > 300,
+    `the balloon changed by only ${m.answered} pixels in the frame the tap landed`);
+  // And it still looks different once the squash has passed: it is thinner now.
+  assert.ok(m.stillDifferent > 300,
+    'a balloon that lost a skin looks exactly like it did before');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('thick balloons arrive with the rungs, not before', async () => {
+  const { context, page } = await newGame();
+  await page.keyboard.press('e');
+  await page.waitForTimeout(2500);
+
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    const seen = {};
+    Ladder.LEVELS.forEach(row => {
+      Game.level = row.level;
+      const skins = new Set();
+      for (let i = 0; i < 3000; i++) { skins.add(Game.randomBalloon().skin); }
+      seen[row.level] = [...skins].sort();
+    });
+    return {
+      seen,
+      firstReinforced: Ladder.LEVELS.find(r => r.reinforced > 0).level,
+      firstArmoured: Ladder.LEVELS.find(r => r.armoured > 0).level
+    };
+  });
+
+  assert.equal(m.firstReinforced, 4, 'reinforced balloons do not start at rung 4');
+  assert.equal(m.firstArmoured, 7, 'armoured balloons do not start at rung 7');
+  for (let level = 1; level <= 10; level++) {
+    const skins = m.seen[level];
+    if (level < m.firstReinforced) {
+      assert.deepEqual(skins, [1], `level ${level} has thick balloons before they arrive`);
+    }
+    if (level >= m.firstReinforced && level < m.firstArmoured) {
+      assert.deepEqual(skins, [1, 2], `level ${level} should have ordinary and reinforced only`);
+    }
+    if (level >= m.firstArmoured) {
+      assert.deepEqual(skins, [1, 2, 3], `level ${level} is missing a thickness`);
+    }
+  }
+  await context.close();
+});
+
+await t('the sky thins out as what is in it gets heavier', async () => {
+  // Diego's rule, and the arithmetic agrees: rarer as well as slower, because
+  // a three-tap balloon spends three of the two taps a second anyone has.
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => Ladder.LEVELS.map(r => ({
+    level: r.level,
+    arrivals: Ladder.arrivals(r),
+    taps: Ladder.meanTaps(r),
+    demand: Ladder.demand(r)
+  })));
+
+  const arriving = m.find(r => r.level === 4);
+  const under = m.find(r => r.level === 3);
+  assert.ok(arriving.arrivals < under.arrivals,
+    'the rung that brings reinforced balloons releases as many as the one below');
+  assert.ok(arriving.demand > under.demand,
+    'the rung that brings reinforced balloons asks no more of the player');
+
+  // Across the whole ladder: balloons a second barely moves, taps a second
+  // nearly triples.
+  const spread = n => Math.max(...m.map(r => r[n])) / Math.min(...m.map(r => r[n]));
+  assert.ok(spread('arrivals') < 1.8,
+    `balloons a second spans ${spread('arrivals').toFixed(2)}x across the ladder`);
+  assert.ok(spread('demand') > 2.4,
+    `taps a second spans only ${spread('demand').toFixed(2)}x across the ladder`);
   await context.close();
 });
 

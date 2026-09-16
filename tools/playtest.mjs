@@ -104,14 +104,14 @@ const BOT = (o) => `
 
     // Go for whatever looked closest to escaping.
     const target = memory.balloons.reduce((a, b) => (b.y < a.y ? b : a));
-    const before = Game.balloons_caught;
+    const before = Game.score;
     Game.canvas.dispatchEvent(new MouseEvent('click', {
       clientX: target.x + (Math.random() * 2 - 1) * AIM_ERROR,
       clientY: target.y + (Math.random() * 2 - 1) * AIM_ERROR,
       bubbles: true
     }));
     window.__stats.clicks++;
-    if (Game.balloons_caught > before) window.__stats.hits++;
+    if (Game.score > before) window.__stats.hits++;
   }, INTERVAL);
 })();
 `;
@@ -162,7 +162,7 @@ async function playLevel(level) {
       .catch(() => { /* survived the cap, which is itself a result */ });
 
     const result = await page.evaluate(() => ({
-      score: Game.balloons_caught,
+      score: Game.score,
       lost: Game.lostBalloons,
       lives: Game.difficulty.maxLost,
       died: Game.screen === 'gameover',
@@ -198,7 +198,7 @@ console.log(
   `${Math.round(1000 / OPTIONS.interval * 10) / 10} clicks/sec ` +
   `· ${OPTIONS.width}×${OPTIONS.height} · ${OPTIONS.capMs / 1000}s cap\n`
 );
-console.log('level  lives  survived   score   accuracy   sky    lost   rung   outcome');
+console.log('level  lives  survived   points  pops/tap   sky    lost   rung   outcome');
 
 const mean = list => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
 

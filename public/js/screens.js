@@ -183,7 +183,7 @@ Screens.gameover = {
         // while nothing is listening.
         game.state.liveAt = Date.now() + Game.MENU_LOCKOUT_MS;
 
-        Scores.submit(game, game.balloons_caught);
+        Scores.submit(game, game.score);
         Scores.load(game);
         Announce.gameover(game);
     },
@@ -204,7 +204,7 @@ Screens.gameover = {
         Paint.panel(game);
         Paint.intro(
             game,
-            "Game Over. Score: " + game.balloons_caught + ", Time: " + game.end_time
+            "Game Over. Score: " + game.score + ", Time: " + game.end_time
         );
         Paint.menu(game);
         Paint.scores(game);

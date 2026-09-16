@@ -67,20 +67,38 @@ Announce.playing = function () {
  * nothing else on the screen announces it.
  */
 Announce.level = function (game) {
-    Announce.say("Level " + game.level + ".");
+    Announce.say("Level " + game.level + "." + Announce.arrivals(game));
+};
+
+/**
+ * What a rung brought that the one below it did not. Said once, when it
+ * arrives: a balloon that does not pop is the kind of surprise a player who
+ * cannot see the rim deserves to be told about.
+ */
+Announce.arrivals = function (game) {
+    var rung = Ladder.at(game.level);
+    var under = Ladder.at(game.level - 1);
+    var news = "";
+
+    if (rung.armoured > 0 && !(under.armoured > 0)) {
+        news += " Armoured balloons: three taps.";
+    } else if (rung.reinforced > 0 && !(under.reinforced > 0)) {
+        news += " Reinforced balloons: two taps.";
+    }
+    return news;
 };
 
 /** A balloon got away, which is the only thing in a round worth interrupting for. */
 Announce.lost = function (game) {
     Announce.say(
         game.lostBalloons + " of " + game.difficulty.maxLost + " lost, " +
-        game.balloons_caught + " popped."
+        game.score + " points."
     );
 };
 
 Announce.gameover = function (game) {
     Announce.say(
-        "Game over. " + game.balloons_caught + " popped in " + game.end_time +
+        "Game over. " + game.score + " points in " + game.end_time +
         " seconds. Press space to play again."
     );
 };
