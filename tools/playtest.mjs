@@ -168,8 +168,9 @@ async function playLevel(level) {
       died: Game.screen === 'gameover',
       time: Game.end_time ? parseFloat(Game.end_time) : null,
       // How far up the ladder the run got: the number this harness exists to
-      // report now that difficulty is ten rungs climbed with time.
-      level: Game.level,
+      // report now that difficulty is ten rungs climbed with time. Not `level`:
+      // that name already belongs to the difficulty letter, a few lines below.
+      rung: Game.level,
       start: Game.difficulty.startLevel,
       stats: window.__stats
     }));
@@ -212,7 +213,7 @@ OPTIONS.levels.forEach((level, i) => {
       (round(accuracy) + '%').padEnd(10),
       round(mean(r.stats.sky)).padEnd(6),
       String(r.lost).padEnd(6),
-      (r.start + '→' + r.level).padEnd(6),
+      (r.start + '→' + r.rung).padEnd(6),
       r.died ? 'died' : 'survived the cap'
     );
   });
