@@ -24,6 +24,7 @@ public/               everything served to the browser
   js/difficulty.js    what each level is: lives, shrink and speed ramps
   js/layout.js        grid, type scale and every on-screen position
   js/sky.js           the drawn sky: one palette per difficulty
+  favicon.svg         the tab icon; the .ico and touch icon are built from it
 netlify/functions/
   scores.mts          high-score API, backed by Netlify Blobs
 test/                 test suite (see below)
@@ -31,8 +32,8 @@ netlify.toml          publish directory and headers
 ```
 
 There is no build step and no runtime dependencies in the browser: the page
-loads seven plain scripts and nothing else. The sky is drawn, not an image,
-so the game ships no image assets at all beyond the favicon.
+loads eight plain scripts and nothing else. The sky is drawn, not an image, so
+apart from the tab icon the game ships no images at all.
 
 ## Running locally
 
@@ -69,6 +70,20 @@ held constant, any difference between levels is the game's.
 
 It aims where a balloon *was* one reaction-time ago, which is the error a person
 makes against a rising target.
+
+## Icons
+
+`public/favicon.svg` is the icon; `favicon.ico` and `apple-touch-icon.png` are
+built from it and committed:
+
+```bash
+node tools/make-favicon.mjs
+```
+
+The .ico exists for Safari before 16 and for anything that asks for
+`/favicon.ico` without reading the page. It used to be a 184KB file holding
+nine sizes, eight of them uncompressed bitmaps, which was more than three times
+the size of the entire game.
 
 ## Deploying
 

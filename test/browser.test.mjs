@@ -7,7 +7,11 @@ import { devices } from 'playwright';
 import { launchBrowser } from './helpers/browser.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.jpeg': 'image/jpeg', '.ico': 'image/x-icon' };
+const TYPES = {
+  '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
+  '.jpeg': 'image/jpeg', '.ico': 'image/x-icon', '.svg': 'image/svg+xml',
+  '.png': 'image/png'
+};
 
 // Stand-in for the Netlify function, same contract (already unit-tested separately).
 const boards = new Map();
@@ -1606,6 +1610,58 @@ await t('the name line clears the composition at every viewport', async () => {
     assert.ok(m.bottom <= h, `the name line runs off the bottom at ${w}x${h}`);
     await context.close();
   }
+});
+
+
+// ---------- what the page actually ships ----------
+
+await t('every icon the page links to is served and decodes', async () => {
+  const { context, page, errors } = await newGame();
+  const icons = await page.evaluate(() =>
+    [...document.querySelectorAll('link[rel$="icon"]')].map(l => ({
+      rel: l.rel, href: l.getAttribute('href'), type: l.type
+    })));
+
+  assert.ok(icons.some(i => i.type === 'image/svg+xml'), 'no SVG icon is linked');
+  assert.ok(icons.some(i => i.href.endsWith('.ico')), 'no .ico fallback is linked');
+  assert.ok(icons.some(i => i.rel === 'apple-touch-icon'), 'no home-screen icon is linked');
+
+  // A hand-built .ico that no decoder accepts would look fine in the listing
+  // and be a blank tab in the browser.
+  const decoded = await page.evaluate(async (hrefs) => {
+    const sizes = {};
+    for (const href of hrefs) {
+      const img = new Image();
+      await new Promise(resolve => {
+        img.onload = img.onerror = resolve;
+        img.src = href;
+      });
+      sizes[href] = img.naturalWidth;
+    }
+    return sizes;
+  }, icons.map(i => i.href));
+
+  Object.keys(decoded).forEach(href => {
+    assert.ok(decoded[href] > 0, `${href} did not decode`);
+  });
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the icons are not the largest thing the site serves', async () => {
+  // They were: a 184KB .ico holding nine sizes, eight of them uncompressed
+  // bitmaps, against 51KB for the game, its scripts, the stylesheet and the
+  // page put together.
+  const sizeOf = name => fs.statSync(path.join(ROOT, name)).size;
+  const code = fs.readdirSync(path.join(ROOT, 'js')).reduce(
+    (total, f) => total + sizeOf(path.join('js', f)),
+    sizeOf('index.html') + sizeOf(path.join('css', 'styles.css')));
+
+  const tab = sizeOf('favicon.svg') + sizeOf('favicon.ico');
+  assert.ok(tab < code / 4,
+    `the tab icons are ${tab} bytes against ${code} bytes of game`);
+  assert.ok(sizeOf('favicon.ico') < 10 * 1024,
+    `the .ico fallback is ${sizeOf('favicon.ico')} bytes`);
 });
 
 
