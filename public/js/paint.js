@@ -17,6 +17,38 @@ Paint.sky = function (game) {
     game.ctx.drawImage(sky, 0, 0, game.width, game.height);
 };
 
+/**
+ * The ground the text block stands on.
+ *
+ * White text over a daytime sky is legible at the top, where the sky is deep
+ * blue, and invisible at the bottom, where it is nearly white: the leaderboard
+ * was landing at 1.4:1 against the horizon. The sky's own scrim was made for a
+ * composition that lived in the top half of the screen. This is the same idea
+ * sized to what is actually drawn.
+ */
+Paint.panel = function (game) {
+    var box = game.layout.panel;
+    var ctx = game.ctx;
+
+    // It fades in rather than sitting there as a card, because the sky it has
+    // to compensate for is not uniform: every palette runs deep at the top and
+    // bright along the horizon, so the ground the text needs is all at the
+    // bottom. The top of the sky is left as it is.
+    var bottom = box.y + box.height;
+    var ground = ctx.createLinearGradient(0, 0, 0, bottom);
+    ground.addColorStop(0, Sky.transparent(game.palette.panel));
+    ground.addColorStop(box.y / bottom, Sky.transparent(game.palette.panel));
+    ground.addColorStop(0.42, game.palette.panel);
+    ground.addColorStop(0.9, game.palette.panel);
+    ground.addColorStop(1, Sky.transparent(game.palette.panel));
+
+    // Full width and no edges: a card inset from a composition that already
+    // fills the screen leaves a sliver of sky around it that reads as a
+    // mistake. This reads as the sky being deeper where the writing is.
+    ctx.fillStyle = ground;
+    ctx.fillRect(0, 0, game.width, bottom);
+};
+
 /** The one headline line, shared by the title and game-over screens. */
 Paint.intro = function (game, text) {
     game.ctx.font = game.layout.fonts.intro;
@@ -167,7 +199,7 @@ Paint.player = function (game) {
     // the same scrim the sky uses behind its own text rather than trusting
     // pale ink to hold up over a lit horizon.
     Layout.roundedRect(ctx, rect, rect.radius);
-    ctx.fillStyle = game.palette.scrim;
+    ctx.fillStyle = game.palette.panel;
     ctx.fill();
 
     if (live && game.pressed === "player") {
@@ -222,6 +254,17 @@ Paint.balloons = function (game) {
 
 Paint.hud = function (game) {
     var hud = game.layout.hud;
+    var ctx = game.ctx;
+
+    // Measured rather than eyeballed: the clock is drawn in the accent colour,
+    // which came out at 3.2:1 against a bright morning sky. Everything else in
+    // the game got a ground; so does this.
+    var band = ctx.createLinearGradient(0, 0, 0, hud.band.height);
+    band.addColorStop(0, game.palette.panel);
+    band.addColorStop(hud.band.solid, game.palette.panel);
+    band.addColorStop(1, Sky.transparent(game.palette.panel));
+    ctx.fillStyle = band;
+    ctx.fillRect(0, 0, game.width, hud.band.height);
 
     game.ctx.font = game.layout.fonts.hud;
     game.ctx.fillStyle = game.palette.ink;

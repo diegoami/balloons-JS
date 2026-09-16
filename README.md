@@ -21,6 +21,7 @@ public/               everything served to the browser
   js/paint.js         what it draws
   js/input.js         what it listens to
   js/scores.js        the leaderboard client
+  js/announce.js      what the game says to a screen reader
   js/namefield.js     the one DOM element in the game
   js/layout.js        grid, type scale and every on-screen position
   js/sky.js           the drawn sky: one palette per difficulty
@@ -50,6 +51,20 @@ speed and the difficulty ramps are expressed per step, not per second. A frame
 may catch up on at most 250ms, so a tab that was hidden for a minute resumes
 rather than replaying the minute. The round clock counts steps too: the time on
 the leaderboard is time played, not time elapsed.
+
+## Getting there without seeing it
+
+The game is one canvas, which to anything but a pair of eyes is a single empty
+element. What the picture says is also said in a live region: which screen is
+up, which difficulty is selected, that a balloon got away, and the final score.
+The canvas is focusable and described, and the difficulty keys work from
+anywhere. Popping still needs a pointer.
+
+Every colour the game draws text in is checked against what is actually behind
+it, on all four palettes, at WCAG AA (4.5:1) — the test renders the ground and
+measures it rather than trusting the palette. That is how the leaderboard was
+found sitting at 1.4:1 on a bright horizon, which is not low contrast so much
+as invisible.
 
 ## Running locally
 

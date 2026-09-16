@@ -73,6 +73,9 @@ Layout.GRID = {
     /** The name field is capped, because a name is not screen-width long. */
     fieldMax: 16,
 
+    /** Air between the text block and the edge of the panel behind it. */
+    panelPad: 0.7,
+
     /** A line height, as a multiple of the advance width of a capital M. */
     lineRatio: 1.3,
 
@@ -248,6 +251,20 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
         rows.push(firstRowY + line * r * G.scoreRowStep);
     }
 
+    // The ground the text block stands on: from above the headline to below
+    // the last score row, with a margin of air. Everything drawn on a static
+    // screen sits inside it, which is what makes one ink colour legible on
+    // every palette.
+    var panelPad = line * G.panelPad;
+    var panelTop = line * G.rows.intro - line;
+    var panel = {
+        x: left - panelPad,
+        y: Math.max(0, panelTop - panelPad),
+        width: Math.min(width - (left - panelPad) * 2, width),
+        height: 0,
+        radius: line * G.button.radius * 2
+    };
+
     var scoresHit = atLeastTouchSize({
         x: width * G.columns.scoresHeading,
         y: headingY - line / 2,
@@ -307,9 +324,13 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
     targets.push({ id: "replay", level: null, hit: scoresHit });
     targets.push({ id: "player", level: null, hit: player });
 
+    panel.height = rows[rows.length - 1] + line - panel.y + panelPad;
+
     return {
         line: line,
         fonts: fonts,
+
+        panel: panel,
 
         intro: { x: left, y: line * G.rows.intro },
 
@@ -343,6 +364,15 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
 
         hud: {
             y: line * G.rows.hud,
+
+            // The HUD is the only text drawn during play, and it is drawn over
+            // whatever the sky is doing. This is its ground: solid behind the
+            // row, then faded out, so it reads as a bar rather than a lid.
+            band: {
+                height: line * G.rows.hud + line * 1.2,
+                solid: (line * G.rows.hud + line * 0.5) / (line * G.rows.hud + line * 1.2)
+            },
+
             caught: width * G.columns.hudCaught,
             level: width * G.columns.hudLevel,
             time: width * G.columns.hudTime

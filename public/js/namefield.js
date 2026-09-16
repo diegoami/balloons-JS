@@ -50,7 +50,20 @@ NameField.show = function (game, value) {
     NameField.element.select();
 };
 
-NameField.hide = function () {
+/**
+ * Takes the field away, and puts focus back on the game.
+ *
+ * Hiding a focused element drops focus onto the body, which leaves a keyboard
+ * user nowhere: the next Tab starts again from the top of the page. The canvas
+ * is focusable for exactly this reason.
+ */
+NameField.hide = function (game) {
+    var hadFocus = document.activeElement === NameField.element;
+
     NameField.element.blur();
     NameField.element.hidden = true;
+
+    if (hadFocus && game && game.canvas) {
+        game.canvas.focus();
+    }
 };
