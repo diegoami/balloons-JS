@@ -13,6 +13,7 @@
  * scale and the composition holds at any aspect ratio.
  */
 
+"use strict";
 var Layout = {};
 
 Layout.HINT_TEXT = "Press E S H V to choose, space to replay";

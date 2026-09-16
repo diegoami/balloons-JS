@@ -41,6 +41,16 @@ touches nothing at parse time, so the order they load in does not matter. The
 sky is drawn, not an image, so apart from the tab icon the game ships no images
 at all.
 
+## How it runs
+
+The game takes fixed steps of 1/30s, driven by `requestAnimationFrame`. A
+frame catches the simulation up to the moment it was called and then paints, so
+the game plays at the same speed on a 30Hz display and a 144Hz one — balloon
+speed and the difficulty ramps are expressed per step, not per second. A frame
+may catch up on at most 250ms, so a tab that was hidden for a minute resumes
+rather than replaying the minute. The round clock counts steps too: the time on
+the leaderboard is time played, not time elapsed.
+
 ## Running locally
 
 ```bash

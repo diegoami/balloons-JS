@@ -1,3 +1,5 @@
+"use strict";
+
 var BALLOON_FREQUENCY = 0.1;
 var BALLOON_SPEED = 5.5;
 
@@ -72,7 +74,15 @@ function cleanName(value) {
 }
 
 var Game = {};
-Game.fps = 30;
+
+/**
+ * One simulation step. Thirty a second, which is the rate the game was tuned
+ * at, and now the rate it runs at whatever the display is doing.
+ */
+Game.STEP_MS = 1000 / 30;
+
+/** The most simulation time one frame is allowed to catch up on. */
+Game.MAX_CATCHUP_MS = 250;
 
 /** How long the countdown before play runs. */
 Game.COUNTDOWN_MS = 2000;
@@ -140,28 +150,83 @@ Game.isMenuLive = function () {
     return screen.menuLive ? screen.menuLive(this) : false;
 };
 
-/** One frame: move what moves, then paint what is on screen by then. */
-Game.frame = function () {
-    var screen = Screens[this.screen];
-
-    if (screen.update) {
-        screen.update(this);
-    }
-    this.paint();
-};
-
+/**
+ * Starts the frame loop, if it is not already running.
+ *
+ * It was setInterval(frame, 1000 / 30). That asks the browser to run the game
+ * on its own schedule rather than the display's, so every frame landed a
+ * little before or after the moment the screen was actually redrawn and the
+ * balloons juddered. It also kept running in a background tab, at whatever
+ * rate the browser felt like throttling it to, which is how you could come
+ * back to a tab and find the game had been played without you.
+ */
 Game.startLoop = function () {
-    var that = this;
-    if (this.tick_interval) {
+    if (this.running) {
         return;
     }
-    this.tick_interval = setInterval(function () { that.frame(); }, 1000 / Game.fps);
+    this.running = true;
+    this.lastFrame = null;
+    this.accumulator = 0;
+
+    var step = function (now) {
+        if (!Game.running) {
+            return;
+        }
+        // Asked for before the work, so that a screen change during the work
+        // can cancel the frame it does not want.
+        Game.frameHandle = window.requestAnimationFrame(step);
+        Game.advance(now);
+    };
+    this.frameHandle = window.requestAnimationFrame(step);
 };
 
 Game.stopLoop = function () {
-    if (this.tick_interval) {
-        clearInterval(this.tick_interval);
-        this.tick_interval = null;
+    this.running = false;
+    if (this.frameHandle !== null && this.frameHandle !== undefined) {
+        window.cancelAnimationFrame(this.frameHandle);
+        this.frameHandle = null;
+    }
+};
+
+/**
+ * Catches the simulation up to `now` and paints once, if anything moved.
+ *
+ * The game takes fixed steps of STEP_MS, however often the display asks for a
+ * frame. A balloon's speed is expressed per step, so without this a 120Hz
+ * display would play the game at four times the speed of a 30Hz one; the whole
+ * difficulty table is calibrated against a step, not a second.
+ *
+ * Taking `now` as an argument rather than reading a clock is what makes the
+ * loop testable: a stall can be handed to it rather than waited for.
+ */
+Game.advance = function (now) {
+    if (this.lastFrame === null) {
+        this.lastFrame = now;
+    }
+
+    // A tab that was hidden for a minute, or a long pause, must not be replayed
+    // at full speed: the game would spawn a minute of balloons into one frame
+    // and you would lose them all before the screen updated.
+    var elapsed = Math.min(now - this.lastFrame, Game.MAX_CATCHUP_MS);
+    this.lastFrame = now;
+    this.accumulator += Math.max(elapsed, 0);
+
+    var stepped = false;
+    while (this.accumulator >= Game.STEP_MS) {
+        this.accumulator -= Game.STEP_MS;
+        stepped = true;
+
+        // Read each time round: a step can change which screen is up. If it
+        // changed to a screen that does not move, the rest of the catch-up
+        // drains harmlessly.
+        var screen = Screens[this.screen];
+        if (screen.update) {
+            screen.update(this);
+        }
+    }
+
+    if (stepped) {
+        this.paint();
     }
 };
 
@@ -303,9 +368,15 @@ Game.setName = function (value) {
 
 // -------------------------------------------------------------------- world
 
-/** How long the current round has been running, as a fixed-point string. */
+/**
+ * How long the round has been running, as a fixed-point string.
+ *
+ * Counted in simulation steps rather than read off the wall clock, so the time
+ * on the board is the time the game was actually played: a stall, a dropped
+ * frame or a tab left in the background does not add to anybody's score.
+ */
 Game.elapsed = function () {
-    return ((Date.now() - this.start) / 1000).toFixed(2);
+    return (this.ticks * Game.STEP_MS / 1000).toFixed(2);
 };
 
 /**
@@ -319,7 +390,7 @@ Game.resetRound = function () {
     this.balloons_caught = 0;
     this.lostBalloons = 0;
     this.end_time = null;
-    this.start = Date.now();
+    this.ticks = 0;
 };
 
 Game.randomBalloon = function () {

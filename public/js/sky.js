@@ -13,6 +13,7 @@
  * each difficulty gets its own time of day.
  */
 
+"use strict";
 var Sky = {};
 
 /**

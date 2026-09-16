@@ -16,6 +16,7 @@
  * and how it looks are different concerns.
  */
 
+"use strict";
 var Difficulty = {};
 
 Difficulty.LEVELS = {
