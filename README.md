@@ -7,6 +7,9 @@ the title screen, or press `E`, `S`, `H` or `V`. Space or Enter replays the
 current difficulty. The selected level is shown both by the filled button and
 by the sky, which has its own palette per difficulty.
 
+Your name is asked for once, on the page rather than in a browser dialog, and
+can be changed any time from the `Playing as ...` chip along the bottom.
+
 ## Layout
 
 ```
@@ -14,7 +17,7 @@ public/               everything served to the browser
   index.html
   css/styles.css
   js/game.js          the game: loop, input, scoring, drawing
-  js/screens.js       what the game is being: title, countdown, play, game over
+  js/screens.js       what the game is being: name, title, countdown, play, over
   js/gameballoons.js  balloon entity: position, drift, collision
   js/htmlballoons.js  draws a balloon on a canvas with bezier curves
   js/color.js         lighten/darken helpers and the gradient palette

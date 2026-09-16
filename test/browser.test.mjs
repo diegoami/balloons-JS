@@ -60,7 +60,9 @@ async function newGame({ width = 1280, height = 720, name = 'TestPlayer', dpr = 
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-  page.on('dialog', d => d.accept(name));
+  // Nothing should open a browser modal any more; if something does, every
+  // test that checks `errors` will say so.
+  page.on('dialog', d => { errors.push('unexpected dialog: ' + d.message()); d.dismiss(); });
   await page.addInitScript(n => {
     try { window.localStorage.setItem('name', n); } catch (e) {}
   }, name);
@@ -125,19 +127,25 @@ await t('font size is bounded by width, by height and by the menu', async () => 
   const cases = [
     { width: 1000, height: 700, expect: 30, bound: 'width' },
     { width: 500, height: 700, expect: 15, bound: 'width' },
-    { width: 1920, height: 1080, expect: 57, bound: 'height, just' },
-    { width: 1920, height: 700, expect: 37, bound: 'height' },
-    { width: 1920, height: 400, expect: 21, bound: 'height' },
+    { width: 1920, height: 1080, expect: 54, bound: 'height' },
+    { width: 1920, height: 700, expect: 34, bound: 'height' },
+    { width: 1920, height: 400, expect: 18, bound: 'height' },
     { width: 320, height: 700, expect: 12, bound: 'minimum' }
   ];
   for (const c of cases) {
     const { context, page } = await newGame({ width: c.width, height: c.height });
-    const size = await page.evaluate(() => Game.fontSize);
-    const predicted = Math.round(Math.max(12, Math.min(30 * c.width / 1000, c.height / 19)));
-    assert.equal(size, c.expect,
-      `at ${c.width}x${c.height} (${c.bound}-bound) expected ${c.expect}px, got ${size}px`);
-    assert.equal(size, predicted,
-      `at ${c.width}x${c.height} the rule predicts ${predicted}px but got ${size}px`);
+    const m = await page.evaluate(() => ({ size: Game.fontSize, grid: Layout.GRID }));
+    const g = m.grid;
+    // Read from the grid rather than repeating its numbers, so tuning one of
+    // them cannot leave this test asserting the old rule.
+    const predicted = Math.round(Math.max(g.minFontSize, Math.min(
+      g.baseFontSize * c.width / 1000,
+      (c.height - g.footerReserve) / g.heightDivisor
+    )));
+    assert.equal(m.size, c.expect,
+      `at ${c.width}x${c.height} (${c.bound}-bound) expected ${c.expect}px, got ${m.size}px`);
+    assert.equal(m.size, predicted,
+      `at ${c.width}x${c.height} the rule predicts ${predicted}px but got ${m.size}px`);
     await context.close();
   }
 });
@@ -322,9 +330,9 @@ await t('no listeners leak across repeated restarts', async () => {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
-  page.on('dialog', d => d.accept('Leaky'));
   // Count listeners registered with an AbortSignal, decrementing when aborted.
   await page.addInitScript(() => {
+    try { localStorage.setItem('name', 'Leaky'); } catch (e) {}
     window.__live = 0;
     const origAdd = EventTarget.prototype.addEventListener;
     EventTarget.prototype.addEventListener = function (type, fn, opts) {
@@ -399,23 +407,52 @@ await t('a second game after game over still responds to input', async () => {
   await context.close();
 });
 
-await t('preferences persist across reloads without re-prompting', async () => {
+await t('a first visit asks for a name on the page, not in a browser modal', async () => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await context.newPage();
+  const errors = [];
   let prompts = 0;
-  page.on('dialog', d => { prompts++; d.accept('Persisted'); });
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('dialog', d => { prompts++; d.dismiss(); });
   await page.goto('http://localhost:8899/', { waitUntil: 'load' });
   await page.waitForTimeout(300);
-  assert.equal(prompts, 1, 'first visit should prompt exactly once');
+
+  assert.equal(prompts, 0, 'a browser modal still interrupts the first visit');
+  const opened = await page.evaluate(() => ({
+    screen: Game.screen,
+    shown: !Game.nameField.hidden,
+    focused: document.activeElement === Game.nameField,
+    value: Game.nameField.value
+  }));
+  assert.equal(opened.screen, 'name', 'a first visit should open the name screen');
+  assert.ok(opened.shown, 'the name field was not shown');
+  assert.ok(opened.focused, 'the name field was not focused, so nothing typed would land');
+  assert.equal(opened.value, 'anonymous', 'the field should start on the default');
+
+  await page.keyboard.type('Persisted');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(200);
+
+  const saved = await page.evaluate(() => ({
+    screen: Game.screen, name: Game.name, hidden: Game.nameField.hidden
+  }));
+  assert.equal(saved.screen, 'title', 'saving a name should land on the title screen');
+  assert.equal(saved.name, 'Persisted');
+  assert.ok(saved.hidden, 'the field is still on the page after leaving the name screen');
+
   await page.keyboard.press('h');
   await page.waitForTimeout(2400);
 
   await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(400);
-  assert.equal(prompts, 1, 'a returning visitor must not be prompted again');
-  const stored = await page.evaluate(() => ({ name: Game.name, diff: Game.difficulty.level }));
+  assert.equal(prompts, 0, 'a returning visitor must not be prompted at all');
+  const stored = await page.evaluate(() => ({
+    name: Game.name, diff: Game.difficulty.level, screen: Game.screen
+  }));
+  assert.equal(stored.screen, 'title', 'a returning visitor should go straight to the title');
   assert.equal(stored.name, 'Persisted');
   assert.equal(stored.diff, 'H', 'difficulty should be remembered');
+  assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
 
@@ -432,6 +469,15 @@ await t('game still works when localStorage throws', async () => {
   });
   await page.goto('http://localhost:8899/', { waitUntil: 'load' });
   await page.waitForTimeout(400);
+
+  // Nothing can be remembered, so the name is asked for on every visit and
+  // kept for the session. It used to be a prompt() on every load.
+  assert.equal(await page.evaluate(() => Game.screen), 'name');
+  await page.keyboard.type('NoStorage');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => Game.name), 'NoStorage');
+
   await page.keyboard.press('e');
   await page.waitForTimeout(2500);
   assert.equal(await page.evaluate(() => Game.difficulty.level), 'E');
@@ -444,7 +490,7 @@ await t('game still works when the score API is unreachable', async () => {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
-  page.on('dialog', d => d.accept('Offline'));
+  await page.addInitScript(() => { try { localStorage.setItem('name', 'Offline'); } catch (e) {} });
   await page.route('**/api/scores/**', r => r.abort());
   await page.goto('http://localhost:8899/', { waitUntil: 'load' });
   await page.waitForTimeout(400);
@@ -598,8 +644,8 @@ await t('repeated resizes do not accumulate pixel-ratio listeners', async () => 
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
-  page.on('dialog', d => d.accept('Ratio'));
   await page.addInitScript(() => {
+    try { localStorage.setItem('name', 'Ratio'); } catch (e) {}
     window.__mqlListeners = 0;
     const origMatch = window.matchMedia.bind(window);
     window.matchMedia = function (q) {
@@ -647,12 +693,12 @@ await t('every menu item becomes a button and a target', async () => {
     items: Difficulty.ORDER,
     buttons: Game.layout.menu.buttons.map(b => b.level),
     labels: Game.layout.menu.buttons.map(b => b.label),
-    targets: Game.layout.targets.map(t => t.level)
+    targets: Game.layout.targets.map(t => t.id)
   }));
   assert.deepEqual(m.buttons, m.items, 'a menu item did not become a button');
   assert.deepEqual(m.labels, ['Easy', 'Standard', 'Hard', 'VHard']);
-  assert.deepEqual(m.targets, [...m.items, null],
-    'targets should be the buttons plus the high-score line');
+  assert.deepEqual(m.targets, [...m.items, 'replay', 'player'],
+    'targets should be the buttons, the high-score line and the name line');
   await context.close();
 });
 
@@ -766,7 +812,7 @@ await t('every tappable target meets the 44px touch minimum', async () => {
   for (const [w, h] of [[390, 664], [412, 839], [320, 568], [1280, 720], [820, 1180]]) {
     const { context, page } = await newGame({ width: w, height: h });
     const targets = await page.evaluate(() => Game.layout.targets.map(t => ({
-      level: t.level || 'replay',
+      level: t.id,
       width: +t.hit.width.toFixed(1),
       height: +t.hit.height.toFixed(1)
     })));
@@ -833,7 +879,6 @@ await t('a real touch tap starts a game on an emulated phone', async () => {
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', e => errors.push(String(e)));
-    page.on('dialog', d => d.accept('Toucher'));
     await page.addInitScript(() => { try { localStorage.setItem('name', 'Toucher'); } catch (e) {} });
     await page.goto('http://localhost:8899/', { waitUntil: 'load' });
     await page.waitForTimeout(500);
@@ -869,14 +914,16 @@ await t('no two tap targets overlap, and each resolves to itself', async () => {
           const a = L.targets[i].hit, z = L.targets[j].hit;
           if (a.x < z.x + z.width && z.x < a.x + a.width &&
               a.y < z.y + z.height && z.y < a.y + a.height) {
-            overlaps.push((L.targets[i].level || 'replay') + '/' + (L.targets[j].level || 'replay'));
+            overlaps.push(L.targets[i].id + '/' + L.targets[j].id);
           }
         }
       }
+      // By id, not by level: two of the targets have no level of their own, so
+      // comparing levels would let one resolve to the other unnoticed.
       const resolved = L.targets.map(t => {
         const point = { x: t.hit.x + t.hit.width / 2, y: t.hit.y + t.hit.height / 2 };
         const got = Layout.pick(L.targets, point);
-        return { want: t.level, got: got ? got.level : 'nothing' };
+        return { want: t.id, got: got ? got.id : 'nothing' };
       });
       return { overlaps, resolved };
     });
@@ -884,7 +931,7 @@ await t('no two tap targets overlap, and each resolves to itself', async () => {
     assert.deepEqual(m.overlaps, [], `targets overlap at ${w}x${h}: ${m.overlaps}`);
     m.resolved.forEach(r => {
       assert.equal(r.got, r.want,
-        `a tap on the centre of ${r.want || 'replay'} resolved to ${r.got} at ${w}x${h}`);
+        `a tap on the centre of ${r.want} resolved to ${r.got} at ${w}x${h}`);
     });
     await context.close();
   }
@@ -998,7 +1045,7 @@ await t('pressing a button changes how it looks, selected or not', async () => {
     await page.mouse.down();
     await page.waitForTimeout(120);
     const pressed = await buttonPaint(page, index);
-    assert.equal(await page.evaluate(() => Game.pressedLevel), level);
+    assert.equal(await page.evaluate(() => Game.pressed), level);
     assert.notDeepEqual(pressed, before,
       `pressing ${level} did not change its paint ` +
       `(${level === selected ? 'this is the selected button' : 'unselected'})`);
@@ -1254,7 +1301,6 @@ await t('a stored level that no longer exists falls back to the default', async 
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
-  page.on('dialog', d => d.accept('Fallback'));
   await page.addInitScript(() => {
     try {
       localStorage.setItem('name', 'Fallback');
@@ -1378,6 +1424,188 @@ await t('a new score invalidates the board that was already on its way', async (
     'the board kept a version fetched before the score was submitted: ' + JSON.stringify(board));
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
+});
+
+
+// ---------- naming yourself ----------
+
+/** The centre of the name line along the bottom. */
+const playerLine = page => page.evaluate(() => {
+  const r = Game.layout.player;
+  return { x: r.x + Math.min(r.width, 80) / 2, y: r.y + r.height / 2 };
+});
+
+await t('the name line opens the name screen and the new name sticks', async () => {
+  boards.clear();
+  apiHits.length = 0;
+  const { context, page, errors } = await newGame({ name: 'Before' });
+  const point = await playerLine(page);
+
+  await page.mouse.click(point.x, point.y);
+  await page.waitForTimeout(150);
+  const opened = await page.evaluate(() => ({
+    screen: Game.screen,
+    shown: !Game.nameField.hidden,
+    focused: document.activeElement === Game.nameField,
+    value: Game.nameField.value
+  }));
+  assert.equal(opened.screen, 'name', 'tapping the name line did not open the name screen');
+  assert.ok(opened.shown && opened.focused, 'the field was not ready to type into');
+  assert.equal(opened.value, 'Before', 'the field should start from the current name');
+
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('After');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(200);
+
+  const saved = await page.evaluate(() => ({
+    screen: Game.screen, name: Game.name, stored: localStorage.getItem('name')
+  }));
+  assert.equal(saved.screen, 'title', 'saving should land back on the title screen');
+  assert.equal(saved.name, 'After');
+  assert.equal(saved.stored, 'After', 'the new name was not remembered');
+
+  // And the score goes to the board under the name that is on screen.
+  await page.keyboard.press('v');
+  await page.waitForTimeout(2400);
+  await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
+  await page.waitForTimeout(400);
+  const posted = apiHits.find(h => h.method === 'POST');
+  assert.ok(posted, 'no score was posted');
+  assert.equal(boards.get('v')[0].name, 'After', 'the score was posted under the old name');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the Save button saves without also starting a game', async () => {
+  const { context, page, errors } = await newGame({ name: 'Clicker' });
+  const point = await playerLine(page);
+  await page.mouse.click(point.x, point.y);
+  await page.waitForTimeout(150);
+
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('Clicked');
+  const save = await page.evaluate(() => Game.layout.name.save);
+  await page.mouse.click(save.x + save.width / 2, save.y + save.height / 2);
+  await page.waitForTimeout(250);
+
+  const m = await page.evaluate(() => ({ screen: Game.screen, name: Game.name }));
+  assert.equal(m.name, 'Clicked');
+  assert.equal(m.screen, 'title', 'the click that saved also started a game');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('escaping leaves the name as it was', async () => {
+  const { context, page, errors } = await newGame({ name: 'Kept' });
+  const point = await playerLine(page);
+  await page.mouse.click(point.x, point.y);
+  await page.waitForTimeout(150);
+
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('Discarded');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+
+  const m = await page.evaluate(() => ({
+    screen: Game.screen, name: Game.name, stored: localStorage.getItem('name')
+  }));
+  assert.equal(m.screen, 'title', 'escape should leave the name screen');
+  assert.equal(m.name, 'Kept', 'escape kept the typed name');
+  assert.equal(m.stored, 'Kept');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the game cleans a name the same way the score function does', async () => {
+  const { context, page } = await newGame({ name: 'Cleaner' });
+  const m = await page.evaluate(() => ({
+    blank: cleanName('   '),
+    missing: cleanName(null),
+    trimmed: cleanName('  Diego  '),
+    control: cleanName('Die\u0000go\u007F'),
+    long: cleanName('x'.repeat(40)).length,
+    max: MAX_NAME_LENGTH,
+    field: Game.nameField.maxLength
+  }));
+  assert.equal(m.blank, 'anonymous', 'an empty field should not post a blank row');
+  assert.equal(m.missing, 'anonymous');
+  assert.equal(m.trimmed, 'Diego');
+  assert.equal(m.control, 'Diego', 'control characters should be stripped');
+  assert.equal(m.long, m.max, `a long name should be cut to ${m.max}`);
+  assert.equal(m.field, m.max, 'the field lets you type more than will be kept');
+  await context.close();
+});
+
+await t('the field is only on the page while the name screen is up', async () => {
+  const { context, page, errors } = await newGame({ name: 'Hidden' });
+  assert.equal(await page.evaluate(() => Game.nameField.hidden), true,
+    'the field is on the title screen, where it is not asked for');
+
+  await page.keyboard.press('e');
+  await page.waitForTimeout(2400);
+  const playing = await page.evaluate(() => ({
+    screen: Game.screen,
+    hidden: Game.nameField.hidden,
+    focused: document.activeElement === Game.nameField
+  }));
+  assert.equal(playing.screen, 'playing');
+  assert.ok(playing.hidden, 'the field is live during play, where it would swallow keys');
+  assert.ok(!playing.focused);
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the field sits exactly where the layout puts it, before and after a resize', async () => {
+  const { context, page, errors } = await newGame({ name: 'Mover' });
+  const point = await playerLine(page);
+  await page.mouse.click(point.x, point.y);
+  await page.waitForTimeout(150);
+
+  const measure = () => page.evaluate(() => {
+    const box = Game.nameField.getBoundingClientRect();
+    const field = Game.layout.name.field;
+    return {
+      dx: Math.abs(box.x - field.x), dy: Math.abs(box.y - field.y),
+      dw: Math.abs(box.width - field.width), dh: Math.abs(box.height - field.height),
+      touch: box.height >= Layout.GRID.minTouchTarget
+    };
+  });
+
+  for (const stage of ['at 1280x720', 'after resizing']) {
+    const m = await measure();
+    assert.ok(m.dx < 1 && m.dy < 1, `the field is not where the layout says ${stage}`);
+    assert.ok(m.dw < 1 && m.dh < 1, `the field is not the size the layout says ${stage}`);
+    assert.ok(m.touch, `the field is under the touch minimum ${stage}`);
+    if (stage === 'at 1280x720') {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.waitForTimeout(250);
+      assert.equal(await page.evaluate(() => Game.screen), 'name',
+        'a resize knocked the game off the name screen');
+    }
+  }
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the name line clears the composition at every viewport', async () => {
+  // It is anchored to the bottom edge instead of flowing after the scores, so
+  // the font size has to reserve room for it. Without that reservation the
+  // last score row landed below the name line on a letterboxed window.
+  for (const [w, h] of VIEWPORTS) {
+    const { context, page } = await newGame({ width: w, height: h, name: 'Diego' });
+    const m = await page.evaluate(() => {
+      const L = Game.layout;
+      return {
+        deepest: L.scores.rows[L.scores.rows.length - 1],
+        top: L.player.y,
+        bottom: L.player.y + L.player.height
+      };
+    });
+    assert.ok(m.top > m.deepest, `the name line overlaps the last score row at ${w}x${h}`);
+    assert.ok(m.bottom <= h, `the name line runs off the bottom at ${w}x${h}`);
+    await context.close();
+  }
 });
 
 
