@@ -1879,6 +1879,253 @@ await t('every script the game ships is strict', async () => {
 });
 
 
+// ---------- what the game says, and to whom ----------
+
+await t('the game says what screen it is on, and what happened', async () => {
+  const { context, page, errors } = await newGame({ name: 'Listener' });
+
+  // The live region is what a screen reader has instead of the canvas, which
+  // to anything but a pair of eyes is one empty element.
+  const region = await page.evaluate(() => {
+    const el = document.getElementById('game_status');
+    return el && {
+      live: el.getAttribute('aria-live'),
+      role: el.getAttribute('role'),
+      atomic: el.getAttribute('aria-atomic'),
+      text: el.textContent.trim()
+    };
+  });
+  assert.ok(region, 'there is no live region on the page');
+  assert.equal(region.live, 'polite', 'the region interrupts instead of waiting');
+  assert.equal(region.role, 'status');
+  assert.equal(region.atomic, 'true', 'a partial update would be read out of context');
+  assert.match(region.text, /Standard/, 'the title screen does not say what is selected');
+  assert.match(region.text, /Listener/, 'the title screen does not say who is playing');
+
+  await page.evaluate(() => {
+    window.__said = [];
+    const say = Announce.say;
+    Announce.say = function (text) { window.__said.push(text); return say(text); };
+  });
+
+  await page.keyboard.press('v'); // VHard: one escaped balloon ends it
+  await page.waitForTimeout(2500);
+  await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
+  await page.waitForTimeout(200);
+
+  const said = await page.evaluate(() => window.__said);
+  const heard = said.join(' | ');
+  assert.match(heard, /Get ready/, 'the countdown is silent: ' + heard);
+  assert.match(heard, /VHard/, 'the difficulty is never said: ' + heard);
+  assert.match(heard, /1 of 1 lost/, 'losing a balloon is silent: ' + heard);
+  assert.match(heard, /Game over\. \d+ popped in [\d.]+ seconds/,
+    'the result is never said: ' + heard);
+
+  // The last thing said is the thing that just happened.
+  const last = await page.evaluate(() => document.getElementById('game_status').textContent);
+  assert.match(last, /Game over/);
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the canvas can be reached and described without seeing it', async () => {
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => {
+    const canvas = document.getElementById('balloon_canvas');
+    const help = document.getElementById(canvas.getAttribute('aria-describedby'));
+    return {
+      tabindex: canvas.getAttribute('tabindex'),
+      role: canvas.getAttribute('role'),
+      label: canvas.getAttribute('aria-label'),
+      help: help && help.textContent.replace(/\s+/g, ' ').trim(),
+      hiddenToSight: help && getComputedStyle(help).clipPath !== 'none'
+    };
+  });
+
+  assert.equal(m.tabindex, '0', 'a keyboard cannot reach the game at all');
+  assert.equal(m.role, 'application', 'the difficulty keys would be swallowed by the reader');
+  assert.ok(m.label && m.label.length > 3, 'the canvas has no name');
+  assert.match(m.help, /E, S, H or V/, 'the description does not say which keys work');
+  assert.match(m.help, /pointer/, 'the description does not admit that popping needs a pointer');
+  assert.ok(m.hiddenToSight, 'the description is drawn on the page as well as read');
+  await context.close();
+});
+
+await t('leaving the name screen hands focus back to the game', async () => {
+  const { context, page, errors } = await newGame({ name: 'Tabber' });
+  const point = await playerLine(page);
+  await page.mouse.click(point.x, point.y);
+  await page.waitForTimeout(150);
+  assert.ok(await page.evaluate(() => document.activeElement === NameField.element),
+    'the field did not take focus');
+
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+
+  // Hiding a focused element drops focus on the body, and the next Tab starts
+  // again from the top of the page.
+  const where = await page.evaluate(() => document.activeElement.id);
+  assert.equal(where, 'balloon_canvas', `focus went to ${where || 'nothing'}`);
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('every colour the game draws text in is readable on its ground', async () => {
+  // Measured, not asserted by eye: the leaderboard used to land at 1.4:1
+  // against a near-white horizon, which is not text at all. WCAG AA asks 4.5.
+  const { context, page } = await newGame();
+  const rows = await page.evaluate(() => {
+    const channel = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    const lum = c => 0.2126 * channel(c[0]) + 0.7152 * channel(c[1]) + 0.0722 * channel(c[2]);
+    const ratio = (a, b) => {
+      const pair = [lum(a), lum(b)].sort((m, n) => n - m);
+      return (pair[0] + 0.05) / (pair[1] + 0.05);
+    };
+    const parse = css => {
+      const m = css.match(/rgba?\(([^)]+)\)/);
+      if (m) {
+        const p = m[1].split(',').map(Number);
+        return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1];
+      }
+      const h = css.replace('#', '');
+      return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), 1];
+    };
+    const over = (fg, bg) => [0, 1, 2].map(i => Math.round(fg[i] * fg[3] + bg[i] * (1 - fg[3])));
+
+    const out = [];
+    Difficulty.ORDER.forEach(level => {
+      const p = Sky.paletteFor(level);
+      Game.difficulty = Difficulty.get(level);
+      Game.palette = p;
+      Game.measureLayout();
+      const L = Game.layout;
+
+      // The ground as it is actually drawn, with no text on top of it.
+      const ground = (x, y, panelled) => {
+        Paint.sky(Game);
+        if (panelled) { Paint.panel(Game); }
+        const d = Game.ctx.getImageData(
+          Math.round(x * Game.dpr), Math.round(y * Game.dpr), 1, 1).data;
+        return [d[0], d[1], d[2]];
+      };
+
+      const check = (what, colour, x, y, panelled) => {
+        const bg = ground(x, y, panelled);
+        out.push({ level, what, ratio: ratio(over(parse(colour), bg), bg) });
+      };
+
+      // On the static screens everything sits on the panel.
+      check('intro', p.ink, L.intro.x + 40, L.intro.y, true);
+      check('hint', p.inkSoft, L.hint.x + 40, L.hint.y, true);
+      check('score name', p.ink, L.scores.columns.name, L.scores.rows[2], true);
+      check('score date', p.inkSoft, L.scores.columns.date + 20, L.scores.rows[2], true);
+      check('score value', p.accent, L.scores.columns.value, L.scores.rows[2], true);
+
+      // The HUD is drawn during play, where it has a band of its own.
+      const hudGround = (x, y) => {
+        Paint.sky(Game);
+        const strip = Game.ctx.createLinearGradient(0, 0, 0, L.hud.band.height);
+        strip.addColorStop(0, p.panel);
+        strip.addColorStop(L.hud.band.solid, p.panel);
+        strip.addColorStop(1, Sky.transparent(p.panel));
+        Game.ctx.fillStyle = strip;
+        Game.ctx.fillRect(0, 0, Game.width, L.hud.band.height);
+        const d = Game.ctx.getImageData(
+          Math.round(x * Game.dpr), Math.round(y * Game.dpr), 1, 1).data;
+        return [d[0], d[1], d[2]];
+      };
+      [['hud', p.ink, L.hud.caught + 20], ['hud level', p.inkSoft, L.hud.level],
+       ['hud time', p.accent, L.hud.time]].forEach(([what, colour, x]) => {
+        const bg = hudGround(x, L.hud.y);
+        out.push({ level, what, ratio: ratio(over(parse(colour), bg), bg) });
+      });
+
+      // A button label sits on the button's own fill, over the panel.
+      const buttonGround = ground(L.menu.buttons[0].x + 30, L.menu.buttons[0].y + 20, true);
+      const fill = over(parse(p.buttonFill), buttonGround);
+      out.push({ level, what: 'button label', ratio: ratio(over(parse(p.ink), fill), fill) });
+      out.push({
+        level, what: 'selected button',
+        ratio: ratio(parse(p.onAccent).slice(0, 3), parse(p.accent).slice(0, 3))
+      });
+
+      // And the name chip carries the panel colour itself.
+      const chipGround = ground(L.player.x + 40, L.player.y + L.player.height / 2, false);
+      const chip = over(parse(p.panel), chipGround);
+      out.push({ level, what: 'name chip', ratio: ratio(over(parse(p.ink), chip), chip) });
+    });
+    return out;
+  });
+
+  const failures = rows.filter(r => r.ratio < 4.5)
+    .map(r => `${r.level} ${r.what} ${r.ratio.toFixed(2)}:1`);
+  assert.deepEqual(failures, [], 'text below WCAG AA 4.5:1 — ' + failures.join(', '));
+  assert.ok(rows.length >= 40, `only ${rows.length} colours checked`);
+  await context.close();
+});
+
+
+await t('the name field is readable too, in the colours it is really given', async () => {
+  // Everything else on the screen is drawn, so measuring the canvas covers it.
+  // The field is an element whose colours are set from the same palette in
+  // JavaScript, which is exactly the kind of second copy that drifts.
+  const { context, page, errors } = await newGame({ name: 'Readable' });
+  const point = await playerLine(page);
+  await page.mouse.click(point.x, point.y);
+  await page.waitForTimeout(200);
+
+  const worst = await page.evaluate(() => {
+    const channel = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    const lum = c => 0.2126 * channel(c[0]) + 0.7152 * channel(c[1]) + 0.0722 * channel(c[2]);
+    const ratio = (a, b) => {
+      const pair = [lum(a), lum(b)].sort((m, n) => n - m);
+      return (pair[0] + 0.05) / (pair[1] + 0.05);
+    };
+    const parse = css => {
+      const m = css.match(/rgba?\(([^)]+)\)/);
+      const p = m[1].split(',').map(Number);
+      return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1];
+    };
+    const over = (fg, bg) => [0, 1, 2].map(i => Math.round(fg[i] * fg[3] + bg[i] * (1 - fg[3])));
+
+    let lowest = { level: null, ratio: Infinity };
+    Difficulty.ORDER.forEach(level => {
+      Game.difficulty = Difficulty.get(level);
+      Game.palette = Sky.paletteFor(level);
+      Game.measureLayout();
+      Game.paint();
+
+      const field = Game.layout.name.field;
+      const style = getComputedStyle(NameField.element);
+
+      // What the canvas is showing underneath the field, where it sits.
+      const under = (() => {
+        Paint.sky(Game);
+        Paint.panel(Game);
+        const d = Game.ctx.getImageData(
+          Math.round((field.x + 4) * Game.dpr),
+          Math.round((field.y + field.height / 2) * Game.dpr), 1, 1).data;
+        return [d[0], d[1], d[2]];
+      })();
+
+      const background = over(parse(style.backgroundColor), under);
+      const text = ratio(over(parse(style.color), background), background);
+      const border = ratio(over(parse(style.borderColor), background), background);
+
+      if (text < lowest.ratio) { lowest = { level, ratio: text, what: 'text' }; }
+      // A border only has to be visible, which WCAG puts at 3:1.
+      if (border < 3) { lowest = { level, ratio: border, what: 'border' }; }
+    });
+    return lowest;
+  });
+
+  assert.ok(worst.ratio >= 4.5,
+    `the name field's ${worst.what} is ${worst.ratio.toFixed(2)}:1 on ${worst.level}`);
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+
 await browser.close();
 server.close();
 

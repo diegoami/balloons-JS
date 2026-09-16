@@ -33,6 +33,7 @@ Screens.title = {
 
     enter: function (game) {
         Scores.load(game);
+        Announce.title(game);
     },
 
     bind: function (game, signal) {
@@ -41,6 +42,7 @@ Screens.title = {
 
     draw: function (game) {
         Paint.sky(game);
+        Paint.panel(game);
         Paint.intro(game, Layout.INTRO_TEXT);
         Paint.menu(game);
         Paint.scores(game);
@@ -64,11 +66,12 @@ Screens.name = {
 
     enter: function (game) {
         game.pressed = null;
+        Announce.name();
         NameField.show(game, game.name);
     },
 
     exit: function (game) {
-        NameField.hide();
+        NameField.hide(game);
     },
 
     bind: function (game, signal) {
@@ -77,6 +80,7 @@ Screens.name = {
 
     draw: function (game) {
         Paint.sky(game);
+        Paint.panel(game);
         Paint.nameScreen(game);
     },
 
@@ -96,6 +100,7 @@ Screens.starting = {
     enter: function (game) {
         game.state.endsAt = Date.now() + Game.COUNTDOWN_MS;
         game.resetRound();
+        Announce.starting(game);
     },
 
     bind: function (game, signal) {
@@ -124,6 +129,7 @@ Screens.playing = {
 
     enter: function (game) {
         game.ticks = 0;
+        Announce.playing();
     },
 
     bind: function (game, signal) {
@@ -132,7 +138,13 @@ Screens.playing = {
 
     update: function (game) {
         game.ticks++;
-        game.lostBalloons += game.removeEscaped();
+
+        var escaped = game.removeEscaped();
+        if (escaped > 0) {
+            game.lostBalloons += escaped;
+            Announce.lost(game);
+        }
+
         game.spawnBalloon();
         game.moveBalloons(false);
 
@@ -167,6 +179,7 @@ Screens.gameover = {
 
         Scores.submit(game, game.balloons_caught);
         Scores.load(game);
+        Announce.gameover(game);
     },
 
     bind: function (game, signal) {
@@ -182,6 +195,7 @@ Screens.gameover = {
 
     draw: function (game) {
         Paint.sky(game);
+        Paint.panel(game);
         Paint.intro(
             game,
             "Game Over. Score: " + game.balloons_caught + ", Time: " + game.end_time
