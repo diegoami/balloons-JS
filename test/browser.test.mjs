@@ -83,7 +83,7 @@ const drawnPixels = page => page.evaluate(() => {
   bare.height = c.height;
   const bctx = bare.getContext('2d');
   bctx.setTransform(Game.dpr, 0, 0, Game.dpr, 0, 0);
-  Sky.paint(bctx, Game.width, Game.height, Sky.paletteFor(Game.diff_level));
+  Sky.paint(bctx, Game.width, Game.height, Sky.paletteFor(Game.difficulty.level));
   const plain = bctx.getImageData(0, 0, bare.width, bare.height).data;
 
   let n = 0;
@@ -211,7 +211,7 @@ await t('the selected difficulty is drawn differently from the rest', async () =
   const { context, page } = await newGame();
   const m = await page.evaluate(() => {
     const L = Game.layout, ctx = Game.ctx;
-    Game.diff_level = 'H';
+    Game.difficulty.level = 'H';
     Game.drawTitleScreen();
     const sample = (button) => {
       const b = button;
@@ -239,7 +239,7 @@ await t('clicking a difficulty box starts that game', async () => {
   const box = layout.buttons[2]; // Hard
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(2600);
-  const state = await page.evaluate(() => ({ diff: Game.diff_level, lost: MAX_LOST_BALLOONS, running: !!Game.tick_interval }));
+  const state = await page.evaluate(() => ({ diff: Game.difficulty.level, lost: Game.difficulty.maxLost, running: !!Game.tick_interval }));
   assert.equal(state.diff, 'H');
   assert.equal(state.lost, 3, 'Hard should allow 3 lost balloons');
   assert.ok(state.running, 'game loop should be running');
@@ -251,7 +251,7 @@ await t('keyboard shortcuts pick a difficulty', async () => {
   const { context, page } = await newGame();
   await page.keyboard.press('v');
   await page.waitForTimeout(2400);
-  assert.equal(await page.evaluate(() => Game.diff_level), 'V');
+  assert.equal(await page.evaluate(() => Game.difficulty.level), 'V');
   await context.close();
 });
 
@@ -392,7 +392,7 @@ await t('a second game after game over still responds to input', async () => {
   await page.waitForTimeout(5600); // difficulty input is rebound after 5s
   await page.keyboard.press('e');
   await page.waitForTimeout(2500);
-  const state = await page.evaluate(() => ({ diff: Game.diff_level, restart: Game.isrestart }));
+  const state = await page.evaluate(() => ({ diff: Game.difficulty.level, restart: Game.isrestart }));
   assert.equal(state.diff, 'E', 'could not start a new game after game over');
   assert.equal(state.restart, false);
   assert.deepEqual(errors, [], errors.join(' | '));
@@ -413,7 +413,7 @@ await t('preferences persist across reloads without re-prompting', async () => {
   await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(400);
   assert.equal(prompts, 1, 'a returning visitor must not be prompted again');
-  const stored = await page.evaluate(() => ({ name: Game.name, diff: Game.diff_level }));
+  const stored = await page.evaluate(() => ({ name: Game.name, diff: Game.difficulty.level }));
   assert.equal(stored.name, 'Persisted');
   assert.equal(stored.diff, 'H', 'difficulty should be remembered');
   await context.close();
@@ -434,7 +434,7 @@ await t('game still works when localStorage throws', async () => {
   await page.waitForTimeout(400);
   await page.keyboard.press('e');
   await page.waitForTimeout(2500);
-  assert.equal(await page.evaluate(() => Game.diff_level), 'E');
+  assert.equal(await page.evaluate(() => Game.difficulty.level), 'E');
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
@@ -548,7 +548,7 @@ await t('difficulty boxes stay clickable after a resize', async () => {
   const box = layout.buttons[2]; // Hard
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(2600);
-  const state = await page.evaluate(() => ({ diff: Game.diff_level, lost: MAX_LOST_BALLOONS }));
+  const state = await page.evaluate(() => ({ diff: Game.difficulty.level, lost: Game.difficulty.maxLost }));
   assert.equal(state.diff, 'H', 'hit regions went stale after resize');
   assert.equal(state.lost, 3);
   assert.deepEqual(errors, [], errors.join(' | '));
@@ -644,7 +644,7 @@ const VIEWPORTS = [
 await t('every menu item becomes a button and a target', async () => {
   const { context, page } = await newGame();
   const m = await page.evaluate(() => ({
-    items: Layout.MENU_ITEMS.map(i => i.level),
+    items: Difficulty.ORDER,
     buttons: Game.layout.menu.buttons.map(b => b.level),
     labels: Game.layout.menu.buttons.map(b => b.label),
     targets: Game.layout.targets.map(t => t.level)
@@ -735,13 +735,13 @@ await t('the menu never overflows, even at extreme widths', async () => {
 
 await t('clicking the high-score line restarts at the current difficulty', async () => {
   const { context, page, errors } = await newGame();
-  await page.evaluate(() => { Game.diff_level = 'H'; });
+  await page.evaluate(() => { Game.difficulty.level = 'H'; });
   const hit = await page.evaluate(() => Game.layout.scores.hit);
   await page.mouse.click(hit.x + hit.width / 2, hit.y + hit.height / 2);
   await page.waitForTimeout(2600);
   assert.equal(await page.evaluate(() => Game.screen), 'playing',
     'the high-score line did not start a game');
-  assert.equal(await page.evaluate(() => Game.diff_level), 'H');
+  assert.equal(await page.evaluate(() => Game.difficulty.level), 'H');
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
@@ -846,7 +846,7 @@ await t('a real touch tap starts a game on an emulated phone', async () => {
     await page.touchscreen.tap(point.x, point.y);
     await page.waitForTimeout(2800);
 
-    const state = await page.evaluate(() => ({ screen: Game.screen, diff: Game.diff_level }));
+    const state = await page.evaluate(() => ({ screen: Game.screen, diff: Game.difficulty.level }));
     assert.equal(state.diff, 'V', `${name}: off-centre tap selected ${state.diff}`);
     assert.equal(state.screen, 'playing', `${name}: tap did not start the game`);
     assert.deepEqual(errors, [], errors.join(' | '));
@@ -966,7 +966,7 @@ await t('the menu is dead briefly after a game, then live', async () => {
   // And now it works.
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(300);
-  assert.equal(await page.evaluate(() => Game.diff_level), 'E',
+  assert.equal(await page.evaluate(() => Game.difficulty.level), 'E',
     'the menu did not respond once live');
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
@@ -990,7 +990,7 @@ await t('pressing a button changes how it looks, selected or not', async () => {
   // selected button and an unselected one.
   for (const [index, level] of [[0, 'E'], [1, 'S']]) {
     const { context, page, errors } = await newGame();
-    const selected = await page.evaluate(() => Game.diff_level);
+    const selected = await page.evaluate(() => Game.difficulty.level);
     const before = await buttonPaint(page, index);
     const box = await page.evaluate(i => Game.layout.menu.buttons[i], index);
 
@@ -1044,7 +1044,7 @@ await t('balloons stay poppable at any score', async () => {
       }
       return { caught, size: balloon.size, poppable };
     };
-    // RATIO_DECREASE on VHard is 300; probe either side of it and well beyond.
+    // ratioDecrease on VHard is 300; probe either side of it and well beyond.
     return [0, 150, 299, 300, 400, 1000, 5000].map(check);
   });
 
@@ -1176,6 +1176,100 @@ await t('a balloon takes the same time to cross any shaped screen', async () => 
   assert.ok(spread < 1.1,
     'time to cross still depends on screen shape: ' +
     crossings.map(c => `${c.size} ${c.seconds.toFixed(1)}s`).join(', '));
+});
+
+
+
+// ---------- difficulty as a value ----------
+
+await t('one table describes a level, and everything reads it', async () => {
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => {
+    Game.difficulty = Difficulty.get('H');
+    Game.palette = Sky.paletteFor('H');
+    Game.drawTitleScreen();
+    return {
+      table: Difficulty.get('H'),
+      buttonLabels: Game.layout.menu.buttons.map(b => b.label),
+      tableLabels: Difficulty.all().map(d => d.label),
+      hudName: Game.difficulty.name
+    };
+  });
+  // The button label and the HUD word used to live in two different files.
+  assert.deepEqual(m.buttonLabels, m.tableLabels,
+    'buttons and the table disagree about the labels');
+  assert.equal(m.hudName, 'HARD');
+  assert.equal(m.table.maxLost, 3);
+  assert.equal(m.table.ratioDecrease, 700);
+  assert.equal(m.table.speedIncrease, 120);
+  await context.close();
+});
+
+await t('two difficulties can be held at once', async () => {
+  // Previously impossible: the difficulty *was* four global variables, so
+  // asking about a level meant first destroying whichever one was in play.
+  // A hover preview, or a test covering two levels, both needed this.
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => {
+    const easy = Difficulty.get('E');
+    const vhard = Difficulty.get('V');
+    const inPlay = Game.difficulty.level;
+    return {
+      easyLives: easy.maxLost,
+      vhardLives: vhard.maxLost,
+      stillInPlay: Game.difficulty.level === inPlay,
+      distinct: easy !== vhard
+    };
+  });
+  assert.equal(m.easyLives, 15);
+  assert.equal(m.vhardLives, 1);
+  assert.ok(m.distinct, 'levels should be separate objects');
+  assert.ok(m.stillInPlay, 'reading two levels disturbed the one in play');
+  await context.close();
+});
+
+await t('every level in the table is playable and reachable', async () => {
+  for (const level of ['E', 'S', 'H', 'V']) {
+    const { context, page, errors } = await newGame();
+    const box = await page.evaluate(
+      l => Game.layout.menu.buttons.find(b => b.level === l), level
+    );
+    assert.ok(box, `no button for level ${level}`);
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForTimeout(2600);
+    const state = await page.evaluate(() => ({
+      level: Game.difficulty.level,
+      lives: Game.difficulty.maxLost,
+      screen: Game.screen
+    }));
+    assert.equal(state.level, level);
+    assert.equal(state.screen, 'playing');
+    assert.deepEqual(errors, [], errors.join(' | '));
+    await context.close();
+  }
+});
+
+await t('a stored level that no longer exists falls back to the default', async () => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('dialog', d => d.accept('Fallback'));
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('name', 'Fallback');
+      localStorage.setItem('diff_level', 'X');  // a level that was removed
+    } catch (e) {}
+  });
+  await page.goto('http://localhost:8899/', { waitUntil: 'load' });
+  await page.waitForTimeout(400);
+  const m = await page.evaluate(() => ({
+    level: Game.difficulty.level,
+    fallback: Difficulty.DEFAULT
+  }));
+  assert.equal(m.level, m.fallback, 'an unknown stored level should fall back');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
 });
 
 
