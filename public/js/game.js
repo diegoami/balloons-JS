@@ -1,5 +1,19 @@
-var BALLOON_FREQUENCY = 0.1;
-var BALLOON_SPEED = 5.5;
+"use strict";
+
+/** Balloon radius before any scaling: a base plus a random spread. */
+var BALLOON_BASE_SIZE = 24;
+var BALLOON_SIZE_SPREAD = 50;
+
+/**
+ * Balloon speed is expressed for a screen this tall and scaled from there.
+ *
+ * Speed was absolute pixels per tick while the distance a balloon had to cross
+ * was the screen height, so the time available to react was set by how tall
+ * your window happened to be. Measured with the playtest harness, a 1920x400
+ * window gave 2.4 seconds of median reaction time against a phone's 4.2, and
+ * it was the only viewport where the bot lost a game.
+ */
+var REFERENCE_HEIGHT = 720;
 var MAX_BALLOONS = 20;
 var RATIO_SIZE = 1;
 
@@ -14,20 +28,15 @@ var RATIO_SIZE = 1;
  * 0.4 keeps the escalation visible while leaving the balloon hittable forever.
  */
 var MIN_RATIO_SIZE = 0.4;
-var MAX_LOST_BALLOONS = 15;
-
-var RATIO_DECREASE = 2000;
-var SPEED_INCREASE = 500;
 var SPEED_MODIFIER = 0.0015;
-var DIFF_LEVEL = "E";
 
 /**
- * Screen positions, the difficulty menu and its hit regions all come from
- * layout.js. Seventeen loose fractions and eight hand-counted string offsets
- * used to live here.
+ * What this file is not: where the screen is laid out (layout.js), what the
+ * game is being at any moment (screens.js), what it draws (paint.js), what it
+ * listens to (input.js), the leaderboard (scores.js) or the one DOM element in
+ * the whole game (namefield.js). What is left here is the game itself: the
+ * loop, the canvas, the screen it is on, and the balloons.
  */
-
-const SCORE_URL = "/api/scores/";
 
 /** localStorage throws when site data is blocked, so every access is guarded. */
 function loadSetting(key) {
@@ -46,8 +55,31 @@ function saveSetting(key, value) {
     }
 }
 
+/**
+ * The same cleaning the score function applies, done here too so the name you
+ * see is the name that gets stored. Control characters out, 24 characters max,
+ * and an empty field means anonymous rather than a blank row on the board.
+ */
+var MAX_NAME_LENGTH = 24;
+
+function cleanName(value) {
+    if (typeof value !== "string") {
+        return "anonymous";
+    }
+    var cleaned = value.replace(/[\u0000-\u001F\u007F]/g, "").trim();
+    return cleaned.slice(0, MAX_NAME_LENGTH) || "anonymous";
+}
+
 var Game = {};
-Game.fps = 30;
+
+/**
+ * One simulation step. Thirty a second, which is the rate the game was tuned
+ * at, and now the rate it runs at whatever the display is doing.
+ */
+Game.STEP_MS = 1000 / 30;
+
+/** The most simulation time one frame is allowed to catch up on. */
+Game.MAX_CATCHUP_MS = 250;
 
 /** How long the countdown before play runs. */
 Game.COUNTDOWN_MS = 2000;
@@ -59,16 +91,150 @@ Game.COUNTDOWN_MS = 2000;
  */
 Game.MENU_LOCKOUT_MS = 1200;
 
+// ------------------------------------------------------------------ screens
+
+/**
+ * Moves to a screen, which is the only way the game changes state.
+ *
+ * Everything a transition needed used to be spread across its caller: restart
+ * set five fields and started a timer, gameover set four more and scheduled a
+ * rebind 1.2 seconds out. Now each screen says what it is (screens.js) and
+ * this is the machinery that swaps one for another.
+ */
+Game.enter = function (name) {
+    var previous = Screens[this.screen];
+    var screen = Screens[name];
+
+    if (previous && previous.exit) {
+        previous.exit(this);
+    }
+
+    this.screen = name;
+
+    // Whatever the incoming screen needs to remember. Deadlines used to live
+    // on the game forever, meaning something outside the screen that set them
+    // could read them long after they stopped meaning anything.
+    this.state = {};
+
+    var signal = this.resetInput();
+
+    if (screen.enter) {
+        screen.enter(this);
+    }
+    if (screen.bind) {
+        screen.bind(this, signal);
+    }
+
+    if (screen.animated) {
+        this.startLoop();
+    } else {
+        this.stopLoop();
+    }
+
+    // Painted on arrival rather than left to the next frame, so a transition
+    // is visible the moment it happens whether or not a loop is running.
+    this.paint();
+};
+
+/** Paints whichever screen is up. */
+Game.paint = function () {
+    Screens[this.screen].draw(this);
+};
+
 /** Whether the difficulty buttons will actually do anything if pressed. */
 Game.isMenuLive = function () {
-    if (this.screen === "title") {
-        return true;
-    }
-    if (this.screen === "gameover") {
-        return Date.now() >= (this.menuLiveAt || 0);
-    }
-    return false;
+    var screen = Screens[this.screen];
+    return screen.menuLive ? screen.menuLive(this) : false;
 };
+
+/**
+ * Starts the frame loop, if it is not already running.
+ *
+ * It was setInterval(frame, 1000 / 30). That asks the browser to run the game
+ * on its own schedule rather than the display's, so every frame landed a
+ * little before or after the moment the screen was actually redrawn and the
+ * balloons juddered. It also kept running in a background tab, at whatever
+ * rate the browser felt like throttling it to, which is how you could come
+ * back to a tab and find the game had been played without you.
+ */
+Game.startLoop = function () {
+    if (this.running) {
+        return;
+    }
+    this.running = true;
+    this.lastFrame = null;
+    this.accumulator = 0;
+
+    var step = function (now) {
+        if (!Game.running) {
+            return;
+        }
+        // Asked for before the work, so that a screen change during the work
+        // can cancel the frame it does not want.
+        Game.frameHandle = window.requestAnimationFrame(step);
+        Game.advance(now);
+    };
+    this.frameHandle = window.requestAnimationFrame(step);
+};
+
+Game.stopLoop = function () {
+    this.running = false;
+    if (this.frameHandle !== null && this.frameHandle !== undefined) {
+        window.cancelAnimationFrame(this.frameHandle);
+        this.frameHandle = null;
+    }
+};
+
+/**
+ * Catches the simulation up to `now` and paints once, if anything moved.
+ *
+ * The game takes fixed steps of STEP_MS, however often the display asks for a
+ * frame. A balloon's speed is expressed per step, so without this a 120Hz
+ * display would play the game at four times the speed of a 30Hz one; the whole
+ * difficulty table is calibrated against a step, not a second.
+ *
+ * Taking `now` as an argument rather than reading a clock is what makes the
+ * loop testable: a stall can be handed to it rather than waited for.
+ */
+Game.advance = function (now) {
+    if (this.lastFrame === null) {
+        this.lastFrame = now;
+    }
+
+    // A tab that was hidden for a minute, or a long pause, must not be replayed
+    // at full speed: the game would spawn a minute of balloons into one frame
+    // and you would lose them all before the screen updated.
+    var elapsed = Math.min(now - this.lastFrame, Game.MAX_CATCHUP_MS);
+    this.lastFrame = now;
+    this.accumulator += Math.max(elapsed, 0);
+
+    var stepped = false;
+    while (this.accumulator >= Game.STEP_MS) {
+        this.accumulator -= Game.STEP_MS;
+        stepped = true;
+
+        // Read each time round: a step can change which screen is up. If it
+        // changed to a screen that does not move, the rest of the catch-up
+        // drains harmlessly.
+        var screen = Screens[this.screen];
+        if (screen.update) {
+            screen.update(this);
+        }
+    }
+
+    if (stepped) {
+        this.paint();
+    }
+};
+
+Game.restart = function (level) {
+    saveSetting("diff_level", level);
+    this.difficulty = Difficulty.get(level);
+    this.palette = Sky.paletteFor(this.difficulty.level);
+    this.enter("starting");
+};
+
+// ------------------------------------------------------------------- canvas
 
 /**
  * Sizes the canvas.
@@ -93,9 +259,21 @@ Game.applyCanvasSize = function () {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     this.ratio = this.width / 1000;
+    this.measureLayout();
+    this.palette = Sky.paletteFor(this.difficulty.level);
+};
+
+/**
+ * Works out where everything goes. Separate from sizing the canvas because the
+ * player's name is drawn and tapped, so changing it moves a hit region and the
+ * layout has to be measured again — without resetting the backing store.
+ */
+Game.measureLayout = function () {
     this.fontSize = Layout.applyFont(this.ctx, this.width, this.height);
-    this.layout = Layout.compute(this.ctx, this.width, this.height, this.fontSize);
-    this.palette = Sky.paletteFor(this.diff_level);
+    this.layout = Layout.compute(
+        this.ctx, this.width, this.height, this.fontSize,
+        Layout.PLAYER_PREFIX + this.name
+    );
 };
 
 /**
@@ -116,24 +294,12 @@ Game.handleResize = function () {
         that.watchPixelRatio();
 
         // Balloons captured the old width as their bounce boundary.
-        for (var i = 0; i < (that.balloons || []).length; i++) {
+        for (var i = 0; i < that.balloons.length; i++) {
             that.balloons[i].xmax = that.width;
         }
 
-        that.redraw();
+        that.paint();
     });
-};
-
-/**
- * Only the title screen is painted once and left alone. Every other screen is
- * repainted by the game loop, which keeps running through game over.
- */
-Game.redraw = function () {
-    if (this.screen === "title") {
-        this.drawTitleScreen();
-    } else if (this.screen === "starting") {
-        this.clear();
-    }
 };
 
 Game.watchViewport = function () {
@@ -170,27 +336,12 @@ Game.watchPixelRatio = function () {
     }, { once: true });
 };
 
-Game.drawTitleScreen = function () {
-    this.clear();
-    this.drawIntro(Layout.INTRO_TEXT);
-    this.draw_diff_levels();
-    if (this.scores) {
-        this.fillscore(this.scores);
-    }
-};
-
-/** The one headline line, shared by the title and game-over screens. */
-Game.drawIntro = function (text) {
-    this.ctx.font = this.layout.fonts.intro;
-    this.ctx.fillStyle = this.palette.ink;
-    this.ctx.fillText(text, this.layout.intro.x, this.layout.intro.y);
-    this.ctx.font = this.layout.fonts.menu;
-};
+// -------------------------------------------------------------------- input
 
 /**
- * Drops every listener bound for the previous game state and returns a signal
- * for the next set. Replaces jQuery's .unbind(), which removed *all* handlers
- * on document as a way to reset input.
+ * Drops every listener the outgoing screen bound and returns a signal for the
+ * incoming one. Replaces jQuery's .unbind(), which removed *all* handlers on
+ * document as a way to reset input.
  */
 Game.resetInput = function () {
     if (this.inputAbort) {
@@ -200,318 +351,43 @@ Game.resetInput = function () {
     return this.inputAbort.signal;
 };
 
-/** Maps a pointer event onto canvas coordinates, accounting for CSS scaling. */
-Game.getCanvasPoint = function (event) {
-    var rect = this.canvas.getBoundingClientRect();
-    return {
-        x: (event.clientX - rect.left) * (this.width / rect.width),
-        y: (event.clientY - rect.top) * (this.height / rect.height)
-    };
+// --------------------------------------------------------------------- name
+
+/**
+ * Takes the name, everywhere it is kept. The layout is measured again because
+ * the name is drawn, so its width is also the width of a tap target.
+ */
+Game.setName = function (value) {
+    this.name = cleanName(value);
+    saveSetting("name", this.name);
+    this.measureLayout();
 };
 
-Game.do_click = function () {
-    var that = this;
-    var signal = this.resetInput();
+// -------------------------------------------------------------------- world
 
-    this.canvas.addEventListener("click", function (event) {
-        var point = that.getCanvasPoint(event);
-        for (var i = that.balloons.length - 1; i >= 0; i--) {
-            if (that.balloons[i].collision(point.x, point.y)) {
-                that.balloons.splice(i, 1);
-                if (!that.isrestart) {
-                    that.balloons_caught++;
-                }
-                break;
-            }
-        }
-    }, { signal: signal });
-};
-
-Game.restart = function (diff_level) {
-    saveSetting("diff_level", diff_level);
-    if (diff_level == "E") {
-        MAX_LOST_BALLOONS = 15;
-        RATIO_DECREASE = 2000;
-        SPEED_INCREASE = 500;
-        DIFF_LEVEL = "EASY";
-    } else if (diff_level == "S") {
-        MAX_LOST_BALLOONS = 7;
-        RATIO_DECREASE = 1200;
-        SPEED_INCREASE = 200;
-        DIFF_LEVEL = "STANDARD";
-    } else if (diff_level == "H") {
-        MAX_LOST_BALLOONS = 3;
-        RATIO_DECREASE = 700;
-        SPEED_INCREASE = 120;
-        DIFF_LEVEL = "HARD";
-    } else if (diff_level == "V") {
-        MAX_LOST_BALLOONS = 1;
-        RATIO_DECREASE = 300;
-        SPEED_INCREASE = 80;
-        DIFF_LEVEL = "VHARD";
-    }
-    this.diff_level = diff_level;
-    this.palette = Sky.paletteFor(diff_level);
-    this.do_click();
-    if (this.tick_interval) {
-        clearInterval(this.tick_interval);
-    }
-    this.isrestart = false;
-    this.showscores = false;
-    this.screen = "starting";
-    this.countdownEnd = Date.now() + Game.COUNTDOWN_MS;
-    this.pressedLevel = null;
-    this.balloons = [];
-    this.balloons_caught = 0;
-    this.lostBalloons = 0;
-
-    // The loop starts now rather than in two seconds, so the countdown can be
-    // drawn. Previously this was a blank sky with no sign the tap had landed.
-    this.clear();
-    this.tick_interval = setInterval(Game.run, 1000 / Game.fps);
-};
-
-Game.init = function () {
-    // Asked once on first visit and remembered afterwards. Previously this
-    // prompted on every single load, and fell back to a plaintext JSONP call
-    // to gd.geobytes.com just to pre-fill the field.
-    var name = loadSetting("name");
-    if (!name) {
-        name = window.prompt("Please enter your name", "anonymous");
-        if (name) {
-            saveSetting("name", name);
-        }
-    }
-    this.name = name || "anonymous";
-
-    this.canvas = document.getElementById("balloon_canvas");
-    this.ctx = this.canvas.getContext("2d");
-
-    this.diff_level = loadSetting("diff_level");
-    if (!this.diff_level) {
-        this.diff_level = "S";
-    }
-
-    this.applyCanvasSize();
-    this.screen = "title";
-    this.pressedLevel = null;
-    this.drawTitleScreen();
-
-    this.getScores();
-    this.setDifficulty();
-    this.watchViewport();
-};
-
-Game.setDifficulty = function () {
-    var that = this;
-    var signal = this.resetInput();
-
-    var repaintIfStatic = function () {
-        if (that.screen === "title") {
-            that.drawTitleScreen();
-        }
-    };
-
-    this.canvas.addEventListener("pointerdown", function (event) {
-        var target = Layout.pick(that.layout.targets, that.getCanvasPoint(event));
-        that.pressedLevel = target ? target.level : null;
-        repaintIfStatic();
-    }, { signal: signal });
-
-    var releasePress = function () {
-        if (that.pressedLevel !== null) {
-            that.pressedLevel = null;
-            repaintIfStatic();
-        }
-    };
-    this.canvas.addEventListener("pointerup", releasePress, { signal: signal });
-    this.canvas.addEventListener("pointercancel", releasePress, { signal: signal });
-    this.canvas.addEventListener("pointerleave", releasePress, { signal: signal });
-
-    this.canvas.addEventListener("click", function (event) {
-        var point = that.getCanvasPoint(event);
-        var target = Layout.pick(that.layout.targets, point);
-
-        that.pressedLevel = null;
-        if (target) {
-            // The high-score line has no level of its own; it replays the
-            // difficulty already selected.
-            that.restart(target.level || that.diff_level);
-        }
-    }, { signal: signal });
-
-    document.addEventListener("keydown", function (event) {
-        var key = event.key.toUpperCase();
-        if (event.key === " " || event.key === "Enter") {
-            that.restart(that.diff_level);
-        } else if (key === "E" || key === "S" || key === "H" || key === "V") {
-            that.restart(key);
-        }
-    }, { signal: signal });
-};
-
-Game.fillscore = function (data) {
-    var scores = this.layout.scores;
-
-    if (!data) {
-        return;
-    }
-
-    this.ctx.font = this.layout.fonts.label;
-    this.ctx.fillStyle = this.palette.inkSoft;
-    this.ctx.fillText(Layout.HIGH_SCORES_TEXT + this.diff_level, scores.heading.x, scores.heading.y);
-
-    this.ctx.font = this.layout.fonts.score;
-    for (var i = 0; i < scores.rows.length; i++) {
-        if (data.length > i) {
-            this.ctx.fillStyle = this.palette.inkSoft;
-            this.ctx.fillText(data[i]["score_day"], scores.columns.date, scores.rows[i]);
-            this.ctx.fillStyle = this.palette.ink;
-            this.ctx.fillText(data[i]["name"], scores.columns.name, scores.rows[i]);
-            this.ctx.fillStyle = this.palette.accent;
-            this.ctx.fillText(data[i]["score"], scores.columns.value, scores.rows[i]);
-        }
-    }
-    this.ctx.font = this.layout.fonts.menu;
-};
-
-Game.getScores = function () {
-    var that = this;
-
-    if (this.scores) {
-        this.fillscore(this.scores);
-        return;
-    }
-
-    // Wait on any score still being submitted, so the board we draw includes it.
-    var ready = this.pendingScore || Promise.resolve();
-
-    ready
-        .then(function () {
-            return fetch(SCORE_URL + that.diff_level.toLowerCase());
-        })
-        .then(function (response) {
-            return response.ok ? response.json() : [];
-        })
-        .then(function (data) {
-            that.scores = data;
-            that.fillscore(data);
-        })
-        .catch(function () {
-            /* The leaderboard is a nicety; the game plays fine without it. */
-        });
-};
-
-Game.addscore = function (score) {
-    var that = this;
-    this.scores = undefined;
-
-    this.pendingScore = fetch(SCORE_URL + this.diff_level.toLowerCase(), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ score: score, name: that.name })
-    }).catch(function () {
-        /* Ignore: a failed submission shouldn't block the game-over screen. */
-    });
-};
-
-Game.gameover = function () {
-    var that = this;
-
-    if (!this.isrestart) {
-        this.addscore(this.balloons_caught);
-        this.resetInput();
-        this.end_time = this.time_to_show;
-        this.isrestart = true;
-        this.screen = "gameover";
-        this.menuLiveAt = Date.now() + Game.MENU_LOCKOUT_MS;
-        this.showscores = true;
-        setTimeout(function () {
-            that.setDifficulty();
-        }, Game.MENU_LOCKOUT_MS);
-    }
-    if (this.end_time) {
-        this.drawIntro("Game Over. Score: " + this.balloons_caught + ", Time: " + this.end_time);
-        this.draw_diff_levels();
-        if (this.showscores) {
-            this.getScores();
-        }
-    }
+/**
+ * How long the round has been running, as a fixed-point string.
+ *
+ * Counted in simulation steps rather than read off the wall clock, so the time
+ * on the board is the time the game was actually played: a stall, a dropped
+ * frame or a tab left in the background does not add to anybody's score.
+ */
+Game.elapsed = function () {
+    return (this.ticks * Game.STEP_MS / 1000).toFixed(2);
 };
 
 /**
- * Draws the difficulty buttons in whichever of four states they are in.
- *
- * A button used to look identical whether or not pressing it would do
- * anything: after a game ended the menu was repainted every frame for five
- * seconds while no input was bound at all.
+ * Clears the board for a new round. The clock is set here and again when play
+ * actually begins, so nothing drawn during the countdown can read a time left
+ * over from the previous game.
  */
-Game.draw_diff_levels = function () {
-    var ctx = this.ctx;
-    var palette = this.palette;
-    var buttons = this.layout.menu.buttons;
-    var live = this.isMenuLive();
-
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = this.layout.fonts.menu;
-    ctx.lineWidth = Math.max(1, this.layout.line * 0.06);
-
-    for (var i = 0; i < buttons.length; i++) {
-        var button = buttons[i];
-        var selected = button.level === this.diff_level;
-        var pressed = live && button.level === this.pressedLevel;
-
-        var fill, border, label;
-        if (!live) {
-            fill = palette.buttonDisabledFill;
-            border = palette.buttonDisabledBorder;
-            label = palette.inkDisabled;
-        } else if (selected) {
-            fill = palette.accent;
-            border = null;
-            label = palette.onAccent;
-        } else {
-            fill = palette.buttonFill;
-            border = palette.buttonBorder;
-            label = palette.ink;
-        }
-
-        Layout.roundedRect(ctx, button, button.radius);
-        ctx.fillStyle = fill;
-        ctx.fill();
-
-        if (border) {
-            ctx.strokeStyle = border;
-            ctx.stroke();
-        }
-
-        // Layered over whatever fill the button has, so the already-selected
-        // button responds to a press too — it restarts the game, so it is just
-        // as pressable as the others.
-        if (pressed) {
-            ctx.fillStyle = palette.buttonPressOverlay;
-            ctx.fill();
-        }
-
-        ctx.fillStyle = label;
-        ctx.fillText(
-            button.label,
-            button.x + button.width / 2,
-            button.y + button.height / 2
-        );
-    }
-
-    ctx.restore();
-
-    ctx.font = this.layout.fonts.label;
-    ctx.fillStyle = live ? palette.inkSoft : palette.inkDisabled;
-    ctx.fillText(
-        live ? Layout.HINT_TEXT : "Hold on...",
-        this.layout.hint.x,
-        this.layout.hint.y
-    );
+Game.resetRound = function () {
+    this.pressed = null;
+    this.balloons = [];
+    this.balloons_caught = 0;
+    this.lostBalloons = 0;
+    this.end_time = null;
+    this.ticks = 0;
 };
 
 Game.randomBalloon = function () {
@@ -519,109 +395,89 @@ Game.randomBalloon = function () {
     var max_height = this.height;
     var xcoord = Math.floor(Math.random() * this.layout.spawn.width) + this.layout.spawn.min;
     var ycoord = max_height;
-    var ratioSize = Math.max(MIN_RATIO_SIZE, RATIO_SIZE - this.balloons_caught / RATIO_DECREASE);
-    var randomSize = (24 + Math.floor(Math.random() * 50)) * this.ratio * ratioSize;
+    var ratioSize = Math.max(MIN_RATIO_SIZE, RATIO_SIZE - this.balloons_caught / this.difficulty.ratioDecrease);
+
+    // A fingertip is the same size whatever the screen, but radius scaled with
+    // width alone: on a 390px phone the smallest balloon was a 19px target,
+    // and 7px once the shrink floor applied. MIN_RATIO_SIZE stopped the radius
+    // reaching zero; it did not make the result hittable.
+    //
+    // The smallest balloon now never falls below the same touch minimum the
+    // menu buttons respect, and the random spread rides on top of that floor,
+    // so a balloon keeps some variety and a desktop game is unchanged.
+    var minRadius = Layout.GRID.minTouchTarget / 2;
+    var baseRadius = Math.max(BALLOON_BASE_SIZE * this.ratio * ratioSize, minRadius);
+    var randomSize = baseRadius + Math.random() * BALLOON_SIZE_SPREAD * this.ratio * ratioSize;
     var getRandomRGB = function () { return Math.floor(Math.random() * 255); };
     var randomColor = { r: getRandomRGB(), g: getRandomRGB(), b: getRandomRGB() };
-    var balloonSpeed = BALLOON_SPEED + this.balloons_caught / SPEED_INCREASE;
+    var balloonSpeed = this.difficulty.speed + this.balloons_caught / this.difficulty.speedIncrease;
 
-    return balloonConstructor(xcoord, ycoord, randomSize, randomColor, max_width, balloonSpeed);
+    // Scaling the rise by height keeps the time to cross the screen the same
+    // whatever shape the window is.
+    var heightScale = this.height / REFERENCE_HEIGHT;
+
+    return balloonConstructor(
+        xcoord, ycoord, randomSize, randomColor, max_width, balloonSpeed, heightScale
+    );
 };
 
-Game.tick = function () {
-    var i;
+/** Maybe releases one balloon. A fuller sky releases them more slowly. */
+Game.spawnBalloon = function () {
+    var frequency = this.difficulty.frequency - SPEED_MODIFIER * this.balloons.length;
 
-    for (i = this.balloons.length - 1; i >= 0; i--) {
+    if (Math.random() < frequency && this.balloons.length < MAX_BALLOONS) {
+        this.balloons.push(this.randomBalloon());
+    }
+};
+
+/** Drops the balloons that reached the top, and says how many got away. */
+Game.removeEscaped = function () {
+    var escaped = 0;
+
+    for (var i = this.balloons.length - 1; i >= 0; i--) {
         if (this.balloons[i].ycoord <= ESCAPE_COORDS) {
             this.balloons.splice(i, 1);
-            if (!this.isrestart) {
-                this.lostBalloons++;
-            }
+            escaped++;
         }
     }
-
-    var balloonFrequency = BALLOON_FREQUENCY - SPEED_MODIFIER * this.balloons.length;
-    if (!this.isrestart) {
-        if (Math.random() < balloonFrequency && this.balloons.length < MAX_BALLOONS) {
-            this.balloons.push(this.randomBalloon());
-        }
-    }
-
-    for (i = 0; i < this.balloons.length; i++) {
-        this.balloons[i].tick(this.isrestart);
-    }
-    if (this.lostBalloons >= MAX_LOST_BALLOONS) {
-        this.gameover();
-    }
+    return escaped;
 };
 
-Game.draw = function () {
+/**
+ * Moves every balloon one step. Accelerating is how the board empties itself
+ * once a game is over: the survivors speed up and fly off the top.
+ */
+Game.moveBalloons = function (accelerate) {
     for (var i = 0; i < this.balloons.length; i++) {
-        this.balloons[i].draw();
-    }
-    if (this.ctx && !this.isrestart) {
-        var hud = this.layout.hud;
-        this.time_to_show = ((Date.now() - this.start) / 1000).toFixed(2);
-
-        this.ctx.font = this.layout.fonts.hud;
-        this.ctx.fillStyle = this.palette.ink;
-        this.ctx.fillText(
-            this.balloons_caught + " popped, " + this.lostBalloons + " lost",
-            hud.caught, hud.y
-        );
-        this.ctx.fillStyle = this.palette.inkSoft;
-        this.ctx.fillText(DIFF_LEVEL, hud.level, hud.y);
-        this.ctx.fillStyle = this.palette.accent;
-        this.ctx.fillText(this.time_to_show + "s", hud.time, hud.y);
+        this.balloons[i].tick(accelerate);
     }
 };
 
-Game.clear = function () {
-    var sky = Sky.render(this.width, this.height, this.dpr, this.diff_level);
-    this.ctx.drawImage(sky, 0, 0, this.width, this.height);
-};
+// --------------------------------------------------------------------- boot
 
-Game.drawStarting = function () {
-    var remaining = this.countdownEnd - Date.now();
+Game.init = function () {
+    // Asked once on first visit and remembered afterwards. This used to be a
+    // window.prompt(), which is a browser modal: it blocked the first paint, so
+    // the question arrived over a blank page; it could not be styled, restyled
+    // or reopened; some browsers suppress it outright; and once answered there
+    // was no way to change the answer short of clearing the site's data.
+    // Before that it prompted on every single load, and pre-filled the field
+    // from a plaintext JSONP call to gd.geobytes.com.
+    var stored = loadSetting("name");
+    this.name = cleanName(stored);
 
-    if (remaining <= 0) {
-        this.screen = "playing";
-        this.start = Date.now();
-        return;
-    }
+    this.canvas = document.getElementById("balloon_canvas");
+    this.ctx = this.canvas.getContext("2d");
+    NameField.find();
+    Announce.find();
 
-    this.clear();
-    this.draw_diff_levels();
+    this.difficulty = Difficulty.get(loadSetting("diff_level"));
+    this.balloons = [];
+    this.pressed = null;
 
-    var ctx = this.ctx;
-    ctx.save();
-    ctx.textAlign = "center";
-
-    ctx.font = this.layout.fonts.label;
-    ctx.fillStyle = this.palette.inkSoft;
-    ctx.fillText("Get ready", this.layout.countdown.x, this.layout.countdown.y - this.layout.line * 1.5);
-
-    ctx.font = this.layout.fonts.countdown;
-    ctx.fillStyle = this.palette.accent;
-    ctx.fillText(String(Math.ceil(remaining / 1000)), this.layout.countdown.x, this.layout.countdown.y);
-
-    ctx.restore();
-};
-
-Game.update = function () {
-    if (this.screen === "starting") {
-        this.drawStarting();
-        return;
-    }
-    this.clear();
-    this.tick();
-    this.draw();
-};
-
-Game.run = function () {
-    if (!Game.stopped) {
-        Game.update();
-    }
+    this.applyCanvasSize();
+    this.enter(stored ? "title" : "name");
+    this.watchViewport();
 };
 
 window.addEventListener("load", function () {

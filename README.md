@@ -7,18 +7,29 @@ the title screen, or press `E`, `S`, `H` or `V`. Space or Enter replays the
 current difficulty. The selected level is shown both by the filled button and
 by the sky, which has its own palette per difficulty.
 
+Your name is asked for once, on the page rather than in a browser dialog, and
+can be changed any time from the `Playing as ...` chip along the bottom.
+
 ## Layout
 
 ```
 public/               everything served to the browser
   index.html
   css/styles.css
-  js/game.js          game loop, input, scoring, screen drawing
+  js/game.js          the game: the loop, the canvas, the balloons
+  js/screens.js       what it is being: name, title, countdown, play, game over
+  js/paint.js         what it draws
+  js/input.js         what it listens to
+  js/scores.js        the leaderboard client
+  js/announce.js      what the game says to a screen reader
+  js/namefield.js     the one DOM element in the game
+  js/layout.js        grid, type scale and every on-screen position
+  js/sky.js           the drawn sky: one palette per difficulty
+  js/difficulty.js    what each level is: lives, shrink and speed ramps
   js/gameballoons.js  balloon entity: position, drift, collision
   js/htmlballoons.js  draws a balloon on a canvas with bezier curves
   js/color.js         lighten/darken helpers and the gradient palette
-  js/layout.js        grid, type scale and every on-screen position
-  js/sky.js           the drawn sky: one palette per difficulty
+  favicon.svg         the tab icon; the .ico and touch icon are built from it
 netlify/functions/
   scores.mts          high-score API, backed by Netlify Blobs
 test/                 test suite (see below)
@@ -26,8 +37,34 @@ netlify.toml          publish directory and headers
 ```
 
 There is no build step and no runtime dependencies in the browser: the page
-loads five plain scripts and nothing else. The sky is drawn, not an image,
-so the game ships no image assets at all beyond the favicon.
+loads twelve plain scripts and nothing else. Each one defines a namespace and
+touches nothing at parse time, so the order they load in does not matter. The
+sky is drawn, not an image, so apart from the tab icon the game ships no images
+at all.
+
+## How it runs
+
+The game takes fixed steps of 1/30s, driven by `requestAnimationFrame`. A
+frame catches the simulation up to the moment it was called and then paints, so
+the game plays at the same speed on a 30Hz display and a 144Hz one — balloon
+speed and the difficulty ramps are expressed per step, not per second. A frame
+may catch up on at most 250ms, so a tab that was hidden for a minute resumes
+rather than replaying the minute. The round clock counts steps too: the time on
+the leaderboard is time played, not time elapsed.
+
+## Getting there without seeing it
+
+The game is one canvas, which to anything but a pair of eyes is a single empty
+element. What the picture says is also said in a live region: which screen is
+up, which difficulty is selected, that a balloon got away, and the final score.
+The canvas is focusable and described, and the difficulty keys work from
+anywhere. Popping still needs a pointer.
+
+Every colour the game draws text in is checked against what is actually behind
+it, on all four palettes, at WCAG AA (4.5:1) — the test renders the ground and
+measures it rather than trusting the palette. That is how the leaderboard was
+found sitting at 1.4:1 on a bright horizon, which is not low contrast so much
+as invisible.
 
 ## Running locally
 
@@ -64,6 +101,20 @@ held constant, any difference between levels is the game's.
 
 It aims where a balloon *was* one reaction-time ago, which is the error a person
 makes against a rising target.
+
+## Icons
+
+`public/favicon.svg` is the icon; `favicon.ico` and `apple-touch-icon.png` are
+built from it and committed:
+
+```bash
+node tools/make-favicon.mjs
+```
+
+The .ico exists for Safari before 16 and for anything that asks for
+`/favicon.ico` without reading the page. It used to be a 184KB file holding
+nine sizes, eight of them uncompressed bitmaps, which was more than three times
+the size of the entire game.
 
 ## Deploying
 

@@ -13,10 +13,13 @@
  *
  *   npm run playtest
  *   npm run playtest -- --runs=5 --cap=120 --reaction=200 --levels=H,V
+ *   npm run playtest -- --width=390 --height=844 --port=8911
  *
  * What it found on first use, against master at the time:
  *   - All four difficulties played identically. BALLOON_FREQUENCY and
- *     BALLOON_SPEED are shared globals, so only lives and a slow ramp differ.
+ *     BALLOON_SPEED were shared globals rather than per-level, so only lives
+ *     and a slow ramp differed between them. Both now live in the difficulty
+ *     table, and this harness is what says whether that was enough.
  *   - 11 of 12 games survived a 70 second cap, VHard included, and that level
  *     ends on one escaped balloon.
  *   - Balloon speed spans 23:1, so the slowest balloon takes 97 seconds to
@@ -32,7 +35,8 @@ import { launchBrowser } from '../test/helpers/browser.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const TYPES = {
   '.html': 'text/html', '.js': 'text/javascript',
-  '.css': 'text/css', '.ico': 'image/x-icon'
+  '.css': 'text/css', '.ico': 'image/x-icon',
+  '.svg': 'image/svg+xml', '.png': 'image/png'
 };
 
 function flag(name, fallback) {
@@ -46,6 +50,8 @@ const OPTIONS = {
   levels: String(flag('levels', 'E,S,H,V')).split(','),
   width: Number(flag('width', 1280)),
   height: Number(flag('height', 720)),
+  // So several viewport sizes can be measured concurrently.
+  port: Number(flag('port', 8910)),
   // A person needs about this long to see a balloon and act on it.
   reaction: Number(flag('reaction', 250)),
   // Pointing is not pixel perfect.
@@ -59,7 +65,7 @@ const BOT = (o) => `
   const REACTION = ${o.reaction}, AIM_ERROR = ${o.aimError}, INTERVAL = ${o.interval};
   const history = [];
   const seen = new Map();
-  window.__stats = { clicks: 0, hits: 0, lifetimes: [] };
+  window.__stats = { clicks: 0, hits: 0, lifetimes: [], sky: [] };
 
   setInterval(() => {
     if (!Game.balloons) return;
@@ -68,6 +74,11 @@ const BOT = (o) => `
       balloons: Game.balloons.map(b => ({ x: b.xcoord, y: b.ycoord }))
     });
     while (history.length > 40) history.shift();
+
+    // How full the sky is. Score cannot tell an easy level from a middling
+    // one, because a player who is already clicking as fast as they can pops
+    // the same number either way; what changes is how much is coming at them.
+    if (Game.screen === 'playing') window.__stats.sky.push(Game.balloons.length);
 
     // How long each balloon is actually on screen: the player's real window.
     const now = Date.now();
@@ -120,7 +131,7 @@ function serve(port) {
   return new Promise(resolve => server.listen(port, () => resolve(server)));
 }
 
-const server = await serve(8910);
+const server = await serve(OPTIONS.port);
 const browser = await launchBrowser();
 
 /** One difficulty, played OPTIONS.runs times. Levels run in parallel. */
@@ -132,7 +143,6 @@ async function playLevel(level) {
       viewport: { width: OPTIONS.width, height: OPTIONS.height }
     });
     const page = await context.newPage();
-    page.on('dialog', d => d.accept('Bot'));
     await page.addInitScript(l => {
       try {
         localStorage.setItem('name', 'Bot');
@@ -140,7 +150,7 @@ async function playLevel(level) {
       } catch (e) { /* storage blocked; the game copes */ }
     }, level);
 
-    await page.goto('http://localhost:8910/', { waitUntil: 'load' });
+    await page.goto(`http://localhost:${OPTIONS.port}/`, { waitUntil: 'load' });
     await page.waitForTimeout(400);
     await page.evaluate(BOT(OPTIONS));
     await page.keyboard.press(level.toLowerCase());
@@ -153,7 +163,7 @@ async function playLevel(level) {
     const result = await page.evaluate(() => ({
       score: Game.balloons_caught,
       lost: Game.lostBalloons,
-      lives: MAX_LOST_BALLOONS,
+      lives: Game.difficulty.maxLost,
       died: Game.screen === 'gameover',
       time: Game.end_time ? parseFloat(Game.end_time) : null,
       stats: window.__stats
@@ -182,7 +192,9 @@ console.log(
   `${Math.round(1000 / OPTIONS.interval * 10) / 10} clicks/sec ` +
   `· ${OPTIONS.width}×${OPTIONS.height} · ${OPTIONS.capMs / 1000}s cap\n`
 );
-console.log('level  lives  survived   score   accuracy   outcome');
+console.log('level  lives  survived   score   accuracy   sky    lost   outcome');
+
+const mean = list => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
 
 OPTIONS.levels.forEach((level, i) => {
   settled[i].forEach((r, j) => {
@@ -193,7 +205,9 @@ OPTIONS.levels.forEach((level, i) => {
       (round(r.time !== null ? r.time : r.wall) + 's').padEnd(10),
       String(r.score).padEnd(7),
       (round(accuracy) + '%').padEnd(10),
-      r.died ? `died, ${r.lost} escaped` : 'survived the cap'
+      round(mean(r.stats.sky)).padEnd(6),
+      String(r.lost).padEnd(6),
+      r.died ? 'died' : 'survived the cap'
     );
   });
 });

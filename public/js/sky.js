@@ -13,11 +13,18 @@
  * each difficulty gets its own time of day.
  */
 
+"use strict";
 var Sky = {};
 
 /**
  * One palette per difficulty. Each defines the sky itself and the ink drawn on
  * it, so text colour is never picked independently of its background.
+ *
+ * `scrim` darkens the top of the sky; `panel` is the stronger version drawn
+ * behind the text block itself. The scrim alone was sized for a composition
+ * that sat in the top half of the screen, and once the leaderboard moved below
+ * it white rows were landing on a near-white horizon at 1.4:1 — text you could
+ * not read rather than text that merely failed a guideline.
  */
 Sky.PALETTES = {
     E: {
@@ -25,6 +32,7 @@ Sky.PALETTES = {
         top: "#1E6FB4", mid: "#6FB6E4", horizon: "#D7EDF8",
         sun: { x: 0.78, y: 0.16, radius: 0.42, color: "#FFF4D6" },
         scrim: "rgba(8, 26, 48, 0.42)",
+        panel: "rgba(8, 26, 48, 0.72)",
         ink: "#FFFFFF",
         inkSoft: "rgba(255, 255, 255, 0.78)",
         accent: "#FFD98A",
@@ -42,6 +50,7 @@ Sky.PALETTES = {
         top: "#1B5FA8", mid: "#63A8DC", horizon: "#EBDFC9",
         sun: { x: 0.82, y: 0.22, radius: 0.46, color: "#FFE2A8" },
         scrim: "rgba(8, 24, 46, 0.44)",
+        panel: "rgba(8, 24, 46, 0.72)",
         ink: "#FFFFFF",
         inkSoft: "rgba(255, 255, 255, 0.78)",
         accent: "#FFCE73",
@@ -59,6 +68,7 @@ Sky.PALETTES = {
         top: "#16294F", mid: "#6B4A7A", horizon: "#E3885F",
         sun: { x: 0.24, y: 0.72, radius: 0.5, color: "#FF9E5E" },
         scrim: "rgba(6, 12, 30, 0.46)",
+        panel: "rgba(6, 12, 30, 0.68)",
         ink: "#FFFFFF",
         inkSoft: "rgba(255, 255, 255, 0.76)",
         accent: "#FFB870",
@@ -76,6 +86,7 @@ Sky.PALETTES = {
         top: "#070F22", mid: "#16233F", horizon: "#34405C",
         sun: null,
         scrim: "rgba(2, 6, 18, 0.34)",
+        panel: "rgba(2, 6, 18, 0.60)",
         ink: "#EAF0FF",
         inkSoft: "rgba(234, 240, 255, 0.72)",
         accent: "#8FB6FF",
@@ -130,6 +141,19 @@ function paintStars(ctx, width, height, count) {
  * Paints one sky into a context sized in CSS pixels.
  * Kept separate from the caching in render() so it can be drawn anywhere.
  */
+/**
+ * The same colour with nothing left of it, for the far end of a fade. Kept
+ * here because this is the file that decides what a palette colour is.
+ */
+Sky.transparent = function (css) {
+    var parts = css.match(/rgba?\(([^)]+)\)/);
+    if (!parts) {
+        return "rgba(0, 0, 0, 0)";
+    }
+    var channels = parts[1].split(",").slice(0, 3).join(",");
+    return "rgba(" + channels + ", 0)";
+};
+
 Sky.paint = function (ctx, width, height, palette) {
     var gradient = ctx.createLinearGradient(0, 0, 0, height);
     gradient.addColorStop(0, palette.top);

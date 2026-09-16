@@ -7,6 +7,7 @@
  * itself, which is what the original did, so balloons render identically.
  */
 
+"use strict";
 /** Returns [hue 0-360, saturation 0-100, lightness 0-100]. */
 function rgbToHsl(r, g, b) {
     r /= 255;

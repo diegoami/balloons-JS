@@ -5,18 +5,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Baloncelli !!!!!!</title>
     <link href="css/styles.css" rel="stylesheet" type="text/css">
-    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <!-- The .ico is the fallback: Safari before 16, and anything that asks for
+         /favicon.ico without reading the page. Everything current takes the SVG.
+         Both are built from favicon.svg by tools/make-favicon.mjs. -->
+    <link rel="icon" href="favicon.ico" sizes="32x32">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <script src="js/difficulty.js" defer></script>
     <script src="js/color.js" defer></script>
     <script src="js/layout.js" defer></script>
     <script src="js/sky.js" defer></script>
     <script src="js/htmlballoons.js" defer></script>
     <script src="js/gameballoons.js" defer></script>
+    <script src="js/announce.js" defer></script>
+    <script src="js/namefield.js" defer></script>
+    <script src="js/scores.js" defer></script>
+    <script src="js/paint.js" defer></script>
+    <script src="js/input.js" defer></script>
+    <script src="js/screens.js" defer></script>
     <script src="js/game.js" defer></script>
 </head>
 <body>
 
 <div id="div_canvas">
-    <canvas id="balloon_canvas"></canvas>
+    <!-- role="application" so a screen reader passes the difficulty keys
+         through rather than intercepting them, and tabindex so a keyboard
+         lands on the game at all. Everything the canvas shows is said in
+         #game_status as it happens. -->
+    <canvas id="balloon_canvas" tabindex="0" role="application"
+            aria-label="Balloons, a game" aria-describedby="game_help"></canvas>
+
+    <p id="game_help" class="visually-hidden">
+        Balloons rise from the bottom of the screen. Click or tap one to pop it
+        before it reaches the top; the game ends when too many escape. Press E,
+        S, H or V to choose a difficulty and start, or space to replay the one
+        already chosen. Popping needs a pointer.
+    </p>
+
+    <!-- What is happening, for anyone who cannot see the canvas. -->
+    <p id="game_status" class="visually-hidden" role="status"
+       aria-live="polite" aria-atomic="true"></p>
+
+    <!-- The name field is a real input, positioned over the canvas and coloured
+         from the same palette. A canvas cannot raise a phone's keyboard, and
+         reimplementing a caret, selection, paste and IME on top of keydown
+         would be worse at all of them than the element the platform provides. -->
+    <label class="visually-hidden" for="player_name">Your name</label>
+    <input id="player_name" type="text" maxlength="24" autocomplete="nickname"
+           autocapitalize="words" spellcheck="false" hidden>
 </div>
 
 </body>
