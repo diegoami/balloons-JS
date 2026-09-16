@@ -8,6 +8,7 @@
  * the game, reads the layout and the palette, and draws.
  */
 
+"use strict";
 var Paint = {};
 
 /** The backdrop, from the cache Sky keeps per size and difficulty. */

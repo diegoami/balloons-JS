@@ -8,6 +8,7 @@
  * possible to see, in one place, what is listening at any moment.
  */
 
+"use strict";
 var Input = {};
 
 /** Maps a pointer event onto canvas coordinates, accounting for CSS scaling. */

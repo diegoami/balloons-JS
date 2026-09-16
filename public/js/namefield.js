@@ -9,6 +9,7 @@
  * coloured from the sky's palette, and this is everything that knows about it.
  */
 
+"use strict";
 var NameField = {};
 
 /** The element lives in the page, so the game only has to find it. */

@@ -251,7 +251,7 @@ await t('clicking a difficulty box starts that game', async () => {
   const box = layout.buttons[2]; // Hard
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(2600);
-  const state = await page.evaluate(() => ({ diff: Game.difficulty.level, lost: Game.difficulty.maxLost, running: !!Game.tick_interval }));
+  const state = await page.evaluate(() => ({ diff: Game.difficulty.level, lost: Game.difficulty.maxLost, running: Game.running }));
   assert.equal(state.diff, 'H');
   assert.equal(state.lost, 3, 'Hard should allow 3 lost balloons');
   assert.ok(state.running, 'game loop should be running');
@@ -289,7 +289,7 @@ await t('clicking a balloon pops it and scores a point', async () => {
 
   const popped = await page.evaluate(async () => {
     // Freeze the loop so the balloon can't drift between reading and clicking.
-    clearInterval(Game.tick_interval);
+    Game.stopLoop();
     const b = Game.balloons[0];
     const caughtBefore = Game.balloons_caught;
     const countBefore = Game.balloons.length;
@@ -385,7 +385,7 @@ await t('no listeners leak across repeated restarts', async () => {
   await page.waitForTimeout(2600);
   await page.waitForFunction(() => Game.balloons.length > 1, null, { timeout: 5000 });
   const popped = await page.evaluate(() => {
-    clearInterval(Game.tick_interval);
+    Game.stopLoop();
     const b = Game.balloons[0];
     const before = Game.balloons.length;
     Game.canvas.dispatchEvent(new MouseEvent('click', { clientX: b.xcoord, clientY: b.ycoord, bubbles: true }));
@@ -562,7 +562,7 @@ await t('clicking a balloon still pops it at 2x (no double-applied ratio)', asyn
   await page.waitForTimeout(2500);
   await page.waitForFunction(() => Game.balloons.length > 0, null, { timeout: 5000 });
   const popped = await page.evaluate(() => {
-    clearInterval(Game.tick_interval);
+    Game.stopLoop();
     const b = Game.balloons[0];
     const before = Game.balloons_caught;
     Game.canvas.dispatchEvent(new MouseEvent('click', { clientX: b.xcoord, clientY: b.ycoord, bubbles: true }));
@@ -615,7 +615,7 @@ await t('rotating mid-game keeps play running and balloons in bounds', async () 
   const m = await page.evaluate(() => ({
     screen: Game.screen,
     logicalW: Game.width,
-    running: !!Game.tick_interval,
+    running: Game.running,
     maxXmax: Math.max(...Game.balloons.map(b => b.xmax)),
     count: Game.balloons.length
   }));
@@ -1214,7 +1214,7 @@ await t('a balloon takes the same time to cross any shaped screen', async () => 
       const n = 3000;
       for (let i = 0; i < n; i++) {
         const b = Game.randomBalloon();
-        total += Game.height / (Math.abs(b.delta) * Game.fps);
+        total += Game.height / (Math.abs(b.delta) * (1000 / Game.STEP_MS));
       }
       return total / n;
     });
@@ -1695,7 +1695,7 @@ await t('the game keeps the game, and nothing else', async () => {
     namespaces: ['Paint', 'Input', 'Scores', 'NameField', 'Screens', 'Layout', 'Sky', 'Difficulty']
       .filter(n => typeof window[n] !== 'object'),
     // What the game is left holding.
-    kept: ['enter', 'paint', 'frame', 'restart', 'applyCanvasSize', 'randomBalloon',
+    kept: ['enter', 'paint', 'advance', 'restart', 'applyCanvasSize', 'randomBalloon',
            'removeEscaped', 'moveBalloons', 'spawnBalloon', 'init']
       .filter(k => typeof Game[k] !== 'function')
   }));
@@ -1705,6 +1705,177 @@ await t('the game keeps the game, and nothing else', async () => {
   assert.deepEqual(m.namespaces, [], 'missing namespace: ' + m.namespaces);
   assert.deepEqual(m.kept, [], 'the game lost something that is its own: ' + m.kept);
   await context.close();
+});
+
+
+// ---------- the engine ----------
+
+/** Drives the loop by hand: no rAF, no clock, just steps. */
+const driveBy = (page, frames, ms) => page.evaluate(({ frames, ms }) => {
+  Game.stopLoop();
+  Game.lastFrame = 0;
+  Game.accumulator = 0;
+  Game.ticks = 0;
+
+  let now = 0;
+  for (let i = 0; i < frames; i++) {
+    now += ms;
+    Game.advance(now);
+  }
+  return Game.ticks;
+}, { frames, ms });
+
+await t('the game runs on animation frames, not on a timer of its own', async () => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  await page.addInitScript(() => {
+    try { localStorage.setItem('name', 'Framed'); } catch (e) {}
+    window.__rafs = 0;
+    const raf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = function (fn) { window.__rafs++; return raf(fn); };
+  });
+  await page.goto('http://localhost:8899/', { waitUntil: 'load' });
+  await page.waitForTimeout(300);
+
+  await page.keyboard.press('e');
+  await page.waitForTimeout(1200);
+  const m = await page.evaluate(() => ({
+    rafs: window.__rafs, running: Game.running, interval: 'tick_interval' in Game
+  }));
+
+  assert.ok(m.running, 'the loop is not running during play');
+  assert.ok(!m.interval, 'the game still keeps an interval handle');
+  assert.ok(m.rafs > 20, `only ${m.rafs} animation frames in a second of play`);
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the simulation steps at its own rate, whatever the display does', async () => {
+  const { context, page } = await newGame({ name: 'Stepper' });
+  await page.keyboard.press('e');
+  await page.waitForTimeout(2400);
+  assert.equal(await page.evaluate(() => Game.screen), 'playing');
+
+  // A second of simulation, delivered as 30Hz, 60Hz and 144Hz frames. Balloon
+  // speed is expressed per step, so if the step rate followed the display the
+  // game would be nearly five times faster on the last of these.
+  const at30 = await driveBy(page, 30, 1000 / 30);
+  const at60 = await driveBy(page, 60, 1000 / 60);
+  const at144 = await driveBy(page, 144, 1000 / 144);
+
+  // A second's worth of frames lands a hair under a second in floating point,
+  // so the thirtieth step can fall into the next frame; what matters is that
+  // all three agree, not that they hit a round number.
+  [[30, at30], [60, at60], [144, at144]].forEach(([hz, steps]) => {
+    assert.ok(steps === 30 || steps === 29,
+      `${hz}Hz gave ${steps} steps in a second of frames`);
+  });
+  assert.ok(Math.max(at30, at60, at144) - Math.min(at30, at60, at144) <= 1,
+    `the step rate follows the display: ${at30}, ${at60}, ${at144}`);
+  await context.close();
+});
+
+await t('a stall is not replayed at full speed', async () => {
+  const { context, page } = await newGame({ name: 'Staller' });
+  await page.keyboard.press('e');
+  await page.waitForTimeout(2400);
+
+  // A minute in a background tab, arriving as one frame. Replaying it would
+  // spawn a minute of balloons into a single step and lose every one of them.
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    Game.lastFrame = 0;
+    Game.accumulator = 0;
+    Game.ticks = 0;
+    Game.balloons.length = 0;
+    Game.lostBalloons = 0;
+
+    Game.advance(60000);
+    return { ticks: Game.ticks, lost: Game.lostBalloons, cap: Game.MAX_CATCHUP_MS, step: Game.STEP_MS };
+  });
+
+  assert.ok(m.ticks <= Math.ceil(m.cap / m.step),
+    `a 60 second stall ran ${m.ticks} steps, not the ${Math.ceil(m.cap / m.step)} it is capped at`);
+  assert.equal(m.lost, 0, 'balloons escaped during a stall the player never saw');
+  await context.close();
+});
+
+await t('the time on the board is time played, not time elapsed', async () => {
+  const { context, page } = await newGame({ name: 'Clocked' });
+  await page.keyboard.press('e');
+  await page.waitForTimeout(2400);
+
+  const m = await page.evaluate(async () => {
+    Game.stopLoop();
+    Game.lastFrame = 0;
+    Game.accumulator = 0;
+    Game.ticks = 0;
+
+    // Two seconds of simulation, then a real-time wait with the loop stopped.
+    let now = 0;
+    for (let i = 0; i < 60; i++) { now += 1000 / 30; Game.advance(now); }
+    const played = Game.elapsed();
+    await new Promise(r => setTimeout(r, 600));
+    return { played, after: Game.elapsed(), ticks: Game.ticks, step: Game.STEP_MS };
+  });
+
+  assert.ok(m.ticks === 60 || m.ticks === 59, `two seconds of frames ran ${m.ticks} steps`);
+  assert.equal(m.played, (m.ticks * m.step / 1000).toFixed(2),
+    'the clock is not simply the steps played');
+  assert.ok(Math.abs(Number(m.played) - 2) < 0.05, `two seconds read as ${m.played}`);
+  assert.equal(m.after, m.played, 'the clock ran on while the game was not');
+  await context.close();
+});
+
+await t('a balloon is painted by one painter, not a new one every frame', async () => {
+  const { context, page, errors } = await newGame({ name: 'Counter' });
+  await page.evaluate(() => {
+    window.__built = { painters: 0, colours: 0 };
+    const Balloon = CANVASBALLOON.Balloon;
+    CANVASBALLOON.Balloon = function (id, x, y, r, c) {
+      window.__built.painters++;
+      return new Balloon(id, x, y, r, c);
+    };
+    CANVASBALLOON.Balloon.prototype = Balloon.prototype;
+
+    const Original = window.Color;
+    window.Color = function (rgb) {
+      window.__built.colours++;
+      return new Original(rgb);
+    };
+    window.Color.prototype = Original.prototype;
+  });
+
+  await page.keyboard.press('e');
+  await page.waitForTimeout(2400 + 3000);
+
+  const m = await page.evaluate(() => ({
+    painters: window.__built.painters,
+    colours: window.__built.colours,
+    balloons: Game.balloons.length + Game.balloons_caught + Game.lostBalloons
+  }));
+
+  assert.ok(m.balloons > 3, `only ${m.balloons} balloons in three seconds, too few to judge`);
+  // Three seconds at thirty frames is ninety chances to rebuild each one.
+  assert.equal(m.painters, m.balloons,
+    `${m.balloons} balloons needed ${m.painters} painters`);
+  assert.equal(m.colours, m.balloons * 3,
+    `each balloon should work out its three colours once, got ${m.colours} for ${m.balloons}`);
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('every script the game ships is strict', async () => {
+  // Sloppy mode silently swallows an assignment to an undeclared name, which
+  // is how a typo becomes a global instead of an error.
+  const loose = fs.readdirSync(path.join(ROOT, 'js')).filter(file => {
+    const body = fs.readFileSync(path.join(ROOT, 'js', file), 'utf8');
+    const firstStatement = body.replace(/\/\*[\s\S]*?\*\//g, '').trim();
+    return !firstStatement.startsWith('"use strict";');
+  });
+  assert.deepEqual(loose, [], 'not strict: ' + loose);
 });
 
 

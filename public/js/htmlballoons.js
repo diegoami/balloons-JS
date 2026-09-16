@@ -1,6 +1,8 @@
 /**
  * @namespace Core namespace
  */
+
+"use strict";
 var CANVASBALLOON = {};
 
 // Constants
@@ -37,6 +39,11 @@ CANVASBALLOON.Balloon = function(canvasElementID, centerX, centerY, radius, colo
     this.baseColor = new Color(color);
     this.darkColor = (new Color(color)).darken(CANVASBALLOON.GRADIENT_FACTOR);
     this.lightColor = (new Color(color)).lighten(CANVASBALLOON.GRADIENT_FACTOR);
+
+    // The gradient is rebuilt every frame because it moves with the balloon,
+    // but its two colours never change, so they are worked out once here.
+    this.darkString = this.darkColor.rgbString();
+    this.lightString = this.lightColor.rgbString();
 };
 
 CANVASBALLOON.Balloon.prototype.check_hit = function(last_x, last_y) {
@@ -143,8 +150,8 @@ CANVASBALLOON.Balloon.prototype.draw = function() {
         gfxContext.createRadialGradient(centerX + gradientOffset, centerY - gradientOffset,
             CANVASBALLOON.GRADIENT_CIRCLE_RADIUS,
             centerX, centerY, radius + heightDiff);
-    balloonGradient.addColorStop(0, this.lightColor.rgbString());
-    balloonGradient.addColorStop(0.7, this.darkColor.rgbString());
+    balloonGradient.addColorStop(0, this.lightString);
+    balloonGradient.addColorStop(0.7, this.darkString);
 
     gfxContext.fillStyle = balloonGradient;
     gfxContext.fill();

@@ -25,6 +25,7 @@
  *   menuLive(game)      whether pressing a difficulty button does anything.
  */
 
+"use strict";
 var Screens = {};
 
 Screens.title = {
@@ -122,7 +123,7 @@ Screens.playing = {
     animated: true,
 
     enter: function (game) {
-        game.start = Date.now();
+        game.ticks = 0;
     },
 
     bind: function (game, signal) {
@@ -130,6 +131,7 @@ Screens.playing = {
     },
 
     update: function (game) {
+        game.ticks++;
         game.lostBalloons += game.removeEscaped();
         game.spawnBalloon();
         game.moveBalloons(false);

@@ -10,6 +10,7 @@
  * requests a second. The promise in flight is the lock that stops that.
  */
 
+"use strict";
 var Scores = {};
 
 Scores.URL = "/api/scores/";
