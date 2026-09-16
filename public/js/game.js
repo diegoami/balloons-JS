@@ -379,6 +379,24 @@ Game.elapsed = function () {
 };
 
 /**
+ * The level a round has climbed to, from the time it has been played.
+ *
+ * Time, not score: a game gets harder because you have been at it, not because
+ * you have been good at it. Counted in simulation steps like everything else,
+ * so a stall or a tab in the background does not advance it.
+ */
+Game.levelFor = function (ticks) {
+    var seconds = ticks * Game.STEP_MS / 1000;
+    var climbed = Math.floor(seconds / this.difficulty.climbEvery);
+    return Math.min(Ladder.MAX, this.difficulty.startLevel + climbed);
+};
+
+/** The row of the ladder the game is being played on right now. */
+Game.rung = function () {
+    return Ladder.at(this.level);
+};
+
+/**
  * Clears the board for a new round. The clock is set here and again when play
  * actually begins, so nothing drawn during the countdown can read a time left
  * over from the previous game.
@@ -390,6 +408,7 @@ Game.resetRound = function () {
     this.lostBalloons = 0;
     this.end_time = null;
     this.ticks = 0;
+    this.level = this.difficulty.startLevel;
 };
 
 Game.randomBalloon = function () {
@@ -397,22 +416,23 @@ Game.randomBalloon = function () {
     var max_height = this.height;
     var xcoord = Math.floor(Math.random() * this.layout.spawn.width) + this.layout.spawn.min;
     var ycoord = max_height;
-    var ratioSize = Math.max(MIN_RATIO_SIZE, RATIO_SIZE - this.balloons_caught / this.difficulty.ratioDecrease);
+    var rung = this.rung();
+    var ratioSize = Math.max(MIN_RATIO_SIZE, rung.size);
 
     // A fingertip is the same size whatever the screen, but radius scaled with
     // width alone: on a 390px phone the smallest balloon was a 19px target,
-    // and 7px once the shrink floor applied. MIN_RATIO_SIZE stopped the radius
-    // reaching zero; it did not make the result hittable.
+    // and 7px once the shrink applied. MIN_RATIO_SIZE stops the ladder's own
+    // shrink reaching zero; it does not make the result hittable.
     //
-    // The smallest balloon now never falls below the same touch minimum the
-    // menu buttons respect, and the random spread rides on top of that floor,
-    // so a balloon keeps some variety and a desktop game is unchanged.
+    // The smallest balloon never falls below the same touch minimum the menu
+    // buttons respect, and the random spread rides on top of that floor, so a
+    // balloon keeps some variety at every rung.
     var minRadius = Layout.GRID.minTouchTarget / 2;
     var baseRadius = Math.max(BALLOON_BASE_SIZE * this.ratio * ratioSize, minRadius);
     var randomSize = baseRadius + Math.random() * BALLOON_SIZE_SPREAD * this.ratio * ratioSize;
     var getRandomRGB = function () { return Math.floor(Math.random() * 255); };
     var randomColor = { r: getRandomRGB(), g: getRandomRGB(), b: getRandomRGB() };
-    var balloonSpeed = this.difficulty.speed + this.balloons_caught / this.difficulty.speedIncrease;
+    var balloonSpeed = rung.speed;
 
     // Scaling the rise by height keeps the time to cross the screen the same
     // whatever shape the window is.
@@ -442,7 +462,7 @@ Game.countOf = function (kind) {
 /** Maybe releases one balloon. A fuller sky releases them more slowly. */
 Game.spawnBalloon = function () {
     var up = this.countOf("balloon");
-    var frequency = this.difficulty.frequency - SPEED_MODIFIER * up;
+    var frequency = this.rung().frequency - SPEED_MODIFIER * up;
 
     if (Math.random() < frequency && up < MAX_BALLOONS) {
         this.add(this.randomBalloon());

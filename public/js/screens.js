@@ -139,6 +139,12 @@ Screens.playing = {
     update: function (game) {
         game.ticks++;
 
+        var climbed = game.levelFor(game.ticks);
+        if (climbed !== game.level) {
+            game.level = climbed;
+            Announce.level(game);
+        }
+
         var escaped = game.reap();
         if (escaped > 0) {
             game.lostBalloons += escaped;

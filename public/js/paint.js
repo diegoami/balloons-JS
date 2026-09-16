@@ -274,7 +274,7 @@ Paint.hud = function (game) {
         hud.caught, hud.y
     );
     game.ctx.fillStyle = game.palette.inkSoft;
-    game.ctx.fillText(game.difficulty.name, hud.level, hud.y);
+    game.ctx.fillText(game.difficulty.name + " " + game.level, hud.level, hud.y);
     game.ctx.fillStyle = game.palette.accent;
     game.ctx.fillText(game.elapsed() + "s", hud.time, hud.y);
 };
