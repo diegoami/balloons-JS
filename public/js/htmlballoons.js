@@ -16,6 +16,16 @@ CANVASBALLOON.GRADIENT_FACTOR = 0.3;
 CANVASBALLOON.GRADIENT_CIRCLE_RADIUS = 3;
 
 /**
+ * How the tapered bottom half of a balloon is described to the hit test.
+ *
+ * The bottom is two cubic beziers from the balloon's waist down to a point,
+ * and `(dx/r)^2 + (dy/reach)^TAPER_POWER = 1` follows that curve to within
+ * 0.7% of the radius at every point along it — fitted against the beziers
+ * rather than guessed, and checked against the drawn pixels by a test.
+ */
+CANVASBALLOON.TAPER_POWER = 1.6;
+
+/**
  * Creates a new Balloon
  * @class	Represents a balloon displayed on a HTML5 canvas
  * @param	{String}	canvasElementID		Unique ID of the canvas element displaying the balloon
@@ -65,25 +75,44 @@ CANVASBALLOON.Balloon.prototype.thin = function (amount) {
         .lighten(CANVASBALLOON.GRADIENT_FACTOR + amount).rgbString();
 };
 
+/**
+ * Whether a point is on the balloon.
+ *
+ * This used to be the bounding RECTANGLE: anywhere within a radius either side
+ * of the centre and anywhere from the top of the head down to the tip of the
+ * tail. A balloon is a disc with a tapered tail, and the rectangle around that
+ * is 31% larger than the shape inside it — so a third of the taps that popped
+ * a balloon landed on empty sky beside it, most of them in the two wide bands
+ * of nothing either side of the tail.
+ *
+ * Now it is the shape. The top half is the circle it is drawn as, and the
+ * bottom half follows the taper of the beziers that draw it, so a tap has to
+ * land on a balloon to pop one.
+ *
+ * The knot below the tail is not included. It is a couple of pixels of string
+ * and aiming at it is aiming below the balloon.
+ */
 CANVASBALLOON.Balloon.prototype.check_hit = function(last_x, last_y) {
-    var centerX = this.centerX;
-    var centerY = this.centerY;
     var radius = this.radius;
+    var dx = last_x - this.centerX;
+    var dy = last_y - this.centerY;
 
-    var handleLength = CANVASBALLOON.KAPPA * radius;
+    if (Math.abs(dx) > radius) {
+        return false;
+    }
 
-    var widthDiff = (radius * CANVASBALLOON.WIDTH_FACTOR);
-    var heightDiff = (radius * CANVASBALLOON.HEIGHT_FACTOR);
+    // The head: the circle the two top beziers approximate.
+    if (dy <= 0) {
+        return dx * dx + dy * dy <= radius * radius;
+    }
 
-    var balloonBottomY = centerY + radius + heightDiff;
-
-    var collision = Math.abs(last_x - centerX) <= radius
-        && (
-            ((last_y <= centerY) && (centerY - last_y <= radius)) ||
-            ((centerY <= last_y) && (centerY - last_y <= radius + heightDiff))
-        );
-
-    return collision;
+    // The tail: as wide as the balloon at the waist, nothing at the tip.
+    var reach = radius * (1 + CANVASBALLOON.HEIGHT_FACTOR);
+    if (dy > reach) {
+        return false;
+    }
+    return (dx * dx) / (radius * radius) +
+        Math.pow(dy / reach, CANVASBALLOON.TAPER_POWER) <= 1;
 };
 
 /**

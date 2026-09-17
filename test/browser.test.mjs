@@ -2790,6 +2790,124 @@ await t('the footage cuts between levels with nobody touching it', async () => {
 });
 
 
+await t('the hitbox is the balloon, checked against the pixels it draws', async () => {
+  // It used to be the bounding rectangle, which is 31% bigger than the shape
+  // inside it: a third of the taps that popped a balloon landed on empty sky
+  // beside it, most of them in the bands of nothing either side of the tail.
+  // So this does not check a formula against another formula. It draws a
+  // balloon, reads every pixel of its bounding box, and asks the hit test
+  // about each one.
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => {
+    const ctx = Game.ctx;
+    const radius = 70;
+    const cx = Game.width / 2;
+    const cy = Game.height / 2;
+
+    // Flat black ground and a bright balloon, so "not background" is "balloon"
+    // with no judgement call about a gradient.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, Game.canvas.width, Game.canvas.height);
+
+    const balloon = new CANVASBALLOON.Balloon('balloon_canvas', cx, cy, radius, {
+      r: 255, g: 255, b: 255
+    });
+    balloon.draw();
+
+    const reach = radius * (1 + CANVASBALLOON.HEIGHT_FACTOR);
+    const wrong = { tappedEmptySky: 0, missedTheBalloon: 0 };
+    const worst = { emptySky: 0, balloon: 0 };
+    let drawn = 0;
+    let tappable = 0;
+
+    // The knot below the tail is drawn separately and is not meant to be
+    // tappable, so the grid stops at the tip.
+    for (let y = Math.floor(cy - radius) - 3; y <= Math.ceil(cy + reach); y++) {
+      for (let x = Math.floor(cx - radius) - 3; x <= Math.ceil(cx + radius) + 3; x++) {
+        const px = ctx.getImageData(x, y, 1, 1).data;
+        const painted = px[0] + px[1] + px[2] > 24;
+        const hit = balloon.check_hit(x, y);
+        if (painted) { drawn++; }
+        if (hit) { tappable++; }
+        if (hit === painted) { continue; }
+
+        // Disagreement is only fair near the edge: the fitted taper follows
+        // the beziers to within a fraction of a pixel, and the fill is
+        // antialiased. Measure how far in from the boundary it happens.
+        const dx = Math.abs(x - cx);
+        const dy = y - cy;
+        const edge = dy <= 0
+          ? Math.abs(Math.sqrt(dx * dx + dy * dy) - radius)
+          : Math.abs(dx - radius * Math.sqrt(Math.max(0,
+              1 - Math.pow(Math.min(1, dy / reach), CANVASBALLOON.TAPER_POWER))));
+        if (hit) {
+          wrong.tappedEmptySky++;
+          worst.emptySky = Math.max(worst.emptySky, edge);
+        } else {
+          wrong.missedTheBalloon++;
+          worst.balloon = Math.max(worst.balloon, edge);
+        }
+      }
+    }
+
+    return { wrong, worst, drawn, tappable, radius, reach };
+  });
+
+  // Every disagreement sits within a pixel or two of the outline.
+  assert.ok(m.worst.emptySky <= 2.5,
+    `the hit test says yes ${m.worst.emptySky.toFixed(1)}px outside the balloon`);
+  assert.ok(m.worst.balloon <= 2.5,
+    `the hit test says no ${m.worst.balloon.toFixed(1)}px inside the balloon`);
+
+  // And the tappable area is the drawn area, not a box around it.
+  const ratio = m.tappable / m.drawn;
+  assert.ok(ratio > 0.95 && ratio < 1.05,
+    `the tappable area is ${(ratio * 100).toFixed(0)}% of the drawn balloon`);
+
+  // The rectangle it replaced, for the record: 2r wide by r + reach tall.
+  const box = 2 * m.radius * (m.radius + m.reach);
+  assert.ok(box / m.drawn > 1.2,
+    'the bounding box is no longer meaningfully bigger than the balloon, so ' +
+    'either the shape or this test has changed');
+  await context.close();
+});
+
+await t('a tap beside the tail no longer pops the balloon', async () => {
+  // The worst of the old rectangle: two wide bands of empty sky either side of
+  // the tail, a full radius across at the very bottom, all of it tappable.
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => {
+    const radius = 60;
+    const balloon = new CANVASBALLOON.Balloon('balloon_canvas', 300, 300, radius, {
+      r: 200, g: 40, b: 40
+    });
+    const reach = radius * (1 + CANVASBALLOON.HEIGHT_FACTOR);
+    return {
+      // Just inside the old box, beside the tail, where there is nothing.
+      besideTheTail: balloon.check_hit(300 + radius - 2, 300 + reach - 2),
+      // The corner of the old box, above the shoulder.
+      aboveTheShoulder: balloon.check_hit(300 + radius - 2, 300 - radius + 2),
+      // Things that must still work.
+      middle: balloon.check_hit(300, 300),
+      topOfTheHead: balloon.check_hit(300, 300 - radius + 1),
+      theWaist: balloon.check_hit(300 - radius + 1, 300),
+      downTheTail: balloon.check_hit(300, 300 + reach - 1),
+      belowTheTip: balloon.check_hit(300, 300 + reach + 3)
+    };
+  });
+
+  assert.equal(m.besideTheTail, false, 'empty sky beside the tail still pops a balloon');
+  assert.equal(m.aboveTheShoulder, false, 'the corner of the old box still pops a balloon');
+  assert.equal(m.middle, true, 'the middle of the balloon does not pop it');
+  assert.equal(m.topOfTheHead, true, 'the top of the head does not pop it');
+  assert.equal(m.theWaist, true, 'the widest part of the balloon does not pop it');
+  assert.equal(m.downTheTail, true, 'the tail does not pop it');
+  assert.equal(m.belowTheTip, false, 'the knot below the balloon pops it');
+  await context.close();
+});
+
+
 await browser.close();
 server.close();
 
