@@ -46,7 +46,7 @@ function flag(name, fallback) {
 
 const OPTIONS = {
   runs: Number(flag('runs', 3)),
-  capMs: Number(flag('cap', 70)) * 1000,
+  capMs: Number(flag('cap', 420)) * 1000,
   width: Number(flag('width', 1280)),
   height: Number(flag('height', 720)),
   // So several viewport sizes can be measured concurrently.
@@ -64,7 +64,7 @@ const BOT = (o) => `
   const REACTION = ${o.reaction}, AIM_ERROR = ${o.aimError}, INTERVAL = ${o.interval};
   const history = [];
   const seen = new Map();
-  window.__stats = { clicks: 0, hits: 0, lifetimes: [], sky: [] };
+  window.__stats = { clicks: 0, hits: 0, lifetimes: [], sky: [], byLevel: {} };
 
   setInterval(() => {
     if (!Game.entities) return;
@@ -78,7 +78,17 @@ const BOT = (o) => `
     // How full the sky is. Score cannot tell an easy level from a middling
     // one, because a player who is already clicking as fast as they can pops
     // the same number either way; what changes is how much is coming at them.
-    if (Game.screen === 'playing') window.__stats.sky.push(balloons.length);
+    if (Game.screen === 'playing') {
+      window.__stats.sky.push(balloons.length);
+
+      // And how full it is PER LEVEL. Ladder.demand computes arrivals against a
+      // full sky of MAX_BALLOONS, which the game never reaches — so every
+      // demand figure in the ladder has been understated by the difference.
+      // This is the measurement that replaces the assumption.
+      const bucket = window.__stats.byLevel[Game.level] ||
+        (window.__stats.byLevel[Game.level] = []);
+      bucket.push(balloons.length);
+    }
 
     // How long each balloon is actually on screen: the player's real window.
     const now = Date.now();
@@ -160,11 +170,16 @@ async function playGame(index) {
     const result = await page.evaluate(() => ({
       score: Game.score,
       lost: Game.lostBalloons,
-      lives: Game.LIVES,
-      died: Game.screen === 'gameover',
+      // The allowance rather than the constant: a run that reached 12, 15 or 18
+      // was handed a life there, and a table saying 5 would be hiding it.
+      lives: Game.allowance,
+      ended: Game.screen === 'gameover',
+      // A run can now end two ways, and the screen alone cannot tell them
+      // apart — surviving level 20 and dying on it both land on gameover.
+      won: Game.won === true,
       time: Game.end_time ? parseFloat(Game.end_time) : null,
       // How far up the ladder the run got: the number this harness exists to
-      // report now that a game is ten rungs climbed with time.
+      // report now that a game is twenty rungs climbed with time.
       rung: Game.level,
       stats: window.__stats
     }));
@@ -207,17 +222,36 @@ settled.forEach(r => {
     round(mean(r.stats.sky)).padEnd(6),
     String(r.lost).padEnd(6),
     String(r.rung).padEnd(6),
-    r.died ? 'died' : 'survived the cap'
+    r.won ? 'WON' : (r.ended ? 'died' : 'survived the cap')
   );
 });
 
-const survived = all.filter(r => !r.died).length;
-console.log(`\n${survived} of ${all.length} games survived the cap.`);
+const won = all.filter(r => r.won).length;
+const capped = all.filter(r => !r.ended).length;
+console.log(
+  `\n${won} of ${all.length} games were won; ${capped} hit the cap without ending.`
+);
 
-// A run that hits the cap says nothing about where the ladder would have
-// ended it, which is the number this harness exists to report.
-if (survived === all.length) {
-  console.log('The ladder never caught this player, so the cap is doing the ending.');
+// A run that hits the cap says nothing about where the ladder would have ended
+// it, which is the number this harness exists to report.
+if (capped > 0) {
+  console.log(
+    'A run that hits the cap is not a result: raise --cap above ' +
+    'Ladder.MAX × Ladder.CLIMB_SECONDS so every game can finish.'
+  );
+}
+
+// The occupancy curve: what Ladder.demand should be dividing by.
+const occupancy = {};
+all.forEach(r => {
+  Object.entries(r.stats.byLevel).forEach(([level, samples]) => {
+    (occupancy[level] || (occupancy[level] = [])).push(...samples);
+  });
+});
+const levels = Object.keys(occupancy).map(Number).sort((a, b) => a - b);
+if (levels.length) {
+  console.log('\nhow full the sky actually is, per level (MAX_BALLOONS is 20):');
+  console.log(levels.map(l => `${l}:${round(mean(occupancy[l]))}`).join('  '));
 }
 
 const lifetimes = all.flatMap(r => r.stats.lifetimes).sort((a, b) => a - b);

@@ -272,7 +272,8 @@ Paint.hud = function (game) {
     game.ctx.font = game.layout.fonts.hud;
     game.ctx.fillStyle = game.palette.ink;
     game.ctx.fillText(
-        game.score + " points, " + game.lostBalloons + " lost",
+        game.score + " points, " + game.lostBalloons + " of " +
+            game.allowance + " lost",
         hud.caught, hud.y
     );
     game.ctx.fillStyle = game.palette.inkSoft;

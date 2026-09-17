@@ -145,7 +145,7 @@ Screens.playing = {
             // the ladder climbs, so how far up you are is visible without
             // reading anything.
             game.applyLevel(climbed);
-            Announce.level(game);
+            Announce.level(game, game.awardLife(climbed));
         }
 
         var escaped = game.reap();
@@ -157,7 +157,13 @@ Screens.playing = {
         game.spawnBalloon();
         game.step(false);
 
-        if (game.lostBalloons >= Game.LIVES) {
+        // Surviving the last level is the win, so the check comes before the
+        // one that ends a run: a player who clears level 20 on the same step
+        // their last life goes has still finished it.
+        if (game.finished()) {
+            game.won = true;
+            game.enter("gameover");
+        } else if (game.lostBalloons >= game.allowance) {
             game.enter("gameover");
         }
     },
@@ -207,7 +213,8 @@ Screens.gameover = {
         Paint.panel(game);
         Paint.intro(
             game,
-            "Game Over. Score: " + game.score + ", Time: " + game.end_time
+            (game.won ? "You win! Score: " : "Game Over. Score: ") +
+                game.score + ", Time: " + game.end_time
         );
         Paint.menu(game);
         Paint.scores(game);

@@ -92,11 +92,18 @@ Game.COUNTDOWN_MS = 2000;
 Game.MENU_LOCKOUT_MS = 1200;
 
 /**
- * Balloons you may lose before the game ends.
+ * Balloons you may lose before the game ends, at the start of a run.
  *
  * One number for everyone. There were four, from fifteen down to one, and they
  * were the main thing four difficulties meant — which also meant four
  * leaderboards nobody could compare. One ladder, one lives count, one board.
+ *
+ * It is a starting number rather than the whole story, because five flat lives
+ * cannot reach level 20. The back half of the ladder runs at break-even: five
+ * lives across ten rungs buys about seven and a half taps more than a player
+ * supplies, over 200 seconds. The ladder awards a life at 12, 15 and 18 — at
+ * each level where a new thing arrives to take one — and `game.allowance` is
+ * where those land.
  */
 Game.LIVES = 5;
 
@@ -412,6 +419,34 @@ Game.rung = function () {
 };
 
 /**
+ * Steps in a whole run: every level of the ladder, played out.
+ *
+ * `levelFor` clamps at the top, so it cannot tell level 20 from the end of
+ * level 20 — and the difference is the whole point of a finish line. You win
+ * by surviving 20, not by arriving at it.
+ */
+Game.runTicks = function () {
+    return Ladder.MAX * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS;
+};
+
+/** Whether the run has been played all the way to the end of the last level. */
+Game.finished = function () {
+    return this.ticks >= Game.runTicks();
+};
+
+/**
+ * Takes the life a level awards, if it awards one.
+ *
+ * Returns how many were given, so the caller can say so: a life that arrives
+ * silently is a life the player does not know they have.
+ */
+Game.awardLife = function (level) {
+    var given = Ladder.at(level).life || 0;
+    this.allowance += given;
+    return given;
+};
+
+/**
  * Clears the board for a new round. The clock is set here and again when play
  * actually begins, so nothing drawn during the countdown can read a time left
  * over from the previous game.
@@ -421,6 +456,8 @@ Game.resetRound = function () {
     this.entities = [];
     this.score = 0;
     this.lostBalloons = 0;
+    this.allowance = Game.LIVES;
+    this.won = false;
     this.end_time = null;
     this.ticks = 0;
     this.applyLevel(1);
