@@ -16,16 +16,17 @@
 "use strict";
 var Layout = {};
 
-Layout.HINT_TEXT = "Press E S H V to choose, space to replay";
+Layout.HINT_TEXT = "Press space to play";
 
 Layout.INTRO_TEXT = "Stop the balloons, before it is too late !!";
-Layout.HIGH_SCORES_TEXT = "High Scores - ";
+Layout.HIGH_SCORES_TEXT = "High Scores";
 
 /** The name line along the bottom, and the screen it opens. */
 Layout.PLAYER_PREFIX = "Playing as ";
 Layout.NAME_TEXT = "Who is playing?";
 Layout.NAME_HINT = "Enter to save, Escape to cancel";
 Layout.SAVE_TEXT = "Save";
+Layout.PLAY_TEXT = "Play";
 
 Layout.GRID = {
     /** Fractions of canvas width. */
@@ -52,8 +53,13 @@ Layout.GRID = {
     scoreRowStep: 2.5,
     scoreRowCount: 3,
 
-    /** Button padding and spacing, in line heights. */
-    button: { padX: 0.55, padY: 0.28, gap: 0.34, radius: 0.28 },
+    /**
+     * Button padding and spacing, in line heights, and a floor on the width as
+     * a fraction of the composition. Four difficulty buttons filled their row
+     * between them; the one button that replaced them looked apologetic at the
+     * width of its own label, so it gets a minimum.
+     */
+    button: { padX: 0.55, padY: 0.28, gap: 0.34, radius: 0.28, minWidth: 0.22 },
 
     /** Gaps in the vertical flow, in line heights. */
     gaps: { afterMenu: 0.95, afterHint: 1.5, beforeScores: 1.7 },
@@ -101,7 +107,7 @@ Layout.GRID = {
 
     /**
      * Smallest thing worth asking a finger to hit, in CSS pixels. Apple asks
-     * for 44, Material for 48. At phone sizes the difficulty boxes came out
+     * for 44, Material for 48. At phone sizes the menu boxes came out
      * 17px tall, which is under a third of a fingertip, so aiming at one
      * missed roughly one tap in seven even with a generous error model.
      */
@@ -172,7 +178,7 @@ Layout.applyFont = function (ctx, width, height) {
 /**
  * Every position the game draws or hit-tests, computed once per resize.
  * Regions that are both drawn and clicked return a single rect, so the two can
- * never drift apart the way the difficulty boxes used to.
+ * never drift apart the way the menu boxes used to.
  */
 Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
     var G = Layout.GRID;
@@ -187,20 +193,25 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
         }
     }
 
-    // --- difficulty buttons, flowed left to right and wrapped if they overrun
+    // --- menu buttons, flowed left to right and wrapped if they overrun
 
     var padX = line * G.button.padX;
     var padY = line * G.button.padY;
     var gap = line * G.button.gap;
     var buttonHeight = Math.max(line + padY * 2, G.minTouchTarget);
 
-    // Read from the difficulty table each time rather than captured at parse
-    // time, so there is no load-order dependency between the two files.
-    var items = Difficulty.all();
+    // One button, where four used to be. The flow below still wraps and still
+    // grows to the touch minimum, because the name screen's Save button and
+    // whatever comes next go through the same machinery.
+    var items = [{ id: "play", label: Layout.PLAY_TEXT }];
 
     ctx.font = fonts.menu;
     var widths = items.map(function (item) {
-        return Math.max(ctx.measureText(item.label).width + padX * 2, G.minTouchTarget);
+        return Math.max(
+            ctx.measureText(item.label).width + padX * 2,
+            available * G.button.minWidth,
+            G.minTouchTarget
+        );
     });
     ctx.font = fonts.score;
 
@@ -216,7 +227,7 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
             rowCount++;
         }
         buttons.push({
-            level: items[i].level,
+            id: items[i].id,
             label: items[i].label,
             x: x,
             y: rowTop,
@@ -291,7 +302,7 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
         label: playerLabel || ""
     };
 
-    // --- the name screen, on the row the difficulty buttons occupy elsewhere
+    // --- the name screen, on the row the menu button occupies elsewhere
 
     ctx.font = fonts.menu;
     var saveWidth = Math.max(ctx.measureText(Layout.SAVE_TEXT).width + padX * 2, G.minTouchTarget);
@@ -315,14 +326,13 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
         label: Layout.SAVE_TEXT
     };
 
-    // Every tappable thing carries an id, because two of them have no
-    // difficulty of their own: the high-score line replays whatever is
-    // selected, and the name line opens the name screen.
+    // Every tappable thing carries an id: the button starts a game, so does
+    // the high-score line, and the name line opens the name screen.
     var targets = buttons.map(function (button) {
-        return { id: button.level, level: button.level, hit: button.hit };
+        return { id: button.id, hit: button.hit };
     });
-    targets.push({ id: "replay", level: null, hit: scoresHit });
-    targets.push({ id: "player", level: null, hit: player });
+    targets.push({ id: "replay", hit: scoresHit });
+    targets.push({ id: "player", hit: player });
 
     panel.height = rows[rows.length - 1] + line - panel.y + panelPad;
 

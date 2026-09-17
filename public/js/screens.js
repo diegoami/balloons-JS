@@ -22,7 +22,7 @@
  *   update(game)        one frame of whatever moves. Absent on static screens.
  *   draw(game)          paints the whole screen, from the sky up.
  *   animated            whether the frame loop runs while this screen is up.
- *   menuLive(game)      whether pressing a difficulty button does anything.
+ *   menuLive(game)      whether pressing a menu button does anything.
  */
 
 "use strict";
@@ -91,8 +91,8 @@ Screens.name = {
 
 /**
  * The countdown. It exists because starting used to be instant: the tap that
- * chose a difficulty was also the first frame of play, on a screen that had
- * shown nothing since.
+ * started a game was also the first frame of play, on a screen that had shown
+ * nothing since.
  */
 Screens.starting = {
     animated: true,
@@ -141,7 +141,10 @@ Screens.playing = {
 
         var climbed = game.levelFor(game.ticks);
         if (climbed !== game.level) {
-            game.level = climbed;
+            // The sky belongs to the rung: it goes from morning to night as
+            // the ladder climbs, so how far up you are is visible without
+            // reading anything.
+            game.applyLevel(climbed);
             Announce.level(game);
         }
 
@@ -154,7 +157,7 @@ Screens.playing = {
         game.spawnBalloon();
         game.step(false);
 
-        if (game.lostBalloons >= game.difficulty.maxLost) {
+        if (game.lostBalloons >= Game.LIVES) {
             game.enter("gameover");
         }
     },

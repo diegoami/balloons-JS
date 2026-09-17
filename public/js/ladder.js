@@ -97,6 +97,15 @@ Ladder.rollSkin = function (row) {
 
 Ladder.MAX = Ladder.LEVELS.length;
 
+/**
+ * Seconds of play before the next rung.
+ *
+ * One pace for everybody. Four difficulties climbing at four speeds meant four
+ * leaderboards that could not be compared with each other; one ladder at one
+ * pace means every score on the board was earned the same way.
+ */
+Ladder.CLIMB_SECONDS = 25;
+
 /** The row for a level, clamped at both ends. */
 Ladder.at = function (level) {
     var n = Math.max(1, Math.min(Ladder.MAX, Math.round(level || 1)));

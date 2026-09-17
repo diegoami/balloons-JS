@@ -11,9 +11,9 @@
 "use strict";
 var Paint = {};
 
-/** The backdrop, from the cache Sky keeps per size and difficulty. */
+/** The backdrop, from the cache Sky keeps per size and time of day. */
 Paint.sky = function (game) {
-    var sky = Sky.render(game.width, game.height, game.dpr, game.difficulty.level);
+    var sky = Sky.render(game.width, game.height, game.dpr, game.level);
     game.ctx.drawImage(sky, 0, 0, game.width, game.height);
 };
 
@@ -58,7 +58,7 @@ Paint.intro = function (game, text) {
 };
 
 /**
- * Draws the difficulty buttons in whichever of four states they are in.
+ * Draws the menu button in whichever of its states it is in.
  *
  * A button used to look identical whether or not pressing it would do
  * anything: after a game ended the menu was repainted every frame for five
@@ -78,8 +78,10 @@ Paint.menu = function (game) {
 
     for (var i = 0; i < buttons.length; i++) {
         var button = buttons[i];
-        var selected = button.level === game.difficulty.level;
-        var pressed = live && button.level === game.pressed;
+        // There is one button and it is the thing to press, so it is drawn the
+        // way the selected difficulty used to be.
+        var selected = true;
+        var pressed = live && button.id === game.pressed;
 
         var fill, border, label;
         if (!live) {
@@ -143,7 +145,7 @@ Paint.scores = function (game) {
 
     game.ctx.font = game.layout.fonts.label;
     game.ctx.fillStyle = game.palette.inkSoft;
-    game.ctx.fillText(Layout.HIGH_SCORES_TEXT + game.difficulty.level, scores.heading.x, scores.heading.y);
+    game.ctx.fillText(Layout.HIGH_SCORES_TEXT, scores.heading.x, scores.heading.y);
 
     game.ctx.font = game.layout.fonts.score;
     for (var i = 0; i < scores.rows.length; i++) {
@@ -274,7 +276,7 @@ Paint.hud = function (game) {
         hud.caught, hud.y
     );
     game.ctx.fillStyle = game.palette.inkSoft;
-    game.ctx.fillText(game.difficulty.name + " " + game.level, hud.level, hud.y);
+    game.ctx.fillText("LEVEL " + game.level, hud.level, hud.y);
     game.ctx.fillStyle = game.palette.accent;
     game.ctx.fillText(game.elapsed() + "s", hud.time, hud.y);
 };

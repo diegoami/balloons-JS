@@ -22,7 +22,7 @@ var RATIO_SIZE = 1;
  * zero and turned negative: at RATIO_DECREASE balloons popped the radius hits
  * 0, and `check_hit` compares against it, so no point on the screen can pop
  * one. Every long game ended the same way, with an unwinnable board that
- * looked like difficulty. On VHard that was about 300 balloons, roughly two
+ * looked like difficulty. That arrived after about 300 balloons, roughly two
  * and a half minutes in.
  *
  * 0.4 keeps the escalation visible while leaving the balloon hittable forever.
@@ -91,6 +91,15 @@ Game.COUNTDOWN_MS = 2000;
  */
 Game.MENU_LOCKOUT_MS = 1200;
 
+/**
+ * Balloons you may lose before the game ends.
+ *
+ * One number for everyone. There were four, from fifteen down to one, and they
+ * were the main thing four difficulties meant — which also meant four
+ * leaderboards nobody could compare. One ladder, one lives count, one board.
+ */
+Game.LIVES = 5;
+
 // ------------------------------------------------------------------ screens
 
 /**
@@ -141,7 +150,7 @@ Game.paint = function () {
     Screens[this.screen].draw(this);
 };
 
-/** Whether the difficulty buttons will actually do anything if pressed. */
+/** Whether the buttons on the screen will actually do anything if pressed. */
 Game.isMenuLive = function () {
     var screen = Screens[this.screen];
     return screen.menuLive ? screen.menuLive(this) : false;
@@ -191,7 +200,7 @@ Game.stopLoop = function () {
  * The game takes fixed steps of STEP_MS, however often the display asks for a
  * frame. A balloon's speed is expressed per step, so without this a 120Hz
  * display would play the game at four times the speed of a 30Hz one; the whole
- * difficulty table is calibrated against a step, not a second.
+ * ladder is calibrated against a step, not a second.
  *
  * Taking `now` as an argument rather than reading a clock is what makes the
  * loop testable: a stall can be handed to it rather than waited for.
@@ -227,11 +236,17 @@ Game.advance = function (now) {
     }
 };
 
-Game.restart = function (level) {
-    saveSetting("diff_level", level);
-    this.difficulty = Difficulty.get(level);
-    this.palette = Sky.paletteFor(this.difficulty.level);
+Game.restart = function () {
     this.enter("starting");
+};
+
+/**
+ * The sky belongs to the rung, so it is set wherever the rung is set rather
+ * than once at boot.
+ */
+Game.applyLevel = function (level) {
+    this.level = level;
+    this.palette = Sky.paletteFor(level);
 };
 
 // ------------------------------------------------------------------- canvas
@@ -260,7 +275,7 @@ Game.applyCanvasSize = function () {
 
     this.ratio = this.width / 1000;
     this.measureLayout();
-    this.palette = Sky.paletteFor(this.difficulty.level);
+    this.palette = Sky.paletteFor(this.level);
 };
 
 /**
@@ -387,8 +402,8 @@ Game.elapsed = function () {
  */
 Game.levelFor = function (ticks) {
     var seconds = ticks * Game.STEP_MS / 1000;
-    var climbed = Math.floor(seconds / this.difficulty.climbEvery);
-    return Math.min(Ladder.MAX, this.difficulty.startLevel + climbed);
+    var climbed = Math.floor(seconds / Ladder.CLIMB_SECONDS);
+    return Math.min(Ladder.MAX, 1 + climbed);
 };
 
 /** The row of the ladder the game is being played on right now. */
@@ -408,7 +423,7 @@ Game.resetRound = function () {
     this.lostBalloons = 0;
     this.end_time = null;
     this.ticks = 0;
-    this.level = this.difficulty.startLevel;
+    this.applyLevel(1);
 };
 
 Game.randomBalloon = function () {
@@ -518,9 +533,9 @@ Game.init = function () {
     NameField.find();
     Announce.find();
 
-    this.difficulty = Difficulty.get(loadSetting("diff_level"));
     this.entities = [];
     this.pressed = null;
+    this.applyLevel(1);
 
     this.applyCanvasSize();
     this.enter(stored ? "title" : "name");

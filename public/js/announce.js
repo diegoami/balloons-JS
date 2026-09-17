@@ -3,7 +3,7 @@
  *
  * The whole game is one canvas. To a screen reader that is a single element
  * with nothing in it, so everything the picture says — which screen is up,
- * which difficulty is selected, that a balloon got away, what the final score
+ * which level it has climbed to, that a balloon got away, what the final score
  * was — has to be said somewhere it can be read. That somewhere is a live
  * region in the page, and this is everything that writes to it.
  *
@@ -40,9 +40,7 @@ Announce.say = function (text) {
 /** The title screen: what this is, what is selected, and how to start. */
 Announce.title = function (game) {
     Announce.say(
-        "Balloons. Difficulty " + game.difficulty.label + ", playing as " +
-        game.name + ". Press E, S, H or V to choose a difficulty and start, " +
-        "or space to play."
+        "Balloons, playing as " + game.name + ". Press space to play."
     );
 };
 
@@ -52,8 +50,7 @@ Announce.name = function () {
 
 Announce.starting = function (game) {
     Announce.say(
-        game.difficulty.label + ", starting at level " + game.difficulty.startLevel +
-        ". Get ready. " + Announce.lives(game.difficulty.maxLost) + " to lose."
+        "Get ready. Level one, and " + Announce.lives(Game.LIVES) + " to lose."
     );
 };
 
@@ -91,7 +88,7 @@ Announce.arrivals = function (game) {
 /** A balloon got away, which is the only thing in a round worth interrupting for. */
 Announce.lost = function (game) {
     Announce.say(
-        game.lostBalloons + " of " + game.difficulty.maxLost + " lost, " +
+        game.lostBalloons + " of " + Game.LIVES + " lost, " +
         game.score + " points."
     );
 };

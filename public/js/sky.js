@@ -10,15 +10,15 @@
  *
  * Drawing it instead means the ground and the text are chosen together, so
  * contrast is guaranteed rather than hoped for, and the sky can carry state:
- * each difficulty gets its own time of day.
+ * the time of day climbs with the ladder, morning to night.
  */
 
 "use strict";
 var Sky = {};
 
 /**
- * One palette per difficulty. Each defines the sky itself and the ink drawn on
- * it, so text colour is never picked independently of its background.
+ * Four times of day. Each defines the sky itself and the ink drawn on it, so
+ * text colour is never picked independently of its background.
  *
  * `scrim` darkens the top of the sky; `panel` is the stronger version drawn
  * behind the text block itself. The scrim alone was sized for a composition
@@ -27,7 +27,7 @@ var Sky = {};
  * not read rather than text that merely failed a guideline.
  */
 Sky.PALETTES = {
-    E: {
+    morning: {
         name: "clear morning",
         top: "#1E6FB4", mid: "#6FB6E4", horizon: "#D7EDF8",
         sun: { x: 0.78, y: 0.16, radius: 0.42, color: "#FFF4D6" },
@@ -45,7 +45,7 @@ Sky.PALETTES = {
         inkDisabled: "rgba(255, 255, 255, 0.34)",
         stars: 0
     },
-    S: {
+    afternoon: {
         name: "afternoon",
         top: "#1B5FA8", mid: "#63A8DC", horizon: "#EBDFC9",
         sun: { x: 0.82, y: 0.22, radius: 0.46, color: "#FFE2A8" },
@@ -63,7 +63,7 @@ Sky.PALETTES = {
         inkDisabled: "rgba(255, 255, 255, 0.34)",
         stars: 0
     },
-    H: {
+    dusk: {
         name: "dusk",
         top: "#16294F", mid: "#6B4A7A", horizon: "#E3885F",
         sun: { x: 0.24, y: 0.72, radius: 0.5, color: "#FF9E5E" },
@@ -81,7 +81,7 @@ Sky.PALETTES = {
         inkDisabled: "rgba(255, 255, 255, 0.34)",
         stars: 0
     },
-    V: {
+    night: {
         name: "night",
         top: "#070F22", mid: "#16233F", horizon: "#34405C",
         sun: null,
@@ -104,8 +104,34 @@ Sky.PALETTES = {
 /** How far down the screen the legibility scrim fades out. */
 Sky.SCRIM_DEPTH = 0.55;
 
+/**
+ * Which sky a level is played under.
+ *
+ * The palettes used to be keyed to the four difficulties, one time of day per
+ * choice. With one game and one ladder they carry the climb instead: morning
+ * while it is gentle, night by the time it is trying to kill you. That is a
+ * player being told how far up they are without reading anything, and it costs
+ * nothing — the four palettes already exist and are already contrast-checked.
+ */
+Sky.BANDS = [
+    { upTo: 3, palette: "morning" },
+    { upTo: 6, palette: "afternoon" },
+    { upTo: 8, palette: "dusk" },
+    { upTo: Infinity, palette: "night" }
+];
+
+Sky.nameFor = function (level) {
+    var rung = Math.max(1, level || 1);
+    for (var i = 0; i < Sky.BANDS.length; i++) {
+        if (rung <= Sky.BANDS[i].upTo) {
+            return Sky.BANDS[i].palette;
+        }
+    }
+    return "night";
+};
+
 Sky.paletteFor = function (level) {
-    return Sky.PALETTES[level] || Sky.PALETTES.S;
+    return Sky.PALETTES[Sky.nameFor(level)];
 };
 
 /**
@@ -202,7 +228,7 @@ Sky.paint = function (ctx, width, height, palette) {
  */
 Sky.render = function (width, height, dpr, level) {
     var palette = Sky.paletteFor(level);
-    var key = width + "x" + height + "@" + dpr + ":" + level;
+    var key = width + "x" + height + "@" + dpr + ":" + Sky.nameFor(level);
 
     if (Sky.cache && Sky.cache.key === key) {
         return Sky.cache.canvas;
