@@ -80,16 +80,14 @@ Input.menu = function (game, signal) {
             return;
         }
 
+        // A tap anywhere starts a game. There is one game to start and the
+        // screen behind this is already showing it being played, so asking
+        // someone to find a button first is a step for its own sake. The name
+        // chip is the one thing that means something else.
         var target = Layout.pick(game.layout.targets, Input.point(game, event));
-        if (!target) {
-            return;
-        }
-        if (target.id === "player") {
+        if (target && target.id === "player") {
             game.enter("name");
         } else {
-            // Play, or the high-score line, which starts a game too: there is
-            // one game to start now, so everything that is not the name chip
-            // starts it.
             game.restart();
         }
     }, { signal: signal });

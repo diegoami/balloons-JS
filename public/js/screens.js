@@ -29,23 +29,40 @@
 var Screens = {};
 
 Screens.title = {
-    animated: false,
+    // The game plays itself here, so the loop runs — unless the viewer has
+    // asked for less movement, in which case the footage holds on one frame.
+    animated: !Attract.reducedMotion(),
 
     enter: function (game) {
         Scores.load(game);
         Announce.title(game);
+        Attract.begin(game);
     },
 
     bind: function (game, signal) {
         Input.menu(game, signal);
     },
 
+    update: function (game) {
+        Attract.step(game);
+    },
+
+    /**
+     * Sky, then the footage, then a short panel with the words on it.
+     *
+     * The high scores are not here any more. The full panel reaches the bottom
+     * of the score table, which covered almost the whole window — so the
+     * footage this screen exists to show was behind it, dimmed to nothing. The
+     * board is drawn on the game-over screen, which is where you have just
+     * earned a place on it and where it is worth reading.
+     */
     draw: function (game) {
         Paint.sky(game);
-        Paint.panel(game);
+        Paint.entities(game);
+        Paint.panel(game, game.layout.splash);
         Paint.intro(game, Layout.INTRO_TEXT);
+        Paint.description(game);
         Paint.menu(game);
-        Paint.scores(game);
         Paint.player(game);
     },
 

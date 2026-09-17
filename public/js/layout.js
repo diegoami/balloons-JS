@@ -16,9 +16,22 @@
 "use strict";
 var Layout = {};
 
-Layout.HINT_TEXT = "Press space to play";
+/**
+ * What the title screen says.
+ *
+ * It used to say "Press space to play", which told a phone nothing and told
+ * everyone else the least interesting true fact about the game. Behind this
+ * text the game is now playing itself (attract.js), so the words only have to
+ * do what the footage cannot: say what a run is, and that it can be finished.
+ */
+Layout.INTRO_TEXT = "Pop the balloons before they get away";
 
-Layout.INTRO_TEXT = "Stop the balloons, before it is too late !!";
+Layout.DESCRIPTION = [
+    "Twenty levels, twenty seconds each, five lives.",
+    "It gets harder as you climb — and it can be won."
+];
+
+Layout.START_TEXT = "Tap anywhere to play";
 Layout.HIGH_SCORES_TEXT = "High Scores";
 
 /** The name line along the bottom, and the screen it opens. */
@@ -52,6 +65,9 @@ Layout.GRID = {
 
     scoreRowStep: 2.5,
     scoreRowCount: 3,
+
+    /** Line spacing for the description block, in line heights. */
+    descriptionStep: 1.35,
 
     /**
      * Button padding and spacing, in line heights, and a floor on the width as
@@ -162,10 +178,16 @@ Layout.applyFont = function (ctx, width, height) {
     size = Math.round(size);
     ctx.font = size + "px Verdana";
 
-    // The hint line is the longest single run of text drawn, so it is what
-    // decides whether the composition fits the width.
+    // Whichever line is longest is what decides whether the composition fits
+    // the width. It used to be the hint, which was the only long string; the
+    // description lines are longer than it was.
     var available = width * (1 - 2 * G.columns.margin);
-    var longest = ctx.measureText(Layout.HINT_TEXT).width;
+    var longest = 0;
+    [Layout.INTRO_TEXT, Layout.START_TEXT]
+        .concat(Layout.DESCRIPTION)
+        .forEach(function (text) {
+            longest = Math.max(longest, ctx.measureText(text).width);
+        });
 
     if (longest > available) {
         size = Math.max(1, Math.floor(size * (available / longest)));
@@ -200,10 +222,12 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
     var gap = line * G.button.gap;
     var buttonHeight = Math.max(line + padY * 2, G.minTouchTarget);
 
-    // One button, where four used to be. The flow below still wraps and still
-    // grows to the touch minimum, because the name screen's Save button and
-    // whatever comes next go through the same machinery.
-    var items = [{ id: "play", label: Layout.PLAY_TEXT }];
+    // No buttons. A tap anywhere on the sky starts a game, so a button would
+    // be a smaller target for the same thing — and it would sit on top of the
+    // footage it was competing with. The flow below is kept because it still
+    // wraps, still grows to the touch minimum, and the name screen's Save
+    // button and whatever comes next go through the same machinery.
+    var items = [];
 
     ctx.font = fonts.menu;
     var widths = items.map(function (item) {
@@ -239,7 +263,17 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
     }
 
     var menuTop = line * G.rows.menu;
-    var menuBottom = rowTop + buttonHeight;
+
+    // With no buttons, the row the menu used to occupy carries the description
+    // instead, and what follows flows from the bottom of THAT rather than from
+    // the height of a button that is no longer drawn.
+    var description = [];
+    for (var d = 0; d < Layout.DESCRIPTION.length; d++) {
+        description.push({ x: left, y: menuTop + line * (1 + d * G.descriptionStep) });
+    }
+    var menuBottom = buttons.length
+        ? rowTop + buttonHeight
+        : menuTop + line * (Layout.DESCRIPTION.length * G.descriptionStep + 0.4);
 
     // Drawn rect and hit rect are the same object now: buttons are laid out
     // rather than bracketing substrings, so both directions can meet the touch
@@ -336,11 +370,23 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
 
     panel.height = rows[rows.length - 1] + line - panel.y + panelPad;
 
+    // A shorter panel for the title screen, which has the game playing behind
+    // it. The full one reaches the bottom of the score table and so covers
+    // almost the whole window — which was fine when there was nothing under it
+    // and hides the footage now. This one stops under the start prompt.
+    var splash = {
+        x: panel.x,
+        y: panel.y,
+        width: panel.width,
+        height: hintY + line - panel.y + panelPad
+    };
+
     return {
         line: line,
         fonts: fonts,
 
         panel: panel,
+        splash: splash,
 
         intro: { x: left, y: line * G.rows.intro },
 
@@ -354,6 +400,7 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
         },
 
         hint: { x: left, y: hintY },
+        description: description,
 
         player: player,
 
