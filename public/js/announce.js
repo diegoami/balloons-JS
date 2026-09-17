@@ -37,10 +37,16 @@ Announce.say = function (text) {
     Announce.region.textContent = text;
 };
 
-/** The title screen: what this is, what is selected, and how to start. */
+/**
+ * The title screen: what this is, who is playing, and how to start.
+ *
+ * The screen behind these words is the game playing itself, which a screen
+ * reader cannot convey at all — so this says what the footage is showing.
+ */
 Announce.title = function (game) {
     Announce.say(
-        "Balloons, playing as " + game.name + ". Press space to play."
+        "Balloons. " + Layout.DESCRIPTION.join(" ") +
+        " Playing as " + game.name + ". Tap anywhere to play."
     );
 };
 

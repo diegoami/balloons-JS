@@ -108,30 +108,125 @@ Sky.SCRIM_DEPTH = 0.55;
  * Which sky a level is played under.
  *
  * The palettes used to be keyed to the four difficulties, one time of day per
- * choice. With one game and one ladder they carry the climb instead: morning
- * while it is gentle, night by the time it is trying to kill you. That is a
- * player being told how far up they are without reading anything, and it costs
- * nothing — the four palettes already exist and are already contrast-checked.
+ * choice. With one game and one ladder they carry the climb instead.
+ *
+ * They are KEYFRAMES rather than bands. Four bands over twenty levels meant the
+ * sky changed four times and sat still in between, and the change landed as a
+ * jump: one level you are in the afternoon, the next it is dusk. Placing the
+ * four at levels 1, 7, 14 and 20 and mixing between them gives every level its
+ * own sky, so the day runs down continuously across a whole run and a player
+ * can see the light going without being able to point at when it went.
  */
-Sky.BANDS = [
-    { upTo: 5, palette: "morning" },
-    { upTo: 10, palette: "afternoon" },
-    { upTo: 15, palette: "dusk" },
-    { upTo: Infinity, palette: "night" }
+Sky.KEYFRAMES = [
+    { at: 1, palette: "morning" },
+    { at: 7, palette: "afternoon" },
+    { at: 14, palette: "dusk" },
+    { at: 20, palette: "night" }
 ];
 
-Sky.nameFor = function (level) {
-    var rung = Math.max(1, level || 1);
-    for (var i = 0; i < Sky.BANDS.length; i++) {
-        if (rung <= Sky.BANDS[i].upTo) {
-            return Sky.BANDS[i].palette;
+function lerp(a, b, t) {
+    return a + (b - a) * t;
+}
+
+/** Pulls the four channels out of `#RRGGBB`, `rgb(...)` or `rgba(...)`. */
+function channels(css) {
+    var hex = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(css);
+    if (hex) {
+        return [parseInt(hex[1], 16), parseInt(hex[2], 16), parseInt(hex[3], 16), 1];
+    }
+    var parts = css.match(/rgba?\(([^)]+)\)/);
+    if (!parts) {
+        return [0, 0, 0, 1];
+    }
+    var values = parts[1].split(",").map(function (n) { return parseFloat(n); });
+    return [values[0], values[1], values[2], values.length > 3 ? values[3] : 1];
+}
+
+/** One colour a fraction of the way to another, alpha included. */
+function mixColour(from, to, t) {
+    var a = channels(from);
+    var b = channels(to);
+    return "rgba(" +
+        Math.round(lerp(a[0], b[0], t)) + ", " +
+        Math.round(lerp(a[1], b[1], t)) + ", " +
+        Math.round(lerp(a[2], b[2], t)) + ", " +
+        Math.round(lerp(a[3], b[3], t) * 1000) / 1000 + ")";
+}
+
+/**
+ * The sun between two palettes.
+ *
+ * Night has no sun at all. Mixing to `null` would make it vanish on one frame,
+ * so it is treated as the same sun with nothing left of it: the disc shrinks
+ * and fades out over the levels rather than being switched off.
+ */
+function mixSun(from, to, t) {
+    if (!from && !to) {
+        return null;
+    }
+    var a = from || { x: to.x, y: to.y, radius: 0, color: Sky.transparent(mixColour(to.color, to.color, 0)) };
+    var b = to || { x: from.x, y: from.y, radius: 0, color: Sky.transparent(mixColour(from.color, from.color, 0)) };
+    return {
+        x: lerp(a.x, b.x, t),
+        y: lerp(a.y, b.y, t),
+        radius: lerp(a.radius, b.radius, t),
+        color: mixColour(a.color, b.color, t)
+    };
+}
+
+var MIXED_COLOURS = [
+    "top", "mid", "horizon", "scrim", "panel", "ink", "inkSoft", "accent",
+    "onAccent", "buttonFill", "buttonBorder", "buttonPressOverlay",
+    "buttonDisabledFill", "buttonDisabledBorder", "inkDisabled"
+];
+
+/** One palette a fraction of the way to another. */
+Sky.mix = function (from, to, t) {
+    var mixed = {
+        // The name is the nearer of the two, because it is read aloud and
+        // "three-fifths of the way from afternoon to dusk" is not a time of day.
+        name: t < 0.5 ? from.name : to.name,
+        sun: mixSun(from.sun, to.sun, t),
+        stars: Math.round(lerp(from.stars, to.stars, t))
+    };
+    MIXED_COLOURS.forEach(function (key) {
+        mixed[key] = mixColour(from[key], to[key], t);
+    });
+    return mixed;
+};
+
+/** Which two keyframes a level sits between, and how far along it is. */
+Sky.blendAt = function (level) {
+    var rung = Math.max(1, Math.min(Sky.KEYFRAMES[Sky.KEYFRAMES.length - 1].at, level || 1));
+    for (var i = Sky.KEYFRAMES.length - 1; i > 0; i--) {
+        var from = Sky.KEYFRAMES[i - 1];
+        var to = Sky.KEYFRAMES[i];
+        if (rung >= from.at) {
+            return { from: from, to: to, t: (rung - from.at) / (to.at - from.at) };
         }
     }
-    return "night";
+    return { from: Sky.KEYFRAMES[0], to: Sky.KEYFRAMES[1], t: 0 };
+};
+
+/** The time of day a level reads as, for anything that says it out loud. */
+Sky.nameFor = function (level) {
+    var blend = Sky.blendAt(level);
+    return blend.t < 0.5 ? blend.from.palette : blend.to.palette;
 };
 
 Sky.paletteFor = function (level) {
-    return Sky.PALETTES[Sky.nameFor(level)];
+    var blend = Sky.blendAt(level);
+    if (blend.t === 0) {
+        return Sky.PALETTES[blend.from.palette];
+    }
+    if (blend.t === 1) {
+        return Sky.PALETTES[blend.to.palette];
+    }
+    return Sky.mix(
+        Sky.PALETTES[blend.from.palette],
+        Sky.PALETTES[blend.to.palette],
+        blend.t
+    );
 };
 
 /**
@@ -228,7 +323,9 @@ Sky.paint = function (ctx, width, height, palette) {
  */
 Sky.render = function (width, height, dpr, level) {
     var palette = Sky.paletteFor(level);
-    var key = width + "x" + height + "@" + dpr + ":" + Sky.nameFor(level);
+    // Keyed on the level, not the time of day: every level has its own sky
+    // now, so two levels sharing a name no longer share an image.
+    var key = width + "x" + height + "@" + dpr + ":L" + Math.round(level || 1);
 
     if (Sky.cache && Sky.cache.key === key) {
         return Sky.cache.canvas;

@@ -26,8 +26,8 @@ Paint.sky = function (game) {
  * composition that lived in the top half of the screen. This is the same idea
  * sized to what is actually drawn.
  */
-Paint.panel = function (game) {
-    var box = game.layout.panel;
+Paint.panel = function (game, box) {
+    box = box || game.layout.panel;
     var ctx = game.ctx;
 
     // It fades in rather than sitting there as a card, because the sky it has
@@ -128,10 +128,25 @@ Paint.menu = function (game) {
     ctx.font = game.layout.fonts.label;
     ctx.fillStyle = live ? palette.inkSoft : palette.inkDisabled;
     ctx.fillText(
-        live ? Layout.HINT_TEXT : "Hold on...",
+        live ? Layout.START_TEXT : "Hold on...",
         game.layout.hint.x,
         game.layout.hint.y
     );
+};
+
+/**
+ * What the game is, in two lines, where the Play button used to be.
+ *
+ * The footage behind this shows how the game moves; these say what a run is,
+ * which is the one thing watching it cannot tell you.
+ */
+Paint.description = function (game) {
+    var ctx = game.ctx;
+    ctx.font = game.layout.fonts.label;
+    ctx.fillStyle = game.palette.inkSoft;
+    game.layout.description.forEach(function (line, i) {
+        ctx.fillText(Layout.DESCRIPTION[i], line.x, line.y);
+    });
 };
 
 /** The board, if one has arrived. Nothing is drawn before then. */
