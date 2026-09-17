@@ -2,10 +2,16 @@
 
 Simple JavaScript / HTML5 game. Pop the balloons before too many escape.
 
-Play by clicking or tapping balloons. Pick a difficulty from the buttons on
-the title screen, or press `E`, `S`, `H` or `V`. Space or Enter replays the
-current difficulty. The selected level is shown both by the filled button and
-by the sky, which has its own palette per difficulty.
+Play by clicking or tapping balloons. There is one game: press space, or the
+Play button, and you start at level 1. The level climbs every 25 seconds of
+play, up to 10, and everything gets faster, denser and smaller as it does.
+Five balloons may escape before the game ends.
+
+From level 4 some balloons are reinforced and take two taps; from level 7 some
+are armoured and take three. They are bigger, slower and worth more, and they
+thin visibly as the skins come off. The sky climbs with the ladder too —
+morning, afternoon, dusk, night — so how far up you are is visible without
+reading anything.
 
 Your name is asked for once, on the page rather than in a browser dialog, and
 can be changed any time from the `Playing as ...` chip along the bottom.
@@ -24,8 +30,9 @@ public/               everything served to the browser
   js/announce.js      what the game says to a screen reader
   js/namefield.js     the one DOM element in the game
   js/layout.js        grid, type scale and every on-screen position
-  js/sky.js           the drawn sky: one palette per difficulty
-  js/difficulty.js    what each level is: lives, shrink and speed ramps
+  js/sky.js           the drawn sky: one palette per time of day
+  js/ladder.js        the ten levels, and what a balloon is like on each
+  js/entities.js      what the sky can hold, and the contract each kind keeps
   js/gameballoons.js  balloon entity: position, drift, collision
   js/htmlballoons.js  draws a balloon on a canvas with bezier curves
   js/color.js         lighten/darken helpers and the gradient palette
@@ -47,7 +54,7 @@ at all.
 The game takes fixed steps of 1/30s, driven by `requestAnimationFrame`. A
 frame catches the simulation up to the moment it was called and then paints, so
 the game plays at the same speed on a 30Hz display and a 144Hz one — balloon
-speed and the difficulty ramps are expressed per step, not per second. A frame
+speed and the ladder's ramps are expressed per step, not per second. A frame
 may catch up on at most 250ms, so a tab that was hidden for a minute resumes
 rather than replaying the minute. The round clock counts steps too: the time on
 the leaderboard is time played, not time elapsed.
@@ -56,8 +63,8 @@ the leaderboard is time played, not time elapsed.
 
 The game is one canvas, which to anything but a pair of eyes is a single empty
 element. What the picture says is also said in a live region: which screen is
-up, which difficulty is selected, that a balloon got away, and the final score.
-The canvas is focusable and described, and the difficulty keys work from
+up, which level it has climbed to, that a balloon got away, and the final
+score. The canvas is focusable and described, and space starts a game from
 anywhere. Popping still needs a pointer.
 
 Every colour the game draws text in is checked against what is actually behind
@@ -94,8 +101,8 @@ npm run playtest -- --runs=5 --cap=120 --reaction=200 --levels=H,V
 ```
 
 `tools/playtest.mjs` plays the game with a bot under human limits — a reaction
-delay, aim error and a realistic click rate — and reports how each difficulty
-went. It asserts nothing and is not part of `npm test`; it exists to answer
+delay, aim error and a realistic click rate — and reports how far up the ladder
+each run got. It asserts nothing and is not part of `npm test`; it exists to answer
 questions about tuning that reading the code does not. Because the player is
 held constant, any difference between levels is the game's.
 
@@ -127,11 +134,12 @@ both the game and its score API together.
 `netlify/functions/scores.mts` serves the leaderboard from the same origin as
 the game:
 
-- `GET /api/scores/:difficulty` returns the board, highest first.
-- `POST /api/scores/:difficulty` with `{"name": "...", "score": 123}` adds an entry.
+- `GET /api/scores` returns the board, highest first.
+- `POST /api/scores` with `{"name": "...", "score": 123}` adds an entry.
 
-`:difficulty` is one of `e`, `s`, `h`, `v`. Boards keep the top 10; the game
-draws the top 3.
+One board, because one game: it keeps the top 10 and the game draws the top 3.
+There used to be four, one per difficulty, and they could not be compared with
+each other. The old four are still in the store under their own keys, unread.
 
 Scores live in [Netlify Blobs](https://docs.netlify.com/build/data-and-storage/netlify-blobs/),
 which needs no configuration or provisioning. Production writes to a global

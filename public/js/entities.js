@@ -64,7 +64,7 @@ Entities.insertionPoint = function (list, entity) {
  * sky was a balloon and popping any of them was the same thing. It stops being
  * fine the moment a bird can overlap a balloon: which one you meant would be
  * decided by the order things happened to be in. Nearest centre is what the
- * difficulty menu already does with overlapping touch targets, and it is what a
+ * menu already does with overlapping touch targets, and it is what a
  * person means by aiming at something.
  */
 Entities.pick = function (list, point) {

@@ -1,9 +1,8 @@
 /**
  * The leaderboard client.
  *
- * One board is in play at a time — the one for the difficulty being shown — so
- * the cache, the request in flight and the submission still settling are three
- * fields here rather than five more on the game.
+ * There is one board, so the cache, the request in flight and the submission
+ * still settling are three fields here rather than five more on the game.
  *
  * The board is asked for on every frame the game-over screen draws. Asking used
  * to mean fetching: until the first response came back, the game issued thirty
@@ -13,7 +12,7 @@
 "use strict";
 var Scores = {};
 
-Scores.URL = "/api/scores/";
+Scores.URL = "/api/scores";
 
 /** What has arrived, or null. */
 Scores.board = null;
@@ -38,7 +37,7 @@ Scores.load = function (game) {
     // Wait on any score still being submitted, so the board we draw includes it.
     var mine = (Scores.submitted || Promise.resolve())
         .then(function () {
-            return fetch(Scores.URL + game.difficulty.level.toLowerCase());
+            return fetch(Scores.URL);
         })
         .then(function (response) {
             return response.ok ? response.json() : [];
@@ -71,7 +70,7 @@ Scores.submit = function (game, score) {
     Scores.board = null;
     Scores.pending = null;
 
-    Scores.submitted = fetch(Scores.URL + game.difficulty.level.toLowerCase(), {
+    Scores.submitted = fetch(Scores.URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ score: score, name: game.name })

@@ -2,7 +2,7 @@ import { getDeployStore, getStore } from "@netlify/blobs";
 import type { Config, Context } from "@netlify/functions";
 
 /**
- * High-score board, one list per difficulty level.
+ * The high-score board.
  *
  * Replaces the old Redis + Node scoreboard service (DA_redis_nodejs_Scoreboard)
  * that used to run in a sibling Docker container on port 5000. Same shape of
@@ -17,7 +17,16 @@ type ScoreEntry = {
 };
 
 const STORE_NAME = "highscores";
-const VALID_DIFFICULTIES = new Set(["e", "s", "h", "v"]);
+/**
+ * One board, under one key.
+ *
+ * There were four, one per difficulty, and they could not be compared with
+ * each other: a score on Easy and a score on VHard were different games. One
+ * game means one board, and every row on it was earned the same way. The four
+ * old lists are still in the store under their own keys, unread; nothing here
+ * deletes them.
+ */
+const BOARD = "all";
 
 /** How many entries we keep. The game only draws the top 3. */
 const MAX_SCORES = 10;
@@ -75,15 +84,9 @@ function json(body: unknown, status = 200): Response {
 }
 
 export default async (req: Request, context: Context) => {
-  const difficulty = String(context.params.difficulty || "").toLowerCase();
-
-  if (!VALID_DIFFICULTIES.has(difficulty)) {
-    return json({ error: "unknown difficulty" }, 404);
-  }
-
   const store = getScoreStore(context);
   const existing =
-    ((await store.get(difficulty, { type: "json" })) as ScoreEntry[] | null) ?? [];
+    ((await store.get(BOARD, { type: "json" })) as ScoreEntry[] | null) ?? [];
 
   if (req.method === "GET") {
     return json(existing);
@@ -117,11 +120,11 @@ export default async (req: Request, context: Context) => {
   // landing in the same instant can drop one of them. For a leaderboard on a
   // toy game that is an acceptable trade against pulling in a real database.
   const updated = [...existing, entry].sort(byScoreDescending).slice(0, MAX_SCORES);
-  await store.setJSON(difficulty, updated);
+  await store.setJSON(BOARD, updated);
 
   return json(updated);
 };
 
 export const config: Config = {
-  path: "/api/scores/:difficulty",
+  path: "/api/scores",
 };

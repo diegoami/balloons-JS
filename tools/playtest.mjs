@@ -12,7 +12,7 @@
  * just differently numbered.
  *
  *   npm run playtest
- *   npm run playtest -- --runs=5 --cap=120 --reaction=200 --levels=H,V
+ *   npm run playtest -- --runs=5 --cap=120 --reaction=200
  *   npm run playtest -- --width=390 --height=844 --port=8911
  *
  * What it found on first use, against master at the time:
@@ -47,7 +47,6 @@ function flag(name, fallback) {
 const OPTIONS = {
   runs: Number(flag('runs', 3)),
   capMs: Number(flag('cap', 70)) * 1000,
-  levels: String(flag('levels', 'E,S,H,V')).split(','),
   width: Number(flag('width', 1280)),
   height: Number(flag('height', 720)),
   // So several viewport sizes can be measured concurrently.
@@ -135,26 +134,23 @@ function serve(port) {
 const server = await serve(OPTIONS.port);
 const browser = await launchBrowser();
 
-/** One difficulty, played OPTIONS.runs times. Levels run in parallel. */
-async function playLevel(level) {
-  const runs = [];
-
-  for (let run = 0; run < OPTIONS.runs; run++) {
+/** One game, played start to finish. Games run in parallel. */
+async function playGame(index) {
+  {
     const context = await browser.newContext({
       viewport: { width: OPTIONS.width, height: OPTIONS.height }
     });
     const page = await context.newPage();
-    await page.addInitScript(l => {
+    await page.addInitScript(() => {
       try {
         localStorage.setItem('name', 'Bot');
-        localStorage.setItem('diff_level', l);
       } catch (e) { /* storage blocked; the game copes */ }
-    }, level);
+    });
 
     await page.goto(`http://localhost:${OPTIONS.port}/`, { waitUntil: 'load' });
     await page.waitForTimeout(400);
     await page.evaluate(BOT(OPTIONS));
-    await page.keyboard.press(level.toLowerCase());
+    await page.keyboard.press(' ');
     await page.waitForTimeout(2300); // the countdown
 
     const started = Date.now();
@@ -164,68 +160,64 @@ async function playLevel(level) {
     const result = await page.evaluate(() => ({
       score: Game.score,
       lost: Game.lostBalloons,
-      lives: Game.difficulty.maxLost,
+      lives: Game.LIVES,
       died: Game.screen === 'gameover',
       time: Game.end_time ? parseFloat(Game.end_time) : null,
       // How far up the ladder the run got: the number this harness exists to
-      // report now that difficulty is ten rungs climbed with time. Not `level`:
-      // that name already belongs to the difficulty letter, a few lines below.
+      // report now that a game is ten rungs climbed with time.
       rung: Game.level,
-      start: Game.difficulty.startLevel,
       stats: window.__stats
     }));
 
-    result.level = level;
+    result.run = index + 1;
     result.wall = Math.round((Date.now() - started) / 100) / 10;
-    runs.push(result);
     await context.close();
+    return result;
   }
-
-  return runs;
 }
 
-const settled = await Promise.all(OPTIONS.levels.map(playLevel));
+const settled = await Promise.all(
+  Array.from({ length: OPTIONS.runs }, (unused, i) => playGame(i))
+);
 await browser.close();
 server.close();
 
 // ---------------------------------------------------------------- report
 
 const round = n => (Math.round(n * 10) / 10).toString();
-const all = settled.flat();
+const all = settled;
 
 console.log(
   `\nbot: ${OPTIONS.reaction}ms reaction, ±${OPTIONS.aimError}px aim, ` +
   `${Math.round(1000 / OPTIONS.interval * 10) / 10} clicks/sec ` +
   `· ${OPTIONS.width}×${OPTIONS.height} · ${OPTIONS.capMs / 1000}s cap\n`
 );
-console.log('level  lives  survived   points  pops/tap   sky    lost   rung   outcome');
+console.log('run   lives  survived   points  pops/tap   sky    lost   rung   outcome');
 
 const mean = list => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
 
-OPTIONS.levels.forEach((level, i) => {
-  settled[i].forEach((r, j) => {
-    const accuracy = r.stats.clicks ? (r.stats.hits / r.stats.clicks * 100) : 0;
-    console.log(
-      (j === 0 ? level : '').padEnd(6),
-      String(r.lives).padEnd(6),
-      (round(r.time !== null ? r.time : r.wall) + 's').padEnd(10),
-      String(r.score).padEnd(7),
-      (round(accuracy) + '%').padEnd(10),
-      round(mean(r.stats.sky)).padEnd(6),
-      String(r.lost).padEnd(6),
-      (r.start + '→' + r.rung).padEnd(6),
-      r.died ? 'died' : 'survived the cap'
-    );
-  });
+settled.forEach(r => {
+  const accuracy = r.stats.clicks ? (r.stats.hits / r.stats.clicks * 100) : 0;
+  console.log(
+    String(r.run).padEnd(5),
+    String(r.lives).padEnd(6),
+    (round(r.time !== null ? r.time : r.wall) + 's').padEnd(10),
+    String(r.score).padEnd(7),
+    (round(accuracy) + '%').padEnd(10),
+    round(mean(r.stats.sky)).padEnd(6),
+    String(r.lost).padEnd(6),
+    String(r.rung).padEnd(6),
+    r.died ? 'died' : 'survived the cap'
+  );
 });
 
 const survived = all.filter(r => !r.died).length;
 console.log(`\n${survived} of ${all.length} games survived the cap.`);
 
-// Only meaningful as a comparison: one level surviving says nothing about
-// whether the levels differ from each other.
-if (survived === all.length && OPTIONS.levels.length > 1) {
-  console.log('No difficulty could kill this player, so the levels are not differing.');
+// A run that hits the cap says nothing about where the ladder would have
+// ended it, which is the number this harness exists to report.
+if (survived === all.length) {
+  console.log('The ladder never caught this player, so the cap is doing the ending.');
 }
 
 const lifetimes = all.flatMap(r => r.stats.lifetimes).sort((a, b) => a - b);

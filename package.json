@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "netlify dev",
-    "check": "node --check public/js/game.js && node --check public/js/gameballoons.js && node --check public/js/htmlballoons.js && node --check public/js/color.js && node --check public/js/layout.js && node --check public/js/sky.js && node --check public/js/difficulty.js && node --check public/js/screens.js && node --check public/js/paint.js && node --check public/js/input.js && node --check public/js/scores.js && node --check public/js/namefield.js && node --check public/js/announce.js && node --check public/js/entities.js && node --check public/js/ladder.js",
+    "check": "node --check public/js/game.js && node --check public/js/gameballoons.js && node --check public/js/htmlballoons.js && node --check public/js/color.js && node --check public/js/layout.js && node --check public/js/sky.js && node --check public/js/screens.js && node --check public/js/paint.js && node --check public/js/input.js && node --check public/js/scores.js && node --check public/js/namefield.js && node --check public/js/announce.js && node --check public/js/entities.js && node --check public/js/ladder.js",
     "test": "npm run check && npm run test:scores && npm run test:browser",
     "test:scores": "node --import ./test/helpers/hook.mjs test/scores.test.mjs",
     "test:browser": "node test/browser.test.mjs",

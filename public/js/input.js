@@ -41,7 +41,7 @@ Input.popping = function (game, signal) {
 };
 
 /**
- * The difficulty menu: bound on the screens that show it.
+ * The menu: bound on the screens that show it.
  *
  * A locked menu is a live binding that declines, rather than the old absence
  * of any binding at all — so the lockout is one condition, checked in the same
@@ -87,9 +87,10 @@ Input.menu = function (game, signal) {
         if (target.id === "player") {
             game.enter("name");
         } else {
-            // The high-score line has no level of its own; it replays the
-            // difficulty already selected.
-            game.restart(target.level || game.difficulty.level);
+            // Play, or the high-score line, which starts a game too: there is
+            // one game to start now, so everything that is not the name chip
+            // starts it.
+            game.restart();
         }
     }, { signal: signal });
 
@@ -97,11 +98,8 @@ Input.menu = function (game, signal) {
         if (!game.isMenuLive()) {
             return;
         }
-        var key = event.key.toUpperCase();
         if (event.key === " " || event.key === "Enter") {
-            game.restart(game.difficulty.level);
-        } else if (key === "E" || key === "S" || key === "H" || key === "V") {
-            game.restart(key);
+            game.restart();
         }
     }, { signal: signal });
 };
