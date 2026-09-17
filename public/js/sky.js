@@ -114,9 +114,9 @@ Sky.SCRIM_DEPTH = 0.55;
  * nothing — the four palettes already exist and are already contrast-checked.
  */
 Sky.BANDS = [
-    { upTo: 3, palette: "morning" },
-    { upTo: 6, palette: "afternoon" },
-    { upTo: 8, palette: "dusk" },
+    { upTo: 5, palette: "morning" },
+    { upTo: 10, palette: "afternoon" },
+    { upTo: 15, palette: "dusk" },
     { upTo: Infinity, palette: "night" }
 ];
 

@@ -1,13 +1,13 @@
 /**
- * The ten levels a game climbs through, and what each one is.
+ * The twenty levels a game climbs through, and what each one is.
  *
  * Difficulty used to be two ramps keyed to the score: balloons shrank by
  * 1/ratioDecrease and sped up by 1/speedIncrease per balloon popped. Four
  * numbers nobody could picture, spread across four levels, and no way to answer
  * "what does minute three feel like?" except by playing it.
  *
- * A ladder is the same idea made legible. Ten rows you can read, tune and test,
- * climbed on time rather than on score, with everything a level is in one
+ * A ladder is the same idea made legible. Twenty rows you can read, tune and
+ * test, climbed on time rather than on score, with everything a level is in one
  * place. The features of v2 arrive as more columns: a level says whether it has
  * reinforced balloons, whether birds cross it, whether the boss can appear.
  *
@@ -17,20 +17,37 @@
  * keeps the crossing time the same on any shaped window.
  *
  * `frequency` is the chance per step that another balloon is released, before
- * the throttle that slows spawning as the sky fills (SPEED_MODIFIER). The rate
- * it works out to at a full sky is `demand` below, in balloons a second.
+ * the throttle that slows spawning as the sky fills (SPEED_MODIFIER).
  *
  * `size` multiplies the balloon radius, floored so a balloon never falls under
  * the touch minimum however far the ladder climbs.
  *
+ * `life` is a life awarded on arriving at that level.
+ *
  * THE ARITHMETIC THAT MATTERS
  *
  * A player supplies about 2.1 taps a second: the bot clicks 3.6 times a second
- * and lands 58% of them, and a good human is faster but not by much. Demand
- * rises past that somewhere around level 5, which is the design: an arcade game
- * ends because the game eventually outruns you, and where it outruns you is
- * your score. What this table must never do is cross that line at level 2, or
- * fail to cross it at all.
+ * and lands 58% of them, and a good human is faster but not by much.
+ *
+ * A game that can be WON cannot simply outrun that. The old ten-rung table was
+ * an arcade curve — demand crossed 2.1 at level 5 and reached 3.2 by level 10,
+ * so the game always won and where it beat you was your score. Extending that
+ * slope to twenty would ask for six taps a second at the top, and nobody would
+ * ever see the end of it.
+ *
+ * So demand climbs to the ceiling and then STOPS. It rises to about 2.16 at
+ * level 10 and falls away again through the back half. That is not a mistake
+ * and not softness: levels 11 to 20 are meant to get harder by taking taps
+ * AWAY rather than asking for more of them — a balloon that jinks lowers your
+ * hit rate, one that fades costs you time to find it, a firefly eats whole
+ * taps, a boss takes a burst. None of those are built yet, which is why the
+ * top of this table is currently gentler than it will feel. The sky thins out
+ * to pay for them, exactly as it already thins where thick balloons arrive.
+ *
+ * The budget is small enough to write down. Five lives, ten rungs and about
+ * 1.5 taps per balloon means the whole back half can afford some seven and a
+ * half taps more than a player supplies, across 200 seconds — a net pressure
+ * of 0.04 taps a second. That is why a life is awarded at 12, 15 and 18.
  */
 
 "use strict";
@@ -38,29 +55,42 @@
 var Ladder = {};
 
 /**
- * How the sky is drawn from the level the player has climbed to.
+ * One new thing every other level, from 4 to 18.
  *
  * `reinforced` and `armoured` are the share of balloons that take two and three
- * taps. They start at rung 4 and 7, so a player meets one new thing at a time
- * with room to learn it.
+ * taps; they arrive at 4 and 10. Between them sit the boss at 6 and birds at 8,
+ * and above them janky balloons at 12, fading ones at 14, the firefly at 16 and
+ * the second boss at 18 — each its own column as it is built. Levels 1 to 3
+ * teach the game, the odd levels tighten what you already have, and 19 and 20
+ * add nothing new. They are the exam.
  *
- * The spawn rate FALLS where they arrive — 0.090 at rung 3, 0.088 at rung 4 —
- * and that is not a mistake. A three-tap balloon costs three of the two taps a
- * second anyone has, so the sky has to thin out as the balloons in it get
- * heavier. Fewer balloons, more work each. The frequencies below were solved
+ * The spawn rate FALLS where a heavier balloon arrives — 0.0833 at 3, 0.0807 at
+ * 4 — and that is not a mistake. A three-tap balloon costs three of the two
+ * taps a second anyone has, so the sky has to thin out as the balloons in it
+ * get heavier. Fewer balloons, more work each. Every frequency below was solved
  * from the demand curve and the mix rather than picked and hoped over.
  */
 Ladder.LEVELS = [
-    { level: 1, speed: 4.0, frequency: 0.0700, size: 1.00, reinforced: 0, armoured: 0 },
-    { level: 2, speed: 4.6, frequency: 0.0800, size: 0.97, reinforced: 0, armoured: 0 },
-    { level: 3, speed: 5.2, frequency: 0.0900, size: 0.93, reinforced: 0, armoured: 0 },
-    { level: 4, speed: 5.8, frequency: 0.0883, size: 0.89, reinforced: 0.15, armoured: 0 },
-    { level: 5, speed: 6.4, frequency: 0.0893, size: 0.84, reinforced: 0.18, armoured: 0 },
-    { level: 6, speed: 7.0, frequency: 0.0908, size: 0.79, reinforced: 0.20, armoured: 0 },
-    { level: 7, speed: 7.8, frequency: 0.0888, size: 0.73, reinforced: 0.20, armoured: 0.08 },
-    { level: 8, speed: 8.6, frequency: 0.0913, size: 0.67, reinforced: 0.22, armoured: 0.10 },
-    { level: 9, speed: 9.4, frequency: 0.0947, size: 0.61, reinforced: 0.22, armoured: 0.14 },
-    { level: 10, speed: 10.4, frequency: 0.0982, size: 0.55, reinforced: 0.25, armoured: 0.16 }
+    { level: 1 , speed:  4.0, frequency: 0.0422, size: 1.00, reinforced: 0.00, armoured: 0.00 },
+    { level: 2 , speed:  4.4, frequency: 0.0502, size: 0.97, reinforced: 0.00, armoured: 0.00 },
+    { level: 3 , speed:  4.8, frequency: 0.0569, size: 0.94, reinforced: 0.00, armoured: 0.00 },
+    { level: 4 , speed:  5.2, frequency: 0.0556, size: 0.91, reinforced: 0.15, armoured: 0.00 },
+    { level: 5 , speed:  5.6, frequency: 0.0629, size: 0.88, reinforced: 0.18, armoured: 0.00 },
+    { level: 6 , speed:  6.0, frequency: 0.0665, size: 0.85, reinforced: 0.20, armoured: 0.00 },
+    { level: 7 , speed:  6.4, frequency: 0.0693, size: 0.82, reinforced: 0.22, armoured: 0.00 },
+    { level: 8 , speed:  6.9, frequency: 0.0719, size: 0.79, reinforced: 0.24, armoured: 0.00 },
+    { level: 9 , speed:  7.4, frequency: 0.0735, size: 0.76, reinforced: 0.26, armoured: 0.00 },
+    { level: 10, speed:  7.9, frequency: 0.0686, size: 0.73, reinforced: 0.25, armoured: 0.08 },
+    { level: 11, speed:  8.4, frequency: 0.0680, size: 0.70, reinforced: 0.25, armoured: 0.10 },
+    { level: 12, speed:  8.9, frequency: 0.0675, size: 0.68, reinforced: 0.25, armoured: 0.12, life: 1 },
+    { level: 13, speed:  9.4, frequency: 0.0656, size: 0.66, reinforced: 0.26, armoured: 0.13 },
+    { level: 14, speed:  9.9, frequency: 0.0609, size: 0.64, reinforced: 0.26, armoured: 0.14 },
+    { level: 15, speed: 10.4, frequency: 0.0587, size: 0.62, reinforced: 0.27, armoured: 0.15, life: 1 },
+    { level: 16, speed: 10.9, frequency: 0.0565, size: 0.60, reinforced: 0.27, armoured: 0.16 },
+    { level: 17, speed: 11.4, frequency: 0.0543, size: 0.58, reinforced: 0.28, armoured: 0.17 },
+    { level: 18, speed: 11.9, frequency: 0.0521, size: 0.56, reinforced: 0.28, armoured: 0.18, life: 1 },
+    { level: 19, speed: 12.4, frequency: 0.0500, size: 0.54, reinforced: 0.30, armoured: 0.19 },
+    { level: 20, speed: 13.0, frequency: 0.0478, size: 0.52, reinforced: 0.30, armoured: 0.20 }
 ];
 
 /**
@@ -103,8 +133,11 @@ Ladder.MAX = Ladder.LEVELS.length;
  * One pace for everybody. Four difficulties climbing at four speeds meant four
  * leaderboards that could not be compared with each other; one ladder at one
  * pace means every score on the board was earned the same way.
+ *
+ * Twenty levels at twenty seconds is a winning run of 6:40, and puts a new
+ * thing in front of the player every forty seconds.
  */
-Ladder.CLIMB_SECONDS = 25;
+Ladder.CLIMB_SECONDS = 20;
 
 /** The row for a level, clamped at both ends. */
 Ladder.at = function (level) {
@@ -112,9 +145,51 @@ Ladder.at = function (level) {
     return Ladder.LEVELS[n - 1];
 };
 
-/** Balloons a second a level releases, once the sky is full. */
-Ladder.arrivals = function (row) {
-    var perStep = row.frequency - SPEED_MODIFIER * MAX_BALLOONS;
+/**
+ * How full the sky actually gets at each level, measured rather than assumed.
+ *
+ * THIS COLUMN EXISTS BECAUSE THE DEMAND SUM WAS WRONG. `arrivals` divided by a
+ * full sky of MAX_BALLOONS, which the game never reaches: the spawn throttle
+ * slows arrivals as the sky fills, so the sky settles at an equilibrium well
+ * under twenty. Measured with the bot, it runs from 2 balloons at level 1 to
+ * about 17 by level 10, and every demand figure computed against 20 was
+ * understated by the difference — by 34% at the bottom and 24% in the middle.
+ *
+ * Which means the tidy curve the last three phases were tuned against never
+ * existed in the running game. Real demand was nearly FLAT at 2.0 to 2.45 taps
+ * a second from level 1 upward, because the throttle is a negative feedback
+ * loop: fewer balloons up means less throttling means more arrivals. What
+ * actually escalates as the ladder climbs is the speed, the size and the taps
+ * per balloon — not the rate.
+ *
+ * So occupancy is a parameter now, not a constant. These are bot measurements,
+ * and they are noisy above about level 15, where only a run that gets that far
+ * contributes samples at all. They are documentation of where the game sits,
+ * not a dial: changing one changes what `demand` reports, never what the game
+ * does. The frequencies were solved against them by iteration — tune, measure,
+ * damp, repeat — because the two chase each other: cutting the spawn rate
+ * empties the sky, which throttles less, which feeds arrivals back.
+ */
+Ladder.SKY = [
+    1.1, 1.2, 1.7, 2.6, 3.8, 4.2, 5.8, 8.2, 11.6, 10.2,
+    10.5, 9.9, 10.2, 8.3, 6.9, 5.5, 9.1, 5.6, 5.5, 5.5
+];
+
+/** How full the sky is when a given level is being played. */
+Ladder.skyAt = function (level) {
+    var n = Math.max(1, Math.min(Ladder.MAX, Math.round(level || 1)));
+    return Ladder.SKY[n - 1];
+};
+
+/**
+ * Balloons a second a level releases, at a given sky.
+ *
+ * `up` defaults to the sky that level actually runs at rather than to a full
+ * one, because the full-sky figure is the one that misled three phases.
+ */
+Ladder.arrivals = function (row, up) {
+    var sky = up === undefined ? Ladder.skyAt(row.level) : up;
+    var perStep = row.frequency - SPEED_MODIFIER * sky;
     return Math.max(0, perStep) * (1000 / Game.STEP_MS);
 };
 
@@ -124,13 +199,16 @@ Ladder.meanTaps = function (row) {
 };
 
 /**
- * TAPS a second a level asks for, once the sky is full.
+ * TAPS a second a level asks for.
  *
  * This is the number the whole table is checked against, so it is worked out
  * from the row rather than written down beside it and left to drift. Counting
  * balloons stopped being enough the moment one of them could take three taps:
  * a sky with fewer, heavier balloons in it asks for more, not less.
+ *
+ * Pass `up` to ask what a level would demand at some other occupancy; leaving
+ * it out asks what it demands in the game as played.
  */
-Ladder.demand = function (row) {
-    return Ladder.arrivals(row) * Ladder.meanTaps(row);
+Ladder.demand = function (row, up) {
+    return Ladder.arrivals(row, up) * Ladder.meanTaps(row);
 };

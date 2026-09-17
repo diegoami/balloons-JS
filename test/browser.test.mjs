@@ -315,9 +315,13 @@ await t('game over submits the score and shows the leaderboard', async () => {
   boards.clear();
   apiHits.length = 0;
   const { context, page, errors } = await newGame({ name: 'Diego' });
-  await page.keyboard.press(' '); // VHard: a single lost balloon ends it
+  await page.keyboard.press(' ');
   await page.waitForTimeout(2500);
   await page.evaluate(() => { Game.score = 17; });
+  // Spend the allowance rather than waiting to lose it: the bottom of the
+  // ladder releases about one balloon a second on purpose, so dying here
+  // naturally takes most of a minute.
+  await page.evaluate(() => { Game.lostBalloons = Game.allowance; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
 
   await page.waitForTimeout(600);
@@ -404,6 +408,10 @@ await t('a second game after game over still responds to input', async () => {
   const { context, page, errors } = await newGame();
   await page.keyboard.press(' ');
   await page.waitForTimeout(2500);
+  // Spend the allowance rather than waiting to lose it: the bottom of the
+  // ladder releases about one balloon a second on purpose, so dying here
+  // naturally takes most of a minute.
+  await page.evaluate(() => { Game.lostBalloons = Game.allowance; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
   await page.waitForTimeout(5600); // input is rebound after the lockout
   await page.keyboard.press(' ');
@@ -997,8 +1005,12 @@ await t('the countdown counts down and then starts the game', async () => {
 
 await t('the menu is dead briefly after a game, then live', async () => {
   const { context, page, errors } = await newGame();
-  await page.keyboard.press(' '); // one lost balloon ends it
+  await page.keyboard.press(' ');
   await page.waitForTimeout(2400);
+  // Spend the allowance rather than waiting to lose it: the bottom of the
+  // ladder releases about one balloon a second on purpose, so dying here
+  // naturally takes most of a minute.
+  await page.evaluate(() => { Game.lostBalloons = Game.allowance; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
 
   assert.equal(await page.evaluate(() => Game.isMenuLive()), false,
@@ -1030,6 +1042,10 @@ await t('scores are requested without waiting out the lockout', async () => {
   const { context, page } = await newGame({ name: 'Diego' });
   await page.keyboard.press(' ');
   await page.waitForTimeout(2400);
+  // Spend the allowance rather than waiting to lose it: the bottom of the
+  // ladder releases about one balloon a second on purpose, so dying here
+  // naturally takes most of a minute.
+  await page.evaluate(() => { Game.lostBalloons = Game.allowance; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
   await page.waitForTimeout(1500);
   assert.ok(apiHits.some(h => h.method === 'GET'),
@@ -1118,20 +1134,27 @@ await t('balloons shrink as the ladder climbs, down to the floor', async () => {
     const mean = (level) => {
       Game.level = level;
       let total = 0;
-      for (let i = 0; i < 400; i++) total += Game.randomBalloon().size;
-      return total / 400;
+      for (let i = 0; i < 4000; i++) total += Game.randomBalloon().size;
+      return total / 4000;
     };
     return {
       floor: MIN_RATIO_SIZE,
       top: Ladder.MAX,
-      at1: mean(1), at5: mean(5), at10: mean(10), past: mean(40)
+      at1: mean(1), at5: mean(5), at10: mean(10),
+      atTop: mean(Ladder.MAX), past: mean(Ladder.MAX * 4),
+      // The mechanism rather than a statistic: past the top, Ladder.at clamps,
+      // so the row a balloon is built from is the same row.
+      rowTop: Ladder.at(Ladder.MAX).size,
+      rowPast: Ladder.at(Ladder.MAX * 4).size
     };
   });
 
+  assert.equal(m.rowPast, m.rowTop,
+    'past the last rung the ladder should hand back the last row');
   assert.ok(m.at5 < m.at1, 'balloons should shrink as the ladder climbs');
   assert.ok(m.at10 < m.at5, 'shrink should continue toward the top of the ladder');
-  assert.ok(Math.abs(m.past - m.at10) / m.at10 < 0.05,
-    `past the last rung the size should hold, not keep falling (${m.at10.toFixed(1)} -> ${m.past.toFixed(1)})`);
+  assert.ok(Math.abs(m.past - m.atTop) / m.atTop < 0.05,
+    `past the last rung the size should hold, not keep falling (${m.atTop.toFixed(1)} -> ${m.past.toFixed(1)})`);
   // Two floors apply: MIN_RATIO_SIZE bounds the shrink, and an absolute
   // minimum keeps the balloon tappable. Whichever is larger wins, so the
   // settled size is at least the ratio floor and never below the touch
@@ -1262,6 +1285,10 @@ await t('each screen keeps its own state, and gets a clean one', async () => {
   assert.equal(playing.screen, 'playing');
   assert.deepEqual(playing.keys, [], 'play is still carrying the countdown deadline');
 
+  // Spend the allowance rather than waiting to lose it: the bottom of the
+  // ladder releases about one balloon a second on purpose, so dying here
+  // naturally takes most of a minute.
+  await page.evaluate(() => { Game.lostBalloons = Game.allowance; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
   const over = await page.evaluate(() => ({
     keys: Object.keys(Game.state),
@@ -1388,6 +1415,10 @@ await t('the name line opens the name screen and the new name sticks', async () 
   // And the score goes to the board under the name that is on screen.
   await page.keyboard.press(' ');
   await page.waitForTimeout(2400);
+  // Spend the allowance rather than waiting to lose it: the bottom of the
+  // ladder releases about one balloon a second on purpose, so dying here
+  // naturally takes most of a minute.
+  await page.evaluate(() => { Game.lostBalloons = Game.allowance; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
   await page.waitForTimeout(400);
   const posted = apiHits.find(h => h.method === 'POST');
@@ -1764,11 +1795,14 @@ await t('a balloon is painted by one painter, not a new one every frame', async 
     window.Color.prototype = Original.prototype;
   });
 
-  // VHard rather than Standard: every difficulty now opens on the ladder, and
-  // the lower rungs release too few balloons in three seconds to tell one
-  // painter each from one per frame. VHard starts at rung 5.
+  // Measured at level 10 rather than level 1. The bottom of the ladder releases
+  // about one balloon a second on purpose, which is far too few in three seconds
+  // to tell one painter each from one per frame; level 10 is where the sky is
+  // fullest. The clock is wound forward rather than waited out.
   await page.keyboard.press(' ');
-  await page.waitForTimeout(2400 + 3000);
+  await page.waitForTimeout(2400);
+  await page.evaluate(() => { Game.ticks = 9 * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS; });
+  await page.waitForTimeout(3000);
 
   const m = await page.evaluate(() => ({
     painters: window.__built.painters,
@@ -1827,8 +1861,12 @@ await t('the game says what screen it is on, and what happened', async () => {
     Announce.say = function (text) { window.__said.push(text); return say(text); };
   });
 
-  await page.keyboard.press(' '); // VHard: one escaped balloon ends it
+  await page.keyboard.press(' ');
   await page.waitForTimeout(2500);
+  // One balloon has to get away for real, because losing one is the thing being
+  // listened for here. The rest of the allowance is spent rather than waited out.
+  await page.waitForFunction(() => Game.lostBalloons > 0, null, { timeout: 40000 });
+  await page.evaluate(() => { Game.lostBalloons = Game.allowance; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
   await page.waitForTimeout(200);
 
@@ -2046,52 +2084,109 @@ await t('the name field is readable too, in the colours it is really given', asy
 
 // ---------- the difficulty curve ----------
 
-await t('the ladder gets harder every rung, and asks more than a player has', async () => {
-  // The defect this guards: difficulty used to be two ramps keyed to the score,
-  // so a level's opening was fixed and the escalation was invisible. It is ten
-  // rows now, and the rows have to actually rise.
+await t('the ladder climbs to the ceiling and then holds there', async () => {
+  // The defect this guards has changed shape. It used to be that difficulty was
+  // two ramps keyed to the score, so a level's opening was fixed and the
+  // escalation was invisible. Now it is twenty rows — and a game you can WIN
+  // cannot simply outrun the player. The old curve crossed 2.1 taps a second at
+  // level 5 and reached 3.2 by 10; extending that slope to 20 would ask for six
+  // taps a second at the top and nobody would ever see the end of it.
   const { context, page } = await newGame();
   const m = await page.evaluate(() => ({
     rungs: Ladder.LEVELS.map(r => ({
       level: r.level, speed: r.speed, frequency: r.frequency, size: r.size,
-      demand: Ladder.demand(r), taps: Ladder.meanTaps(r),
-      arrivals: Ladder.arrivals(r)
+      life: r.life || 0,
+      taps: Ladder.meanTaps(r),
+      arrivals: Ladder.arrivals(r),
+      // As played, at the sky the level actually runs at...
+      demand: Ladder.demand(r),
+      // ...and as the sum used to read it, against a sky of twenty.
+      demandFull: Ladder.demand(r, MAX_BALLOONS)
     })),
-    max: Ladder.MAX
+    max: Ladder.MAX,
+    climb: Ladder.CLIMB_SECONDS,
+    sky: Ladder.SKY.length,
+    skyTop: Ladder.SKY[Ladder.MAX - 1],
+    skyClamped: Ladder.skyAt(999)
   }));
 
-  assert.equal(m.rungs.length, 10, 'the ladder is not ten levels');
-  assert.equal(m.max, 10);
+  assert.equal(m.rungs.length, 20, 'the ladder is not twenty levels');
+  assert.equal(m.max, 20);
+  assert.equal(m.climb, 20, 'a level should last twenty seconds');
+  assert.equal(m.sky, 20, 'every level needs a measured sky to divide by');
+  assert.equal(m.skyClamped, m.skyTop,
+    'past the last rung the sky should hold at the top one');
+
   m.rungs.forEach((r, i) => {
     assert.equal(r.level, i + 1, 'a rung is out of order or mislabelled');
     if (i === 0) { return; }
     const under = m.rungs[i - 1];
     assert.ok(r.speed > under.speed,
       `level ${r.level} is no faster than ${under.level} (${under.speed} then ${r.speed})`);
-    // The spawn rate may FALL where heavier balloons arrive, and that is the
-    // design: a three-tap balloon costs three of the two taps a second anyone
-    // has, so the sky thins as what is in it gets heavier. What may never fall
-    // is what the rung asks of the player.
+    assert.ok(r.size < under.size,
+      `level ${r.level} is no smaller than ${under.level}`);
+    assert.ok(r.taps >= under.taps,
+      `level ${r.level} has lighter balloons than ${under.level}`);
+    // The spawn rate may FALL, and above level 9 it always does: a three-tap
+    // balloon costs three of the two taps a second anyone has, so the sky has
+    // to thin as what is in it gets heavier. Thinning it for nothing would just
+    // be an easier rung.
     if (r.frequency < under.frequency) {
       assert.ok(r.taps > under.taps,
         `level ${r.level} releases fewer balloons than ${under.level} without ` +
         'making them any heavier');
     }
-    assert.ok(r.size < under.size,
-      `level ${r.level} is no smaller than ${under.level}`);
-    assert.ok(r.demand > under.demand,
-      `level ${r.level} asks no more than ${under.level}`);
   });
 
-  // A player supplies about 2.1 taps a second. The ladder has to pass that:
-  // not at the second rung, which would be a countdown rather than a game, and
-  // not never, which would be a game that no longer ends.
-  const crossing = m.rungs.findIndex(r => r.demand > 2.1) + 1;
-  assert.ok(crossing >= 4 && crossing <= 7,
-    `demand passes a player's 2.1 taps a second at level ${crossing || 'never'}, ` +
-    'which should happen between 4 and 7');
-  assert.ok(m.rungs[0].demand < 1.5,
-    `the first rung already asks ${m.rungs[0].demand.toFixed(2)} taps a second`);
+  // THE BUG THIS LOCKS DOWN. `demand` used to divide by a full sky of twenty
+  // balloons, which the game never reaches — the spawn throttle slows arrivals
+  // as the sky fills, so it settles far below that. Every figure the last three
+  // phases were tuned against was understated, worst at the bottom where the
+  // sky is nearly empty. Occupancy is measured and passed in now.
+  assert.ok(m.rungs[0].demandFull < m.rungs[0].demand / 2,
+    'the full-sky sum should read far lower than the game does at level 1 ' +
+    `(${m.rungs[0].demandFull.toFixed(2)} against ${m.rungs[0].demand.toFixed(2)})`);
+  m.rungs.forEach(r => {
+    assert.ok(r.demand > r.demandFull,
+      `level ${r.level} reads harder at a full sky than at its own, which means ` +
+      'the occupancy column is wrong');
+  });
+
+  // The bottom half is a climb. Level by level it wobbles, because the rate is
+  // not the only thing feeding it, so the check is on bands rather than on
+  // neighbours.
+  const band = (from, to) => {
+    const rows = m.rungs.filter(r => r.level >= from && r.level <= to);
+    return rows.reduce((total, r) => total + r.demand, 0) / rows.length;
+  };
+  assert.ok(band(1, 3) < band(4, 7),
+    `levels 1-3 ask ${band(1, 3).toFixed(2)} taps a second and 4-7 ask ` +
+    `${band(4, 7).toFixed(2)}; the ladder is not climbing`);
+  assert.ok(band(4, 7) < band(8, 12),
+    `levels 4-7 ask ${band(4, 7).toFixed(2)} and 8-12 ask ${band(8, 12).toFixed(2)}`);
+
+  // And then it stops climbing. A game you can WIN cannot outrun the player:
+  // levels 13 to 20 are meant to get harder by taking taps AWAY — a balloon
+  // that jinks, one that fades, a firefly, a boss — not by asking for more.
+  assert.ok(band(13, 20) <= band(8, 12),
+    `the top of the ladder asks ${band(13, 20).toFixed(2)} taps a second against ` +
+    `${band(8, 12).toFixed(2)} in the middle; the back half has no room for that`);
+
+  // A player supplies about 2.1 taps a second. The peak has to reach it,
+  // otherwise the whole thing is a stroll, and must not run away from it.
+  const peak = Math.max(...m.rungs.map(r => r.demand));
+  assert.ok(peak >= 2.1 && peak <= 2.6,
+    `the ladder peaks at ${peak.toFixed(2)} taps a second, which is not near ` +
+    "a player's 2.1");
+  const peakAt = m.rungs.find(r => r.demand === peak).level;
+  assert.ok(peakAt >= 8 && peakAt <= 13,
+    `the ladder peaks at level ${peakAt}, not around the middle where the ` +
+    'climb is supposed to stop');
+
+  // Five flat lives cannot reach 20.
+  const awarded = m.rungs.filter(r => r.life > 0).map(r => r.level);
+  assert.deepEqual(awarded, [12, 15, 18],
+    'a life should arrive at 12, 15 and 18, where a new thing arrives to take one');
   await context.close();
 });
 
@@ -2435,8 +2530,8 @@ await t('thick balloons arrive with the rungs, not before', async () => {
   });
 
   assert.equal(m.firstReinforced, 4, 'reinforced balloons do not start at rung 4');
-  assert.equal(m.firstArmoured, 7, 'armoured balloons do not start at rung 7');
-  for (let level = 1; level <= 10; level++) {
+  assert.equal(m.firstArmoured, 10, 'armoured balloons do not start at rung 10');
+  for (const level of Object.keys(m.seen).map(Number)) {
     const skins = m.seen[level];
     if (level < m.firstReinforced) {
       assert.deepEqual(skins, [1], `level ${level} has thick balloons before they arrive`);
@@ -2469,16 +2564,115 @@ await t('the sky thins out as what is in it gets heavier', async () => {
   assert.ok(arriving.demand > under.demand,
     'the rung that brings reinforced balloons asks no more of the player');
 
-  // Across the whole ladder: balloons a second barely moves, taps a second
-  // nearly triples.
-  const spread = n => Math.max(...m.map(r => r[n])) / Math.min(...m.map(r => r[n]));
-  assert.ok(spread('arrivals') < 1.8,
-    `balloons a second spans ${spread('arrivals').toFixed(2)}x across the ladder`);
-  assert.ok(spread('demand') > 2.4,
-    `taps a second spans only ${spread('demand').toFixed(2)}x across the ladder`);
+  const armoured = m.find(r => r.level === 10);
+  const belowArmoured = m.find(r => r.level === 9);
+  assert.ok(armoured.arrivals < belowArmoured.arrivals,
+    'the rung that brings armoured balloons releases as many as the one below');
+  assert.ok(armoured.demand > belowArmoured.demand,
+    'the rung that brings armoured balloons asks no more of the player');
+
+  // Across the whole ladder the two numbers move in opposite directions, and by
+  // the top that is the entire story: level 20 releases fewer balloons a second
+  // than level 1 does, while asking far more taps of each one.
+  const first = m.find(r => r.level === 1);
+  const last = m.find(r => r.level === 20);
+  assert.ok(last.arrivals < first.arrivals,
+    `level 20 releases ${last.arrivals.toFixed(2)} balloons a second, which is ` +
+    `no fewer than level 1's ${first.arrivals.toFixed(2)}`);
+  assert.ok(last.taps > first.taps * 1.5,
+    `a balloon at level 20 costs ${last.taps.toFixed(2)} taps, which is not much ` +
+    `more than level 1's ${first.taps.toFixed(2)}`);
+
+  // Taps per balloon only ever rise: a rung that thinned the sky without making
+  // what is left heavier would just be an easier rung.
+  m.forEach((r, i) => {
+    if (i === 0) { return; }
+    assert.ok(r.taps >= m[i - 1].taps,
+      `level ${r.level} has lighter balloons than ${m[i - 1].level}`);
+  });
   await context.close();
 });
 
+
+await t('surviving the last level wins the game; reaching it does not', async () => {
+  // This is the one case a level number cannot describe. levelFor clamps at the
+  // top, so it reads 20 both a second into the last level and a second after it
+  // should have ended — and the difference between those two is the finish line.
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2600);
+
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    const out = { run: Game.runTicks() };
+
+    out.levelNearEnd = Game.levelFor(Game.runTicks() - 30);
+    Game.ticks = Game.runTicks() - 30;   // a second of level 20 still to play
+    out.finishedNearEnd = Game.finished();
+    Screens.playing.update(Game);
+    out.screenNearEnd = Game.screen;
+    out.wonNearEnd = Game.won;
+
+    Game.ticks = Game.runTicks() - 1;    // the last step of the last level
+    Screens.playing.update(Game);
+    out.finishedAtEnd = Game.finished();
+    out.screenAtEnd = Game.screen;
+    out.wonAtEnd = Game.won;
+    return out;
+  });
+
+  assert.equal(m.run, 20 * 20 * 30, 'a whole run should be twenty levels of twenty seconds');
+  assert.equal(m.levelNearEnd, 20, 'a second short of the end is still level 20');
+  assert.equal(m.finishedNearEnd, false, 'the run finished before level 20 was played out');
+  assert.equal(m.screenNearEnd, 'playing', 'reaching level 20 ended the game by itself');
+  assert.equal(m.wonNearEnd, false, 'the game was won on arrival at the top rung');
+  assert.equal(m.finishedAtEnd, true, 'playing out level 20 did not finish the run');
+  assert.equal(m.screenAtEnd, 'gameover');
+  assert.equal(m.wonAtEnd, true, 'surviving the last level was not recorded as a win');
+
+  const heard = await page.evaluate(() => document.getElementById('game_status').textContent);
+  assert.match(heard, /You win/, 'a won run is announced as a game over: ' + heard);
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the ladder hands out lives, and the run ends on the allowance', async () => {
+  // The bug this guards: the end-of-run check read the constant five, so an
+  // awarded life could be announced and then quietly ignored.
+  const { context, page } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2600);
+
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    Game.resetRound();
+    const start = Game.allowance;
+    const given = [];
+    for (let level = 1; level <= Ladder.MAX; level++) {
+      if (Game.awardLife(level) > 0) { given.push(level); }
+    }
+    const end = Game.allowance;
+
+    Game.ticks = 0;
+    Game.allowance = 7;
+    Game.lostBalloons = 6;
+    Screens.playing.update(Game);
+    const atSix = Game.screen;
+    Game.lostBalloons = 7;
+    Screens.playing.update(Game);
+    const atSeven = Game.screen;
+    return { start, given, end, atSix, atSeven };
+  });
+
+  assert.equal(m.start, 5, 'a run should start on five lives');
+  assert.deepEqual(m.given, [12, 15, 18]);
+  assert.equal(m.end, 8, 'three awarded lives should leave an allowance of eight');
+  assert.equal(m.atSix, 'playing',
+    'six lost out of an allowance of seven ended the run early');
+  assert.equal(m.atSeven, 'gameover',
+    'the run did not end when the allowance ran out');
+  await context.close();
+});
 
 await browser.close();
 server.close();

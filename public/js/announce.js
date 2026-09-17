@@ -63,8 +63,12 @@ Announce.playing = function () {
  * balloon getting away, and it earns that: the game just got harder and
  * nothing else on the screen announces it.
  */
-Announce.level = function (game) {
-    Announce.say("Level " + game.level + "." + Announce.arrivals(game));
+Announce.level = function (game, awarded) {
+    var life = awarded > 0
+        ? " Extra life. " + Announce.lives(game.allowance - game.lostBalloons) +
+          " left to lose."
+        : "";
+    Announce.say("Level " + game.level + "." + Announce.arrivals(game) + life);
 };
 
 /**
@@ -88,14 +92,17 @@ Announce.arrivals = function (game) {
 /** A balloon got away, which is the only thing in a round worth interrupting for. */
 Announce.lost = function (game) {
     Announce.say(
-        game.lostBalloons + " of " + Game.LIVES + " lost, " +
+        game.lostBalloons + " of " + game.allowance + " lost, " +
         game.score + " points."
     );
 };
 
 Announce.gameover = function (game) {
     Announce.say(
-        "Game over. " + game.score + " points in " + game.end_time +
+        (game.won
+            ? "You win. Level " + Ladder.MAX + " survived. "
+            : "Game over. ") +
+        game.score + " points in " + game.end_time +
         " seconds. Press space to play again."
     );
 };
