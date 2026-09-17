@@ -69,9 +69,12 @@ const BOT = (o) => `
   setInterval(() => {
     if (!Game.entities) return;
     const balloons = Game.entities.filter(e => e.kind === 'balloon');
+    // The entity itself, not a copy of where it was. Deciding what to go for
+    // is what the reaction delay applies to; where to put the finger is not,
+    // because a person tracks a thing that is moving steadily.
     history.push({
       t: Date.now(),
-      balloons: balloons.map(b => ({ x: b.xcoord, y: b.ycoord }))
+      balloons: balloons.map(b => ({ ref: b, x: b.xcoord, y: b.ycoord }))
     });
     while (history.length > 40) history.shift();
 
@@ -111,12 +114,22 @@ const BOT = (o) => `
     }
     if (!memory || !memory.balloons.length) return;
 
-    // Go for whatever looked closest to escaping.
+    // Go for whatever looked closest to escaping, a reaction time ago.
     const target = memory.balloons.reduce((a, b) => (b.y < a.y ? b : a));
+    if (!Game.entities.includes(target.ref)) return;
+
+    // And aim where it is NOW. Aiming at the remembered position instead meant
+    // aiming some sixty pixels below the balloon at the upper levels, which the
+    // old bounding-box hit test quietly absorbed: the box ran 1.4 radii below
+    // the centre. Against the balloon's real outline those taps land on sky,
+    // so the harness was measuring its own failure to track rather than the
+    // game's difficulty.
+    const aimX = target.ref.xcoord;
+    const aimY = target.ref.ycoord;
     const before = Game.score;
     Game.canvas.dispatchEvent(new MouseEvent('click', {
-      clientX: target.x + (Math.random() * 2 - 1) * AIM_ERROR,
-      clientY: target.y + (Math.random() * 2 - 1) * AIM_ERROR,
+      clientX: aimX + (Math.random() * 2 - 1) * AIM_ERROR,
+      clientY: aimY + (Math.random() * 2 - 1) * AIM_ERROR,
       bubbles: true
     }));
     window.__stats.clicks++;
