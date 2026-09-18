@@ -33,10 +33,18 @@
  * is the emptiest the sky ever gets — which is the trigger condition — and you
  * would fight two back to back.
  *
- * `janky` is the share of balloons that wander sideways as they rise. They
- * cost no extra taps, so they do not move the demand sum -- what they cost is
- * hit rate, which is the supply side. How far one may wander in a reaction
- * window is bounded by its own radius; see gameballoons.js.
+ * `janky` is the share of balloons that wander sideways as they rise, and
+ * `fading` the share that thin out as they go. Neither costs extra taps, so
+ * neither moves the demand sum -- what they cost is hit rate and search time,
+ * which are both the supply side. Both are bounded by what a person can
+ * actually deal with rather than by taste: how far one may wander inside a
+ * reaction window, and how faint one may get against the sky behind it. See
+ * gameballoons.js for both.
+ *
+ * They are EXCLUSIVE. A balloon is awkward in one way or the other, never
+ * both, so what each costs stays separately measurable -- and so the share of
+ * the sky that is awkward at all is the sum of the two columns rather than
+ * something you have to work out.
  *
  * `fireflies` is how many hover at that level. They are never removed and
  * never reach the top, so this is a population rather than a rate: the
@@ -50,10 +58,10 @@
  *
  * `news` is a headline and a line of explanation for the thing this level
  * brings, and setting it is what makes the game BREAK before the level starts
- * (screens.js). Only the levels whose feature exists carry one: announcing
- * fading balloons at 14 before they exist would be a lie, so 14 and 18 get
- * theirs when their phase lands. Eight breaks in a winning run is
- * the intent; six of them work today.
+ * (screens.js). Only the levels whose feature exists carry one: announcing the
+ * second saucer at 18 before it exists would be a lie, so 18 gets its own when
+ * that phase lands. Eight breaks in a winning run is the intent; seven of them
+ * work today.
  *
  * THE ARITHMETIC THAT MATTERS
  *
@@ -71,8 +79,8 @@
  * and not softness: levels 11 to 20 are meant to get harder by taking taps
  * AWAY rather than asking for more of them — a balloon that jinks lowers your
  * hit rate, one that fades costs you time to find it, a firefly eats whole
- * taps, a boss takes a burst. None of those are built yet, which is why the
- * top of this table is currently gentler than it will feel. The sky thins out
+ * taps, a boss takes a burst. All but the second saucer are built now, which
+ * is why the top of this table reads gentler than it plays. The sky thins out
  * to pay for them, exactly as it already thins where thick balloons arrive.
  *
  * The budget is small enough to write down. Five lives, ten rungs and about
@@ -90,10 +98,16 @@ var Ladder = {};
  *
  * `reinforced` and `armoured` are the share of balloons that take two and three
  * taps; they arrive at 4 and 10. Between them sit the boss at 6 and birds at 8,
- * and above them janky balloons at 12, fading ones at 14, the firefly at 16 and
+ * and above them janky balloons at 12, fading ones at 14, fireflies at 16 and
  * the second boss at 18 — each its own column as it is built. Levels 1 to 3
  * teach the game, the odd levels tighten what you already have, and 19 and 20
  * add nothing new. They are the exam.
+ *
+ * `janky` STOPS CLIMBING at 14, where `fading` starts, and gives back some of
+ * what it had. The ceiling belongs to the two of them together: a sky where
+ * two balloons in three are awkward in one way or another stops reading as
+ * "some of these are awkward" and starts reading as the game being unsteady.
+ * Their sum runs from 0.20 at 12 to 0.56 at the top.
  *
  * The spawn rate FALLS where a heavier balloon arrives — 0.0833 at 3, 0.0807 at
  * 4 — and that is not a mistake. A three-tap balloon costs three of the two
@@ -120,14 +134,15 @@ Ladder.LEVELS = [
     { level: 12, speed:  8.9, frequency: 0.0675, size: 0.68, reinforced: 0.25, armoured: 0.12, life: 1, birds: 0.006, bossAt: 4, bossEvery: 420, janky: 0.20,
       news: ["Janky balloons", "Some of them wander as they rise. They are bigger, too."] },
     { level: 13, speed:  9.4, frequency: 0.0656, size: 0.66, reinforced: 0.26, armoured: 0.13, birds: 0.007, bossAt: 4, bossEvery: 400, janky: 0.24 },
-    { level: 14, speed:  9.9, frequency: 0.0609, size: 0.64, reinforced: 0.26, armoured: 0.14, birds: 0.007, bossAt: 4, bossEvery: 390, janky: 0.28 },
-    { level: 15, speed: 10.4, frequency: 0.0587, size: 0.62, reinforced: 0.27, armoured: 0.15, life: 1, birds: 0.008, bossAt: 5, bossEvery: 380, janky: 0.30 },
+    { level: 14, speed:  9.9, frequency: 0.0609, size: 0.64, reinforced: 0.26, armoured: 0.14, birds: 0.007, bossAt: 4, bossEvery: 390, janky: 0.26, fading: 0.12,
+      news: ["Fading balloons", "Some of them thin out as they rise. Take them early."] },
+    { level: 15, speed: 10.4, frequency: 0.0587, size: 0.62, reinforced: 0.27, armoured: 0.15, life: 1, birds: 0.008, bossAt: 5, bossEvery: 380, janky: 0.27, fading: 0.14 },
     { level: 16, speed: 10.9, frequency: 0.0565, size: 0.60, reinforced: 0.27, armoured: 0.16, birds: 0.008, bossAt: 5, bossEvery: 370, fireflies: 2,
-      news: ["Fireflies", "Pretty, harmless, and in the way. Taps land on them."], janky: 0.32 },
-    { level: 17, speed: 11.4, frequency: 0.0543, size: 0.58, reinforced: 0.28, armoured: 0.17, birds: 0.009, bossAt: 5, bossEvery: 360, fireflies: 3, janky: 0.34 },
-    { level: 18, speed: 11.9, frequency: 0.0521, size: 0.56, reinforced: 0.28, armoured: 0.18, life: 1, birds: 0.009, bossAt: 6, bossEvery: 340, fireflies: 3, janky: 0.36 },
-    { level: 19, speed: 12.4, frequency: 0.0500, size: 0.54, reinforced: 0.30, armoured: 0.19, birds: 0.010, bossAt: 6, bossEvery: 320, fireflies: 4, janky: 0.38 },
-    { level: 20, speed: 13.0, frequency: 0.0478, size: 0.52, reinforced: 0.30, armoured: 0.20, birds: 0.010, bossAt: 6, bossEvery: 300, fireflies: 4, janky: 0.40 }
+      news: ["Fireflies", "Pretty, harmless, and in the way. Taps land on them."], janky: 0.28, fading: 0.16 },
+    { level: 17, speed: 11.4, frequency: 0.0543, size: 0.58, reinforced: 0.28, armoured: 0.17, birds: 0.009, bossAt: 5, bossEvery: 360, fireflies: 3, janky: 0.29, fading: 0.18 },
+    { level: 18, speed: 11.9, frequency: 0.0521, size: 0.56, reinforced: 0.28, armoured: 0.18, life: 1, birds: 0.009, bossAt: 6, bossEvery: 340, fireflies: 3, janky: 0.30, fading: 0.20 },
+    { level: 19, speed: 12.4, frequency: 0.0500, size: 0.54, reinforced: 0.30, armoured: 0.19, birds: 0.010, bossAt: 6, bossEvery: 320, fireflies: 4, janky: 0.31, fading: 0.22 },
+    { level: 20, speed: 13.0, frequency: 0.0478, size: 0.52, reinforced: 0.30, armoured: 0.20, birds: 0.010, bossAt: 6, bossEvery: 300, fireflies: 4, janky: 0.32, fading: 0.24 }
 ];
 
 /**
@@ -148,6 +163,25 @@ Ladder.SKINS = [
 
 Ladder.skin = function (n) {
     return Ladder.SKINS[Math.max(1, Math.min(Ladder.SKINS.length, n)) - 1];
+};
+
+/**
+ * Whether the next balloon is awkward, and in which of the two ways.
+ *
+ * ONE roll for both columns rather than one each, so they cannot land on the
+ * same balloon. Two independent rolls would give balloons that wander AND
+ * fade -- two taxes at once on a sky meant to charge one at a time -- and
+ * would make each column's measured cost depend on the other's share.
+ */
+Ladder.rollQuirk = function (row) {
+    var roll = Math.random();
+    if (roll < (row.janky || 0)) {
+        return "janky";
+    }
+    if (roll < (row.janky || 0) + (row.fading || 0)) {
+        return "fading";
+    }
+    return null;
 };
 
 /** Picks how many skins the next balloon has, from the rung's mix. */

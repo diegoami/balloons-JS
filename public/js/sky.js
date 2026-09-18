@@ -264,6 +264,125 @@ Sky.paletteFor = function (level) {
 };
 
 /**
+ * WCAG 2.1 SC 1.4.11: a graphical object you must be able to make out to use
+ * the thing has to reach 3:1 against what is behind it. A balloon is exactly
+ * that — the whole game is finding one and tapping it — so this is the number
+ * a fading balloon is not allowed to go under, rather than an opacity somebody
+ * liked the look of.
+ */
+Sky.MIN_OBJECT_CONTRAST = 3;
+
+/**
+ * How much above that a derivation has to aim, so the PIXELS clear it.
+ *
+ * The sky is read one column per thirty-second of the width, and a balloon is
+ * sixty pixels across: it covers a patch of sky rather than sitting on the one
+ * point its floor was worked out against. Flying balloons and measuring the
+ * drawn pixels against the drawn sky puts the real ratio within about 2.5% of
+ * the modelled one, worst case 2.93 where 3.00 was intended -- so aiming here
+ * instead makes the promise hold where it is actually kept, on the screen.
+ */
+Sky.SAMPLING_MARGIN = 1.05;
+
+/** WCAG relative luminance. */
+Sky.luminance = function (rgb) {
+    var lit = [0, 1, 2].map(function (i) {
+        var v = rgb[i] / 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * lit[0] + 0.7152 * lit[1] + 0.0722 * lit[2];
+};
+
+/** WCAG contrast ratio, 1 for two colours that are the same. */
+Sky.contrast = function (a, b) {
+    var high = Sky.luminance(a);
+    var low = Sky.luminance(b);
+    if (low > high) {
+        var swap = high;
+        high = low;
+        low = swap;
+    }
+    return (high + 0.05) / (low + 0.05);
+};
+
+/** One colour drawn over another at some opacity. */
+Sky.over = function (fg, alpha, bg) {
+    return [0, 1, 2].map(function (i) {
+        return fg[i] * alpha + bg[i] * (1 - alpha);
+    });
+};
+
+/**
+ * The faintest a colour may be drawn over a ground and still be found.
+ *
+ * Contrast against the ground rises monotonically with opacity — at zero the
+ * colour IS the ground and the ratio is 1 — so there is one crossing and a
+ * bisection finds it. A colour that cannot reach the threshold even at full
+ * opacity gets 1 back: it was never allowed to fade in the first place.
+ */
+Sky.faintestOver = function (fg, bg, wanted) {
+    var need = wanted || Sky.MIN_OBJECT_CONTRAST;
+    if (Sky.contrast(fg, bg) < need) {
+        return 1;
+    }
+    var low = 0;
+    var high = 1;
+    for (var i = 0; i < 16; i++) {
+        var mid = (low + high) / 2;
+        if (Sky.contrast(Sky.over(fg, mid, bg), bg) >= need) {
+            high = mid;
+        } else {
+            low = mid;
+        }
+    }
+    return high;
+};
+
+/**
+ * What is actually behind a point in the sky, read off the painted pixels.
+ *
+ * Not computed from `top`, `mid` and `horizon`: the sky also carries a sun
+ * glow, a scrim over its top half and, at night, stars — so the gradient alone
+ * is not the ground anything is drawn on. The cheapest honest answer is to ask
+ * the image, and since the image is cached per level, so are these.
+ *
+ * A whole column of pixels, not a handful of samples down one. Reading
+ * thirteen rows and interpolating put the modelled sky as much as 27% off the
+ * real one at dusk, where the gradient between the purple middle and the
+ * near-black top is steep -- and 27% is the difference between a balloon that
+ * clears 3:1 and one that lands at 2.4. Asking for the whole column in one
+ * read instead of thirteen leaves no vertical error at all, so the only error
+ * left is sideways.
+ *
+ * A column per thirty-second of the width, taken once and kept with the sky it
+ * came from.
+ */
+Sky.COLUMN_BUCKETS = 32;
+
+Sky.column = function (width, height, dpr, level, xFraction) {
+    var canvas = Sky.render(width, height, dpr, level);
+    var bucket = Math.max(0, Math.min(Sky.COLUMN_BUCKETS - 1,
+        Math.floor((xFraction || 0) * Sky.COLUMN_BUCKETS)));
+    var store = Sky.cache.columns || (Sky.cache.columns = {});
+
+    if (!store[bucket]) {
+        var x = Math.min(canvas.width - 1,
+            Math.round((bucket + 0.5) / Sky.COLUMN_BUCKETS * canvas.width));
+        store[bucket] = canvas.getContext("2d")
+            .getImageData(x, 0, 1, canvas.height).data;
+    }
+
+    return store[bucket];
+};
+
+/** The sky a fraction of the way down a column. */
+Sky.down = function (column, yFraction) {
+    var rows = column.length / 4;
+    var i = Math.round(Math.max(0, Math.min(1, yFraction)) * (rows - 1)) * 4;
+    return [column[i], column[i + 1], column[i + 2]];
+};
+
+/**
  * Stars are placed from a fixed seed so they stay put between redraws instead
  * of twinkling around the sky every time the canvas is resized.
  */

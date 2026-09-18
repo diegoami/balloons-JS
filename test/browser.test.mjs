@@ -3932,11 +3932,22 @@ await t('a janky balloon is bigger, and wanders both ways rather than drifting',
       speeds.push(Math.abs(b.xdelta));
     }
 
+    // A janky balloon with skins on keeps the extra size when one comes off.
+    // The factor belongs to the balloon, not to the skin it is wearing.
+    let thick = null;
+    for (let i = 0; i < 8000 && !thick; i++) {
+      const made = Game.randomBalloon();
+      if (made.janky && made.skin === 3) { thick = made; }
+    }
+    const beforeTap = thick.size;
+    thick.tapped(Game);
+
     return {
       jankyMean: mean(sizes.janky),
       steadyMean: mean(sizes.steady),
       bothWays: headings.size > 1,
-      neverExceeded: Math.max(...speeds) <= b.jinkMax + 1e-9
+      neverExceeded: Math.max(...speeds) <= b.jinkMax + 1e-9,
+      shrankBy: beforeTap / thick.size
     };
   });
 
@@ -3946,6 +3957,259 @@ await t('a janky balloon is bigger, and wanders both ways rather than drifting',
     'same tax charged twice');
   assert.ok(m.bothWays, 'it only ever drifts one way, which is a drift and not a wander');
   assert.ok(m.neverExceeded, 'it wandered faster than its own bound allows');
+  // Skin 3 is 1.30 of the base and skin 2 is 1.15, so one tap should take
+  // exactly that much off and nothing else.
+  assert.ok(Math.abs(m.shrankBy - 1.30 / 1.15) < 1e-6,
+    `a tap shrank a janky balloon by ${m.shrankBy.toFixed(3)}, not the ` +
+    'difference between its two skins');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+
+await t('fading balloons arrive at 14, and never share a balloon with a janky one', async () => {
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => {
+    // The two awkward columns come off ONE roll, so the share of the sky that
+    // is awkward at all can be read straight off the table.
+    const quirks = { janky: 0, fading: 0, plain: 0 };
+    const row = Ladder.at(20);
+    for (let i = 0; i < 20000; i++) {
+      quirks[Ladder.rollQuirk(row) || 'plain']++;
+    }
+
+    return {
+      first: Ladder.LEVELS.find(r => r.fading).level,
+      shares: Ladder.LEVELS.map(r => r.fading || 0),
+      unions: Ladder.LEVELS.map(r => (r.fading || 0) + (r.janky || 0)),
+      news: Ladder.at(14).news,
+      quirks,
+      // Thinning out costs no extra taps, so it must not move the demand sum.
+      withFading: Ladder.meanTaps({ reinforced: 0.26, armoured: 0.14, fading: 0.9 }),
+      without: Ladder.meanTaps({ reinforced: 0.26, armoured: 0.14 })
+    };
+  });
+
+  assert.equal(m.first, 14, 'fading balloons do not start at level 14');
+  m.shares.forEach((share, i) => {
+    if (i + 1 < 14) {
+      assert.equal(share, 0, `level ${i + 1} fades before it should`);
+    } else {
+      assert.ok(share > 0, `level ${i + 1} lost its fading balloons`);
+      assert.ok(share >= m.shares[i - 1], `level ${i + 1} fades less than level ${i}`);
+    }
+  });
+
+  // The ceiling belongs to the UNION of the two columns rather than to either
+  // one: a sky where most balloons are awkward in some way stops reading as
+  // "some of these are awkward".
+  const worst = Math.max(...m.unions);
+  assert.ok(worst <= 0.6, `${(worst * 100).toFixed(0)}% of the sky is awkward at the top`);
+  assert.ok(m.unions[19] > m.unions[11], 'the sky gets no more awkward than it was at 12');
+  assert.ok(Array.isArray(m.news), 'level 14 does not announce them');
+  assert.equal(m.withFading, m.without, 'fading changed what a balloon costs in taps');
+
+  assert.ok(Math.abs(m.quirks.janky / 20000 - 0.32) < 0.02,
+    `janky came out at ${(m.quirks.janky / 20000).toFixed(3)}, not 0.32`);
+  assert.ok(Math.abs(m.quirks.fading / 20000 - 0.24) < 0.02,
+    `fading came out at ${(m.quirks.fading / 20000).toFixed(3)}, not 0.24`);
+  await context.close();
+});
+
+await t('the level that announces fading balloons actually has them', async () => {
+  // This is the test that caught the arithmetic. The first version of the
+  // floor asked every height to survive the opacity of the TOP of the climb,
+  // which almost no colour at level 14 can do: the share arrived at 0.008
+  // against the 0.12 its row asks for, and the feature did not exist on the
+  // level that announces it. A column is worth what it delivers.
+  const { context, page } = await newGame();
+  const rows = await page.evaluate(() => {
+    Game.stopLoop();
+    const out = [];
+    [14, 17, 20].forEach(level => {
+      Game.applyLevel(level);
+      let faded = 0;
+      const floors = [];
+      for (let i = 0; i < 2000; i++) {
+        const b = Game.randomBalloon();
+        if (b.fading) { faded++; floors.push(b.alphaFloor); }
+      }
+      floors.sort((a, b) => a - b);
+      out.push({
+        level,
+        wanted: Ladder.at(level).fading,
+        got: faded / 2000,
+        median: floors.length ? floors[Math.floor(floors.length / 2)] : 1
+      });
+    });
+    return out;
+  });
+
+  rows.forEach(r => {
+    assert.ok(r.got >= r.wanted * 0.85,
+      `level ${r.level} asks for ${r.wanted} fading balloons and delivers ${r.got.toFixed(3)}`);
+    assert.ok(r.got <= r.wanted + 0.025,
+      `level ${r.level} delivers more fading balloons than it asks for`);
+    // And they have to actually fade. A floor of 0.95 is a feature nobody sees.
+    assert.ok(r.median <= 0.75,
+      `the middling fading balloon at level ${r.level} only reaches ` +
+      `${r.median.toFixed(2)} opacity`);
+  });
+  await context.close();
+});
+
+await t('a fading balloon never drops under 3:1 against the sky it is drawn on', async () => {
+  // The whole fairness argument, measured off the painted pixels rather than
+  // recomputed from the model that set the floor. WCAG SC 1.4.11 puts a
+  // graphical object you have to make out at 3:1, and a balloon is exactly
+  // that: the game is finding one and tapping it.
+  const { context, page, errors } = await newGame();
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    const channel = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    const lum = c => 0.2126 * channel(c[0]) + 0.7152 * channel(c[1]) + 0.0722 * channel(c[2]);
+    const ratio = (a, b) => {
+      const pair = [lum(a), lum(b)].sort((x, y) => y - x);
+      return (pair[0] + 0.05) / (pair[1] + 0.05);
+    };
+    const pixel = (x, y) => {
+      const d = Game.ctx.getImageData(
+        Math.round(x * Game.dpr), Math.round(y * Game.dpr), 1, 1).data;
+      return [d[0], d[1], d[2]];
+    };
+
+    let worst = { ratio: Infinity, level: 0, alpha: 1 };
+    let faintest = 1;
+    let checked = 0;
+
+    [14, 17, 20].forEach(level => {
+      Game.applyLevel(level);
+
+      for (let n = 0; n < 10; n++) {
+        let b = null;
+        // One skin only: a rim is a stroke in its own colour, and is not part
+        // of the gradient the floor was derived from.
+        for (let i = 0; i < 3000 && !b; i++) {
+          const made = Game.randomBalloon();
+          if (made.fading && made.skin === 1) { b = made; }
+        }
+        if (!b) { continue; }
+
+        // FLOWN, not teleported. A balloon drifts sideways as it rises and
+        // works its floor out along the path it is going to take, so dropping
+        // it at a height is not the same test at all -- and putting it at an
+        // x it was never going to reach is how this test first reported the
+        // game failing its own bound.
+        Game.entities = [b];
+
+        while (b.ycoord > Game.height * (1 - FADE_HOLD)) {
+          b.step(Game, false);
+        }
+
+        for (;;) {
+          for (let i = 0; i < 8; i++) { b.step(Game, false); }
+          // Past the top it stops being drawn at all, and comparing a sky
+          // against itself is a perfect 1:1 that looks just like a failure.
+          if (b.ycoord <= 0) { break; }
+          const r = b.size;
+          // The two ends of the gradient: its centre, and a point past the
+          // 70% stop that is still inside the balloon's shape.
+          // Only spots that are still on the canvas: by the top of the climb
+          // the upper one is off the screen, and reading past the edge gives
+          // black for both the sky and the balloon, which compares as a
+          // perfect 1:1 and looks exactly like a failure.
+          const spots = [
+            [b.xcoord + r / 3, b.ycoord - r / 3],
+            [b.xcoord - r * 0.6, b.ycoord + r * 0.3]
+          ].filter(([x, y]) => x >= 0 && y >= 0 && x < Game.width && y < Game.height);
+          if (!spots.length) { continue; }
+
+          Paint.sky(Game);
+          const sky = spots.map(([x, y]) => pixel(x, y));
+          Paint.entities(Game);
+          const drawn = spots.map(([x, y]) => pixel(x, y));
+
+          faintest = Math.min(faintest, b.alpha());
+          drawn.forEach((colour, i) => {
+            checked++;
+            const got = ratio(colour, sky[i]);
+            if (got < worst.ratio) {
+              worst = { ratio: got, level: level, alpha: b.alpha() };
+            }
+          });
+        }
+      }
+    });
+
+    return { worst, faintest, checked };
+  });
+
+  assert.ok(m.checked > 200, `only ${m.checked} pixels compared`);
+  // Three, not a shade under it. The derivation aims above 3:1 by a measured
+  // margin precisely so that this, the number on the screen, is the real one.
+  assert.ok(m.worst.ratio >= 3,
+    `a fading balloon reached ${m.worst.ratio.toFixed(2)}:1 against its sky ` +
+    `at level ${m.worst.level}, at ${m.worst.alpha.toFixed(2)} opacity`);
+  // And the bound is not vacuous: something really does get faint.
+  assert.ok(m.faintest <= 0.7,
+    `the faintest balloon anywhere was ${m.faintest.toFixed(2)} opacity`);
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the fade holds, then falls, and only ever on a fading balloon', async () => {
+  const { context, page, errors } = await newGame();
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    Game.applyLevel(20);
+
+    const climb = (b) => {
+      const out = [];
+      for (let i = 0; i <= 20; i++) {
+        b.ycoord = Game.height * (1 - i / 20);
+        out.push(b.alpha());
+      }
+      return out;
+    };
+
+    let fading = null;
+    let steady = null;
+    for (let i = 0; i < 6000 && !(fading && steady); i++) {
+      const made = Game.randomBalloon();
+      if (made.fading && !fading) { fading = made; }
+      if (!made.fading && !steady) { steady = made; }
+    }
+
+    // How much legibility the fade takes away inside one reaction window — the
+    // same 250ms the janky bound is built on. A target that dims while you are
+    // aiming at it is the same unfairness as one that moves while you aim.
+    const steps = Game.height * (1 - FADE_HOLD) / Math.abs(fading.delta);
+    const trace = climb(fading);
+    return {
+      trace,
+      solidFor: (trace.filter(a => a === 1).length - 1) / (trace.length - 1),
+      steadyTrace: climb(steady),
+      floor: fading.alphaFloor,
+      lostPerReaction: (1 - fading.alphaFloor) / steps * 7.5
+    };
+  });
+
+  assert.equal(m.trace[0], 1, 'a balloon arrives already faded');
+  assert.ok(m.solidFor >= 0.45,
+    `the fade starts ${(m.solidFor * 100).toFixed(0)}% up the climb, before the ` +
+    'balloon has given you a clear look at it');
+  m.trace.forEach((a, i) => {
+    if (i > 0) {
+      assert.ok(a <= m.trace[i - 1] + 1e-9, `the fade goes back up at step ${i}`);
+    }
+  });
+  assert.ok(Math.abs(m.trace[m.trace.length - 1] - m.floor) < 1e-9,
+    'it does not reach its floor by the top of the screen');
+  assert.deepEqual(m.steadyTrace, m.steadyTrace.map(() => 1),
+    'an ordinary balloon fades, and it should cost nothing to be one');
+  assert.ok(m.lostPerReaction < 0.1,
+    `a fading balloon loses ${m.lostPerReaction.toFixed(3)} of its opacity while ` +
+    'you are deciding where to tap');
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });

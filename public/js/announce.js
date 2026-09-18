@@ -118,6 +118,9 @@ Announce.arrivals = function (game) {
     var under = Ladder.at(game.level - 1);
     var news = "";
 
+    if (rung.fading > 0 && !(under.fading > 0)) {
+        return " Fading balloons: they thin out as they rise.";
+    }
     if (rung.janky > 0 && !(under.janky > 0)) {
         return " Janky balloons: some of them wander.";
     }

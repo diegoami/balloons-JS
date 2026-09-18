@@ -61,6 +61,11 @@ CANVASBALLOON.Balloon = function(canvasElementID, centerX, centerY, radius, colo
     // it is set, so an ordinary balloon is untouched.
     this.rimWidth = 0;
     this.rimColor = "rgba(0, 0, 0, 0.45)";
+
+    // Body, rim and tie all fade together, so the opacity belongs to the whole
+    // drawing rather than to any colour inside it. Ordinary balloons never set
+    // it and never pay for it.
+    this.alpha = 1;
 };
 
 /**
@@ -123,6 +128,11 @@ CANVASBALLOON.Balloon.prototype.draw = function() {
     // Prepare constants
 
     var gfxContext = this.gfxContext;
+    var faded = this.alpha < 1;
+    if (faded) {
+        gfxContext.save();
+        gfxContext.globalAlpha = this.alpha;
+    }
     var centerX = this.centerX;
     var centerY = this.centerY;
     var radius = this.radius;
@@ -228,4 +238,7 @@ CANVASBALLOON.Balloon.prototype.draw = function() {
     gfxContext.lineTo(centerX + 1, balloonBottomY);
     gfxContext.fill();
 
+    if (faded) {
+        gfxContext.restore();
+    }
 };

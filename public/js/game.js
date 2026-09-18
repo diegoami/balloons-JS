@@ -589,18 +589,32 @@ Game.randomBalloon = function () {
     var minRadius = Layout.GRID.minTouchTarget / 2;
     var baseRadius = Math.max(BALLOON_BASE_SIZE * this.ratio * ratioSize, minRadius);
     var randomSize = baseRadius + Math.random() * BALLOON_SIZE_SPREAD * this.ratio * ratioSize;
-    var getRandomRGB = function () { return Math.floor(Math.random() * 255); };
-    var randomColor = { r: getRandomRGB(), g: getRandomRGB(), b: getRandomRGB() };
+    // A fading balloon may not keep this one: it needs a colour with somewhere
+    // to fade to, and only the balloon knows which sky it is being drawn on.
+    var randomColor = randomBalloonColour();
     var balloonSpeed = rung.speed;
 
     // Scaling the rise by height keeps the time to cross the screen the same
     // whatever shape the window is.
     var heightScale = this.height / REFERENCE_HEIGHT;
 
+    // What is actually behind a point in the sky, so a fading balloon can work
+    // out how faint it may get without asking the screen mid-flight. Read off
+    // the painted sky and cached per level, so this is a lookup.
+    var game = this;
+    var skyAt = function (x, yFraction) {
+        return Sky.down(
+            Sky.column(game.width, game.height, game.dpr, game.level,
+                x / Math.max(1, game.width)),
+            yFraction
+        );
+    };
+
     return balloonConstructor(
         xcoord, ycoord, randomSize, randomColor, max_width, balloonSpeed, heightScale,
         Ladder.rollSkin(rung),
-        Math.random() < (rung.janky || 0)
+        Ladder.rollQuirk(rung),
+        skyAt
     );
 };
 
