@@ -26,9 +26,20 @@ var Layout = {};
  */
 Layout.INTRO_TEXT = "Pop the balloons before they get away";
 
+/**
+ * The rules, in one line, and what a run is in another.
+ *
+ * The first line replaces the break between levels. That screen stopped the
+ * game every time something new arrived to explain it, which was the right
+ * instinct and the wrong place: four verbs cover every object in the game, and
+ * a player who has read them once does not need the game to stop and say them
+ * again. "Save" does the work of two rules at once — a bird and a firefly are
+ * both things you leave alone, for different reasons that do not matter while
+ * you are playing.
+ */
 Layout.DESCRIPTION = [
-    "Twenty levels, twenty seconds each, five lives.",
-    "It gets harder as you climb — and it can be won."
+    "Pop the balloons, send back the saucers, save the birds and the fireflies.",
+    "Twenty levels, twenty seconds each, five lives. It can be won."
 ];
 
 Layout.START_TEXT = "Tap anywhere to play";

@@ -79,23 +79,11 @@ Announce.starting = function (game) {
 };
 
 /**
- * The break between levels, read out.
+ * A tab that was away, said out loud.
  *
- * The screen says this too, but a reader cannot see the balloons hanging in
- * the air waiting, so it also says that the game will carry on by itself.
+ * The screen says this too, but a reader cannot see the sky hanging frozen, so
+ * it also says the game is waiting rather than over.
  */
-Announce.levelup = function (game, awarded) {
-    var news = game.rung().news || ["", ""];
-    Announce.say(
-        "Level " + game.level + ". " + news[0] + ". " + news[1] +
-        (awarded > 0
-            ? " Extra life, " + Announce.lives(game.allowance - game.livesLost) +
-              " left to lose."
-            : "") +
-        " Resuming in a moment, or press space to go now."
-    );
-};
-
 Announce.paused = function (game) {
     Announce.say(
         "Paused at level " + game.level + ". " + game.score +

@@ -170,19 +170,7 @@ Screens.playing = {
             // the ladder climbs, so how far up you are is visible without
             // reading anything.
             game.applyLevel(climbed);
-            var awarded = game.awardLife(climbed);
-            Announce.level(game, awarded);
-
-            // A level that brings something new stops the game and says so.
-            // Eight new things across six and a half minutes is one every
-            // forty seconds, and a line in a live region that scrolls past
-            // while balloons are escaping is not how anyone learns that a
-            // balloon can take three taps.
-            if (game.rung().news) {
-                game.state.awarded = awarded;
-                game.enter("levelup");
-                return;
-            }
+            Announce.level(game, game.awardLife(climbed));
         }
 
         var escaped = game.reap();
@@ -212,50 +200,6 @@ Screens.playing = {
         Paint.sky(game);
         Paint.entities(game);
         Paint.hud(game);
-    },
-
-    menuLive: function () {
-        return false;
-    }
-};
-
-/**
- * The break between levels.
- *
- * The frame loop keeps running, because the countdown has to tick — but
- * nothing here steps the simulation, so the sky holds exactly where it was.
- * You resume into the balloons you left, under the new level's rules, which is
- * the honest version of a level change and the harder one.
- *
- * It resumes by itself. A break you have to dismiss is a break you can park
- * on, and a player who glanced away would come back to a stopped game waiting
- * for a click. The button skips the remainder; it never holds it open.
- */
-Screens.levelup = {
-    animated: true,
-
-    enter: function (game) {
-        game.pressed = null;
-        game.state.stepsLeft = Game.BREAK_STEPS;
-        Announce.levelup(game, game.state.awarded);
-    },
-
-    bind: function (game, signal) {
-        Input.resume(game, signal);
-    },
-
-    update: function (game) {
-        game.state.stepsLeft--;
-        if (game.state.stepsLeft <= 0) {
-            game.enter("playing");
-        }
-    },
-
-    draw: function (game) {
-        Paint.sky(game);
-        Paint.entities(game);
-        Paint.panel(game, game.layout.breakPanel);
-        Paint.levelup(game, game.state.stepsLeft);
     },
 
     menuLive: function () {
@@ -312,6 +256,12 @@ Screens.gameover = {
         // while nothing is listening.
         game.state.liveAt = Date.now() + Game.MENU_LOCKOUT_MS;
 
+        // And it does not sit here for ever. Left alone, the game goes back to
+        // the title and starts playing itself again — which is what the
+        // attract screen is for, and what a machine nobody is sitting at
+        // should be showing.
+        game.state.stepsHome = Game.GAMEOVER_STEPS;
+
         // A practice run is not submitted at all. A board mixing runs that
         // skipped the climb with runs that did it is worse than no board, and
         // the honest way to keep them apart is to not post one of them.
@@ -331,6 +281,11 @@ Screens.gameover = {
     update: function (game) {
         game.reap();
         game.step(true);
+
+        game.state.stepsHome--;
+        if (game.state.stepsHome <= 0) {
+            game.enter("title");
+        }
     },
 
     draw: function (game) {
