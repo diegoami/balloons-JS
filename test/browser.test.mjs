@@ -29,10 +29,11 @@ const server = http.createServer((req, res) => {
       req.on('end', () => {
         const sent = JSON.parse(body);
         apiHits[apiHits.length - 1].body = sent;
-        const { name, score, level, won } = sent;
+        const { name, score, level, won, pointer } = sent;
         const row = { name, score, score_day: '2026-09-15' };
         if (level !== undefined) { row.level = level; }
         if (won === true && level === 20) { row.won = true; }
+        if (pointer) { row.pointer = pointer; }
         const next = [...board, row]
           .sort((a, b) => b.score - a.score).slice(0, 10);
         boards.set('all', next);
@@ -3682,6 +3683,143 @@ await t('a firefly takes a tap aimed at the balloon beside it', async () => {
   assert.equal(m.drifted, 'firefly', 'a tap that drifted onto a firefly missed it entirely');
   assert.ok(m.layerAbove, 'fireflies should be drawn over balloons, so you can see one coming');
   await context.close();
+});
+
+
+await t('the game records what a run was played with, and only when it knows', async () => {
+  // The ladder assumes one pointer at about 2.1 taps a second. Two thumbs on a
+  // touchscreen doubles that -- measured, the difference between dying around
+  // level 8 and finishing every run -- so the board should not pretend the two
+  // are the same achievement.
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => {
+    const kind = () => {
+      Game.pointers = { touch: 0, mouse: 0 };
+      return Game;
+    };
+    const out = {};
+
+    out.nothingSaid = Game.pointerKind.call(kind());
+    kind(); for (let i = 0; i < 10; i++) { Game.countPointer('mouse'); }
+    out.allMouse = Game.pointerKind();
+    kind(); for (let i = 0; i < 10; i++) { Game.countPointer('touch'); }
+    out.allTouch = Game.pointerKind();
+    kind(); for (let i = 0; i < 10; i++) { Game.countPointer('pen'); }
+    out.pen = Game.pointerKind();
+
+    // A laptop with a touchscreen registers the odd stray touch. One is not
+    // a mixed run.
+    kind();
+    for (let i = 0; i < 40; i++) { Game.countPointer('mouse'); }
+    Game.countPointer('touch');
+    out.strayTouch = Game.pointerKind();
+
+    kind();
+    for (let i = 0; i < 6; i++) { Game.countPointer('mouse'); }
+    for (let i = 0; i < 4; i++) { Game.countPointer('touch'); }
+    out.reallyMixed = Game.pointerKind();
+
+    // An old browser that fires pointerdown without the field says nothing.
+    kind(); Game.countPointer(undefined);
+    out.unknown = Game.pointerKind();
+    return out;
+  });
+
+  assert.equal(m.nothingSaid, null, 'a run with no taps claimed a pointer');
+  assert.equal(m.allMouse, 'mouse');
+  assert.equal(m.allTouch, 'touch');
+  assert.equal(m.pen, 'touch', 'a pen is a pointer you aim, like a finger');
+  assert.equal(m.strayTouch, 'mouse', 'one stray touch made a whole run mixed');
+  assert.equal(m.reallyMixed, 'mixed');
+  assert.equal(m.unknown, null, 'an unknown pointer was guessed at rather than left out');
+  await context.close();
+});
+
+await t('the pointer goes to the board, and is only shown when it is not a mouse', async () => {
+  boards.clear();
+  apiHits.length = 0;
+  const { context, page, errors } = await newGame({ name: 'Toucher' });
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+  await page.evaluate(() => {
+    Game.pointers = { touch: 20, mouse: 0 };
+    Game.score = 240;
+    Game.livesLost = Game.allowance;
+  });
+  await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
+  await page.waitForTimeout(400);
+
+  const posted = apiHits.find(h => h.method === 'POST');
+  assert.ok(posted && posted.body, 'no score was posted');
+  assert.equal(posted.body.pointer, 'touch', 'the pointer was not sent with the score');
+  assert.equal(boards.get('all')[0].pointer, 'touch', 'the board did not keep it');
+
+  // A mouse is the baseline the ladder is calibrated against, so it carries no
+  // label; two thumbs is the thing worth flagging. A fifth column would not
+  // fit a phone and a marker on every row would be noise.
+  const drawn = await page.evaluate(() => [
+    Paint.reached({ level: 14, pointer: 'mouse' }),
+    Paint.reached({ level: 14, pointer: 'touch' }),
+    Paint.reached({ level: 14, pointer: 'mixed' }),
+    Paint.reached({ level: 14 }),
+    Paint.reached({ level: 20, won: true, pointer: 'touch' }),
+    Paint.reached({})
+  ]);
+  assert.deepEqual(drawn,
+    ['L14', 'L14 touch', 'L14 mixed', 'L14', 'WON touch', '\u2014']);
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+
+await t('a real touch is recorded as touch, and a real mouse as mouse', async () => {
+  // The tests above call countPointer directly, which leaves the part most
+  // likely to break silently untested: whether pointerdown fires at all on the
+  // playing screen, and whether it carries a pointerType. If it did not, every
+  // score would quietly record nothing.
+  const phone = devices['Pixel 7'];
+  const touchContext = await browser.newContext({ ...phone });
+  const touchPage = await touchContext.newPage();
+  await touchPage.addInitScript(() => {
+    try { localStorage.setItem('name', 'Toucher'); } catch (e) {}
+  });
+  await touchPage.goto('http://localhost:8899/', { waitUntil: 'load' });
+  await touchPage.waitForTimeout(400);
+  await touchPage.touchscreen.tap(180, 400);
+  await touchPage.waitForTimeout(2600);
+  for (let i = 0; i < 5; i++) {
+    await touchPage.touchscreen.tap(110 + i * 30, 500);
+  }
+  const touched = await touchPage.evaluate(() => ({
+    screen: Game.screen, pointers: Game.pointers, kind: Game.pointerKind()
+  }));
+  await touchContext.close();
+
+  const { context, page } = await newGame({ name: 'Mouser' });
+  await page.mouse.click(700, 400);
+  await page.waitForTimeout(2600);
+  for (let i = 0; i < 5; i++) {
+    await page.mouse.click(300 + i * 40, 500);
+  }
+  const moused = await page.evaluate(() => ({
+    screen: Game.screen, pointers: Game.pointers, kind: Game.pointerKind()
+  }));
+  await context.close();
+
+  assert.equal(touched.screen, 'playing', 'the phone never got into a game');
+  assert.equal(moused.screen, 'playing', 'the desktop never got into a game');
+  assert.ok(touched.pointers.touch >= 5, 'touches were not counted: ' +
+    JSON.stringify(touched.pointers));
+  assert.equal(touched.pointers.mouse, 0, 'a touch was counted as a mouse');
+  assert.equal(touched.kind, 'touch');
+  assert.ok(moused.pointers.mouse >= 5, 'clicks were not counted: ' +
+    JSON.stringify(moused.pointers));
+  assert.equal(moused.pointers.touch, 0, 'a click was counted as a touch');
+  assert.equal(moused.kind, 'mouse');
+
+  // The tap that STARTED each game is not counted: it landed on the title
+  // screen, and what the board wants is what the run was played with.
+  assert.ok(touched.pointers.touch < 7, 'the tap that started the game was counted');
 });
 
 

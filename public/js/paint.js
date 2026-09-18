@@ -153,10 +153,20 @@ Paint.description = function (game) {
 
 /** How a row says where it got to: won, a level, or nothing recorded. */
 Paint.reached = function (row) {
-    if (row["won"]) {
-        return "WON";
+    var got = row["won"] ? "WON" : (row["level"] ? "L" + row["level"] : "\u2014");
+    var pointer = row["pointer"];
+
+    // Only when it is not a mouse.
+    //
+    // A fifth column would not fit a phone, and a marker on every row would be
+    // noise. One pointer at about 2.1 taps a second is what the ladder is
+    // calibrated against, so a mouse is the baseline and needs no label; two
+    // thumbs is the thing worth flagging. Same rule as the practice warning:
+    // say it when it applies and stay quiet when it does not.
+    if (pointer === "touch" || pointer === "mixed") {
+        return got + " " + pointer;
     }
-    return row["level"] ? "L" + row["level"] : "\u2014";
+    return got;
 };
 
 /** The board, if one has arrived. Nothing is drawn before then. */

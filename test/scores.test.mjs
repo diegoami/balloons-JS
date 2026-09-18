@@ -138,6 +138,33 @@ await t('rows written before levels existed are left alone', async () => {
     'a row with no level should carry no level key at all');
 });
 
+await t('a score records what it was played with', async () => {
+  __reset();
+  await post({ name: 'Thumbs', score: 900, level: 20, pointer: 'touch' });
+  await post({ name: 'Mouser', score: 800, level: 14, pointer: 'mouse' });
+  await post({ name: 'Both', score: 700, level: 9, pointer: 'mixed' });
+  const board = await (await get()).json();
+  const by = (name) => board.find(r => r.name === name);
+  assert.equal(by('Thumbs').pointer, 'touch');
+  assert.equal(by('Mouser').pointer, 'mouse');
+  assert.equal(by('Both').pointer, 'mixed');
+});
+
+await t('a pointer we do not know is not recorded at all', async () => {
+  // Undefined rather than a fallback, like the level: a fact we cannot trust
+  // is a fact we do not have, and the board knows how to draw a row without
+  // one. Guessing "mouse" would quietly claim the harder achievement.
+  __reset();
+  for (const pointer of ['finger', 'TOUCH', '', 0, null, true, {}, undefined]) {
+    await post({ name: 'Odd', score: 10, level: 5, pointer });
+  }
+  const board = await (await get()).json();
+  assert.equal(board.length, 8, 'a bad pointer should not cost the score');
+  board.forEach((row, i) => {
+    assert.equal(row.pointer, undefined, `row ${i} kept a pointer it should not have`);
+  });
+});
+
 await t('unsupported methods are rejected with 405', async () => {
   const r = await handler(new Request('https://x/api/scores', { method: 'DELETE' }), ctx());
   assert.equal(r.status, 405);
