@@ -124,6 +124,27 @@ Announce.arrivals = function (game) {
 };
 
 /**
+ * The boss, all three moments of it.
+ *
+ * A mechanic that punishes you silently is one a player who cannot see the
+ * canvas can only learn about by losing to it — and this one has a clock, so
+ * "it is here" and "it is charging" are the whole interface for them.
+ */
+Announce.bossArrived = function (game) {
+    Announce.say("A saucer. Tap it down, quickly.");
+};
+
+Announce.bossDestroyed = function (game) {
+    Announce.say("Saucer destroyed. " + game.score + " points.");
+};
+
+Announce.bossFired = function (game) {
+    Announce.say(
+        "The saucer fired. " + game.livesLost + " of " + game.allowance + " lost."
+    );
+};
+
+/**
  * A bird was touched.
  *
  * Said every time, unlike most things in a round, because the cost is a life

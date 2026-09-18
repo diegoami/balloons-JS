@@ -64,7 +64,25 @@ const BOT = (o) => `
   const REACTION = ${o.reaction}, AIM_ERROR = ${o.aimError}, INTERVAL = ${o.interval};
   const history = [];
   const seen = new Map();
-  window.__stats = { clicks: 0, hits: 0, lifetimes: [], sky: [], byLevel: {}, birdsTouched: 0 };
+  window.__stats = {
+    clicks: 0, hits: 0, lifetimes: [], sky: [], byLevel: {},
+    birdsTouched: 0, bossesMet: 0, bossesLost: 0
+  };
+
+  // How the boss fights went. Counted by watching, because a fight settles
+  // inside the entity and the harness only sees the result.
+  let bossUp = null;
+  setInterval(() => {
+    const boss = Game.entities && Game.entities.find(e => e.kind === 'boss');
+    if (boss && boss !== bossUp) {
+      bossUp = boss;
+      window.__stats.bossesMet++;
+      bossUp.__lost = Game.livesLost;
+    } else if (!boss && bossUp) {
+      if (Game.livesLost > bossUp.__lost) { window.__stats.bossesLost++; }
+      bossUp = null;
+    }
+  }, 40);
 
   setInterval(() => {
     if (!Game.entities) return;
@@ -112,6 +130,27 @@ const BOT = (o) => `
     for (let i = history.length - 1; i >= 0; i--) {
       if (history[i].t <= cutoff) { memory = history[i]; break; }
     }
+
+    // A boss first, and everything else second.
+    //
+    // It is the only thing in the sky with a deadline: five taps in three
+    // seconds, and the life is gone whatever the balloons were doing. A
+    // harness that kept popping balloons through a boss fight would report
+    // that the boss always wins, which would say more about the bot than the
+    // game -- the same trap birds set, one level earlier.
+    const boss = Game.entities.find(e => e.kind === 'boss');
+    if (boss && boss.taps > 0) {
+      window.__stats.clicks++;
+      const bossBefore = Game.score;
+      Game.canvas.dispatchEvent(new MouseEvent('click', {
+        clientX: boss.xcoord + (Math.random() * 2 - 1) * AIM_ERROR,
+        clientY: boss.ycoord + (Math.random() * 2 - 1) * AIM_ERROR,
+        bubbles: true
+      }));
+      if (Game.score > bossBefore) { window.__stats.hits++; }
+      return;
+    }
+
     if (!memory || !memory.balloons.length) return;
 
     // Go for whatever looked closest to escaping, a reaction time ago -- but
@@ -205,6 +244,8 @@ async function playGame(index) {
       score: Game.score,
       lost: Game.livesLost,
       birdsTouched: window.__stats.birdsTouched,
+      bossesMet: window.__stats.bossesMet,
+      bossesLost: window.__stats.bossesLost,
       // The allowance rather than the constant: a run that reached 12, 15 or 18
       // was handed a life there, and a table saying 5 would be hiding it.
       lives: Game.allowance,
@@ -242,7 +283,7 @@ console.log(
   `${Math.round(1000 / OPTIONS.interval * 10) / 10} clicks/sec ` +
   `· ${OPTIONS.width}×${OPTIONS.height} · ${OPTIONS.capMs / 1000}s cap\n`
 );
-console.log('run   lives  survived   points  pops/tap   sky    lost  birds  rung   outcome');
+console.log('run   lives  survived   points  pops/tap   sky    lost  birds  boss     rung   outcome');
 
 const mean = list => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
 
@@ -257,6 +298,7 @@ settled.forEach(r => {
     round(mean(r.stats.sky)).padEnd(6),
     String(r.lost).padEnd(5),
     String(r.birdsTouched).padEnd(6),
+    ((r.bossesMet - r.bossesLost) + '/' + r.bossesMet).padEnd(8),
     String(r.rung).padEnd(6),
     r.won ? 'WON' : (r.ended ? 'died' : 'survived the cap')
   );

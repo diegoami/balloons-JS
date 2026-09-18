@@ -43,6 +43,11 @@ Sky.PALETTES = {
         buttonDisabledFill: "rgba(255, 255, 255, 0.05)",
         buttonDisabledBorder: "rgba(255, 255, 255, 0.16)",
         inkDisabled: "rgba(255, 255, 255, 0.34)",
+        bossHull: "#3A4A5E",
+        bossDome: "#6E7C90",
+        bossLight: "#FFD98A",
+        bossBeam: "rgba(255, 120, 60, 0.75)",
+        bossHot: "#C4543A",
         birdInk: "#16324A",
         stars: 0
     },
@@ -62,6 +67,11 @@ Sky.PALETTES = {
         buttonDisabledFill: "rgba(255, 255, 255, 0.05)",
         buttonDisabledBorder: "rgba(255, 255, 255, 0.16)",
         inkDisabled: "rgba(255, 255, 255, 0.34)",
+        bossHull: "#3B4759",
+        bossDome: "#6D788B",
+        bossLight: "#FFCE73",
+        bossBeam: "rgba(255, 120, 60, 0.75)",
+        bossHot: "#C4543A",
         birdInk: "#17304C",
         stars: 0
     },
@@ -81,6 +91,11 @@ Sky.PALETTES = {
         buttonDisabledFill: "rgba(255, 255, 255, 0.05)",
         buttonDisabledBorder: "rgba(255, 255, 255, 0.16)",
         inkDisabled: "rgba(255, 255, 255, 0.34)",
+        bossHull: "#2F2338",
+        bossDome: "#5A4668",
+        bossLight: "#FFB870",
+        bossBeam: "rgba(255, 150, 90, 0.8)",
+        bossHot: "#D4603C",
         birdInk: "#2A1A33",
         stars: 0
     },
@@ -100,6 +115,11 @@ Sky.PALETTES = {
         buttonDisabledFill: "rgba(255, 255, 255, 0.05)",
         buttonDisabledBorder: "rgba(255, 255, 255, 0.16)",
         inkDisabled: "rgba(255, 255, 255, 0.34)",
+        bossHull: "#3A4566",
+        bossDome: "#66739B",
+        bossLight: "#8FB6FF",
+        bossBeam: "rgba(150, 190, 255, 0.8)",
+        bossHot: "#6E86C8",
         birdInk: "#8FA4CC",
         stars: 90
     }
@@ -181,7 +201,8 @@ function mixSun(from, to, t) {
 var MIXED_COLOURS = [
     "top", "mid", "horizon", "scrim", "panel", "ink", "inkSoft", "accent",
     "onAccent", "buttonFill", "buttonBorder", "buttonPressOverlay",
-    "buttonDisabledFill", "buttonDisabledBorder", "inkDisabled", "birdInk"
+    "buttonDisabledFill", "buttonDisabledBorder", "inkDisabled", "birdInk",
+    "bossHull", "bossDome", "bossLight", "bossBeam", "bossHot"
 ];
 
 /** One palette a fraction of the way to another. */

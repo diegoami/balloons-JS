@@ -482,6 +482,9 @@ Game.resetRound = function () {
     // too, and a counter named after one of the two things that fill it is the
     // kind of name this project keeps having to fix.
     this.livesLost = 0;
+    // Far enough back that the first boss is only waiting on the sky going
+    // quiet, not on a cooldown left over from nothing.
+    this.lastBoss = -Infinity;
     this.allowance = Game.LIVES;
     this.won = false;
     this.end_time = null;
@@ -546,6 +549,49 @@ Game.spawnBalloon = function () {
     if (Math.random() < frequency && up < MAX_BALLOONS) {
         this.add(this.randomBalloon());
     }
+};
+
+/**
+ * Maybe sends in a saucer.
+ *
+ * Two conditions, both from the ladder: the sky has to be down to `bossAt`
+ * balloons or fewer, and `bossEvery` steps must have passed since the last
+ * fight settled. One boss at a time.
+ */
+Game.spawnBoss = function () {
+    var rung = this.rung();
+    if (!rung.bossAt || this.countOf("boss") > 0) {
+        return;
+    }
+    if (this.countOf("balloon") > rung.bossAt) {
+        return;
+    }
+    if (this.ticks - this.lastBoss < rung.bossEvery) {
+        return;
+    }
+
+    var radius = Math.max(BOSS_MIN_RADIUS, BOSS_BASE_SIZE * this.ratio);
+    this.add(bossConstructor(
+        this.width / 2,
+        // High, so the fight happens over the balloons rather than in them —
+        // but not so high that the fuse ring drawn around it disappears under
+        // the HUD band.
+        Math.max(radius * 1.6, this.height * 0.26),
+        radius,
+        BOSS_DRIFT * this.ratio * (Math.random() < 0.5 ? 1 : -1),
+        this.width
+    ));
+    Announce.bossArrived(this);
+};
+
+/**
+ * A fight ended, however it ended.
+ *
+ * The cooldown starts here rather than when the boss arrived, so a long fight
+ * does not eat into the gap before the next one.
+ */
+Game.bossSettled = function () {
+    this.lastBoss = this.ticks;
 };
 
 /**
