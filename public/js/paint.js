@@ -422,29 +422,80 @@ Paint.entities = function (game) {
     }
 };
 
-Paint.hud = function (game) {
-    var hud = game.layout.hud;
+/**
+ * The score, the level and the clock, each on a ground of its own.
+ *
+ * Measured rather than eyeballed: the clock is drawn in the accent colour,
+ * which came out at 3.2:1 against a bright morning sky. Everything else in the
+ * game got a ground; so does this.
+ *
+ * What it does NOT get is a ground across the whole width. The HUD is drawn
+ * over the play area, so a bar of scrim along the top of the screen is a lid
+ * over the top of the game: balloons rose behind it at about 1.4:1 against the
+ * sky and escaped through a strip nobody could see into. Three chips the size
+ * of the words leave the rest of the row as clear sky.
+ */
+Paint.hudRuns = function (game) {
+    return [
+        { text: game.score + " points, " + game.livesLost + " of " +
+            game.allowance + " lost", x: game.layout.hud.caught,
+          ink: game.palette.ink },
+        { text: "LEVEL " + game.level, x: game.layout.hud.level,
+          ink: game.palette.inkSoft },
+        { text: game.elapsed() + "s", x: game.layout.hud.time,
+          ink: game.palette.accent }
+    ];
+};
+
+/**
+ * The chips the HUD text stands on, and nothing else.
+ *
+ * Its own routine so the contrast test can measure the ground the game really
+ * draws rather than a copy of it kept in step by hand — the old test rebuilt
+ * the band itself, which is a test of the test.
+ */
+Paint.hudGround = function (game) {
+    var plate = game.layout.hud.plate;
     var ctx = game.ctx;
+    var grounds = [];
 
-    // Measured rather than eyeballed: the clock is drawn in the accent colour,
-    // which came out at 3.2:1 against a bright morning sky. Everything else in
-    // the game got a ground; so does this.
-    var band = ctx.createLinearGradient(0, 0, 0, hud.band.height);
-    band.addColorStop(0, game.palette.panel);
-    band.addColorStop(hud.band.solid, game.palette.panel);
-    band.addColorStop(1, Sky.transparent(game.palette.panel));
-    ctx.fillStyle = band;
-    ctx.fillRect(0, 0, game.width, hud.band.height);
+    ctx.font = game.layout.fonts.hud;
 
-    game.ctx.font = game.layout.fonts.hud;
-    game.ctx.fillStyle = game.palette.ink;
-    game.ctx.fillText(
-        game.score + " points, " + game.livesLost + " of " +
-            game.allowance + " lost",
-        hud.caught, hud.y
-    );
-    game.ctx.fillStyle = game.palette.inkSoft;
-    game.ctx.fillText("LEVEL " + game.level, hud.level, hud.y);
-    game.ctx.fillStyle = game.palette.accent;
-    game.ctx.fillText(game.elapsed() + "s", hud.time, hud.y);
+    // Chips that touch become one chip. On a narrow screen the three runs
+    // crowd together, and three overlapping rounded rectangles read as a
+    // mistake where one bar reads as a decision — so a phone gets the old bar
+    // back, arrived at rather than special-cased.
+    Paint.hudRuns(game).forEach(function (run) {
+        var box = {
+            x: run.x - plate.padX,
+            y: plate.y,
+            width: ctx.measureText(run.text).width + plate.padX * 2,
+            height: plate.height
+        };
+        var last = grounds[grounds.length - 1];
+        if (last && box.x <= last.x + last.width + plate.padX) {
+            last.width = Math.max(last.x + last.width, box.x + box.width) - last.x;
+            return;
+        }
+        grounds.push(box);
+    });
+
+    ctx.fillStyle = game.palette.panel;
+    grounds.forEach(function (box) {
+        Layout.roundedRect(ctx, box, plate.radius);
+        ctx.fill();
+    });
+
+    return grounds;
+};
+
+Paint.hud = function (game) {
+    Paint.hudGround(game);
+
+    var ctx = game.ctx;
+    ctx.font = game.layout.fonts.hud;
+    Paint.hudRuns(game).forEach(function (run) {
+        ctx.fillStyle = run.ink;
+        ctx.fillText(run.text, run.x, game.layout.hud.y);
+    });
 };

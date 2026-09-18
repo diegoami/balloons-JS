@@ -695,8 +695,8 @@ Game.spawnBoss = function () {
     this.add(bossConstructor(
         this.width / 2,
         // High, so the fight happens over the balloons rather than in them —
-        // but not so high that the fuse ring drawn around it disappears under
-        // the HUD band.
+        // but not so high that the fuse ring drawn around it disappears behind
+        // the HUD.
         Math.max(radius * 1.6, this.height * 0.26),
         radius,
         BOSS_DRIFT * this.ratio * (Math.random() < 0.5 ? 1 : -1),
