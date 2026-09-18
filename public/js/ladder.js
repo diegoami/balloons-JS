@@ -33,6 +33,11 @@
  * is the emptiest the sky ever gets — which is the trigger condition — and you
  * would fight two back to back.
  *
+ * `janky` is the share of balloons that wander sideways as they rise. They
+ * cost no extra taps, so they do not move the demand sum -- what they cost is
+ * hit rate, which is the supply side. How far one may wander in a reaction
+ * window is bounded by its own radius; see gameballoons.js.
+ *
  * `fireflies` is how many hover at that level. They are never removed and
  * never reach the top, so this is a population rather than a rate: the
  * spawner tops it up and that is all. They cost no lives and no taps of
@@ -46,9 +51,9 @@
  * `news` is a headline and a line of explanation for the thing this level
  * brings, and setting it is what makes the game BREAK before the level starts
  * (screens.js). Only the levels whose feature exists carry one: announcing
- * janky balloons at 12 before they exist would be a lie, so 12, 14 and 18
- * get theirs when their phase lands. Eight breaks in a winning run is
- * the intent; five of them work today.
+ * fading balloons at 14 before they exist would be a lie, so 14 and 18 get
+ * theirs when their phase lands. Eight breaks in a winning run is
+ * the intent; six of them work today.
  *
  * THE ARITHMETIC THAT MATTERS
  *
@@ -112,16 +117,17 @@ Ladder.LEVELS = [
     { level: 10, speed:  7.9, frequency: 0.0686, size: 0.73, reinforced: 0.25, armoured: 0.08,
       news: ["Armoured balloons", "Three taps. Worth six points."], birds: 0.005, bossAt: 3, bossEvery: 460 },
     { level: 11, speed:  8.4, frequency: 0.0680, size: 0.70, reinforced: 0.25, armoured: 0.10, birds: 0.006, bossAt: 3, bossEvery: 440 },
-    { level: 12, speed:  8.9, frequency: 0.0675, size: 0.68, reinforced: 0.25, armoured: 0.12, life: 1, birds: 0.006, bossAt: 4, bossEvery: 420 },
-    { level: 13, speed:  9.4, frequency: 0.0656, size: 0.66, reinforced: 0.26, armoured: 0.13, birds: 0.007, bossAt: 4, bossEvery: 400 },
-    { level: 14, speed:  9.9, frequency: 0.0609, size: 0.64, reinforced: 0.26, armoured: 0.14, birds: 0.007, bossAt: 4, bossEvery: 390 },
-    { level: 15, speed: 10.4, frequency: 0.0587, size: 0.62, reinforced: 0.27, armoured: 0.15, life: 1, birds: 0.008, bossAt: 5, bossEvery: 380 },
+    { level: 12, speed:  8.9, frequency: 0.0675, size: 0.68, reinforced: 0.25, armoured: 0.12, life: 1, birds: 0.006, bossAt: 4, bossEvery: 420, janky: 0.20,
+      news: ["Janky balloons", "Some of them wander as they rise. They are bigger, too."] },
+    { level: 13, speed:  9.4, frequency: 0.0656, size: 0.66, reinforced: 0.26, armoured: 0.13, birds: 0.007, bossAt: 4, bossEvery: 400, janky: 0.24 },
+    { level: 14, speed:  9.9, frequency: 0.0609, size: 0.64, reinforced: 0.26, armoured: 0.14, birds: 0.007, bossAt: 4, bossEvery: 390, janky: 0.28 },
+    { level: 15, speed: 10.4, frequency: 0.0587, size: 0.62, reinforced: 0.27, armoured: 0.15, life: 1, birds: 0.008, bossAt: 5, bossEvery: 380, janky: 0.30 },
     { level: 16, speed: 10.9, frequency: 0.0565, size: 0.60, reinforced: 0.27, armoured: 0.16, birds: 0.008, bossAt: 5, bossEvery: 370, fireflies: 2,
-      news: ["Fireflies", "Pretty, harmless, and in the way. Taps land on them."] },
-    { level: 17, speed: 11.4, frequency: 0.0543, size: 0.58, reinforced: 0.28, armoured: 0.17, birds: 0.009, bossAt: 5, bossEvery: 360, fireflies: 3 },
-    { level: 18, speed: 11.9, frequency: 0.0521, size: 0.56, reinforced: 0.28, armoured: 0.18, life: 1, birds: 0.009, bossAt: 6, bossEvery: 340, fireflies: 3 },
-    { level: 19, speed: 12.4, frequency: 0.0500, size: 0.54, reinforced: 0.30, armoured: 0.19, birds: 0.010, bossAt: 6, bossEvery: 320, fireflies: 4 },
-    { level: 20, speed: 13.0, frequency: 0.0478, size: 0.52, reinforced: 0.30, armoured: 0.20, birds: 0.010, bossAt: 6, bossEvery: 300, fireflies: 4 }
+      news: ["Fireflies", "Pretty, harmless, and in the way. Taps land on them."], janky: 0.32 },
+    { level: 17, speed: 11.4, frequency: 0.0543, size: 0.58, reinforced: 0.28, armoured: 0.17, birds: 0.009, bossAt: 5, bossEvery: 360, fireflies: 3, janky: 0.34 },
+    { level: 18, speed: 11.9, frequency: 0.0521, size: 0.56, reinforced: 0.28, armoured: 0.18, life: 1, birds: 0.009, bossAt: 6, bossEvery: 340, fireflies: 3, janky: 0.36 },
+    { level: 19, speed: 12.4, frequency: 0.0500, size: 0.54, reinforced: 0.30, armoured: 0.19, birds: 0.010, bossAt: 6, bossEvery: 320, fireflies: 4, janky: 0.38 },
+    { level: 20, speed: 13.0, frequency: 0.0478, size: 0.52, reinforced: 0.30, armoured: 0.20, birds: 0.010, bossAt: 6, bossEvery: 300, fireflies: 4, janky: 0.40 }
 ];
 
 /**
