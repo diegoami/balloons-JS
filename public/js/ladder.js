@@ -24,6 +24,9 @@
  *
  * `life` is a life awarded on arriving at that level.
  *
+ * `bossMark` is which saucer turns up: the one from level 6, or the mark II
+ * from 18. What each is made of lives in Ladder.SAUCERS.
+ *
  * `bossAt` is how few balloons have to be up before a saucer arrives, and
  * `bossEvery` the steps that must pass since the last one settled. Both from
  * level 6. The threshold RISES as the ladder climbs: clearing down to one
@@ -58,10 +61,8 @@
  *
  * `news` is a headline and a line of explanation for the thing this level
  * brings, and setting it is what makes the game BREAK before the level starts
- * (screens.js). Only the levels whose feature exists carry one: announcing the
- * second saucer at 18 before it exists would be a lie, so 18 gets its own when
- * that phase lands. Eight breaks in a winning run is the intent; seven of them
- * work today.
+ * (screens.js). Every level that brings something now carries one: eight
+ * breaks in a winning run, which was the intent.
  *
  * THE ARITHMETIC THAT MATTERS
  *
@@ -79,9 +80,11 @@
  * and not softness: levels 11 to 20 are meant to get harder by taking taps
  * AWAY rather than asking for more of them — a balloon that jinks lowers your
  * hit rate, one that fades costs you time to find it, a firefly eats whole
- * taps, a boss takes a burst. All but the second saucer are built now, which
- * is why the top of this table reads gentler than it plays. The sky thins out
- * to pay for them, exactly as it already thins where thick balloons arrive.
+ * taps, a boss takes a burst. All of them are built now, which is why the top
+ * of this table reads gentler than it plays. The sky thins out to pay for
+ * them, exactly as it already thins where thick balloons arrive -- and levels
+ * 18 to 20 thin again for the mark II saucer, which asks for eight taps where
+ * the first asked five.
  *
  * The budget is small enough to write down. Five lives, ten rungs and about
  * 1.5 taps per balloon means the whole back half can afford some seven and a
@@ -99,7 +102,7 @@ var Ladder = {};
  * `reinforced` and `armoured` are the share of balloons that take two and three
  * taps; they arrive at 4 and 10. Between them sit the boss at 6 and birds at 8,
  * and above them janky balloons at 12, fading ones at 14, fireflies at 16 and
- * the second boss at 18 — each its own column as it is built. Levels 1 to 3
+ * the mark II saucer at 18 — each its own column. Levels 1 to 3
  * teach the game, the odd levels tighten what you already have, and 19 and 20
  * add nothing new. They are the exam.
  *
@@ -140,9 +143,10 @@ Ladder.LEVELS = [
     { level: 16, speed: 10.9, frequency: 0.0565, size: 0.60, reinforced: 0.27, armoured: 0.16, birds: 0.008, bossAt: 5, bossEvery: 370, fireflies: 2,
       news: ["Fireflies", "Pretty, harmless, and in the way. Taps land on them."], janky: 0.28, fading: 0.16 },
     { level: 17, speed: 11.4, frequency: 0.0543, size: 0.58, reinforced: 0.28, armoured: 0.17, birds: 0.009, bossAt: 5, bossEvery: 360, fireflies: 3, janky: 0.29, fading: 0.18 },
-    { level: 18, speed: 11.9, frequency: 0.0521, size: 0.56, reinforced: 0.28, armoured: 0.18, life: 1, birds: 0.009, bossAt: 6, bossEvery: 340, fireflies: 3, janky: 0.30, fading: 0.20 },
-    { level: 19, speed: 12.4, frequency: 0.0500, size: 0.54, reinforced: 0.30, armoured: 0.19, birds: 0.010, bossAt: 6, bossEvery: 320, fireflies: 4, janky: 0.31, fading: 0.22 },
-    { level: 20, speed: 13.0, frequency: 0.0478, size: 0.52, reinforced: 0.30, armoured: 0.20, birds: 0.010, bossAt: 6, bossEvery: 300, fireflies: 4, janky: 0.32, fading: 0.24 }
+    { level: 18, speed: 11.9, frequency: 0.0521, size: 0.56, reinforced: 0.28, armoured: 0.18, life: 1, birds: 0.009, bossAt: 6, bossEvery: 300, bossMark: 2, fireflies: 3, janky: 0.30, fading: 0.20,
+      news: ["A bigger saucer", "Eight taps, and it will not hold still."] },
+    { level: 19, speed: 12.4, frequency: 0.0500, size: 0.54, reinforced: 0.30, armoured: 0.19, birds: 0.010, bossAt: 6, bossEvery: 285, bossMark: 2, fireflies: 4, janky: 0.31, fading: 0.22 },
+    { level: 20, speed: 13.0, frequency: 0.0478, size: 0.52, reinforced: 0.30, armoured: 0.20, birds: 0.010, bossAt: 6, bossEvery: 270, bossMark: 2, fireflies: 4, janky: 0.32, fading: 0.24 }
 ];
 
 /**
@@ -160,6 +164,40 @@ Ladder.SKINS = [
     { skin: 2, size: 1.15, speed: 0.72, points: 3, rim: 0.055 },
     { skin: 3, size: 1.30, speed: 0.55, points: 6, rim: 0.085 }
 ];
+
+/**
+ * The two saucers.
+ *
+ * `taps` and `fuse` are the fight. They move TOGETHER on purpose: 5 taps in 3
+ * seconds and 8 in 4.8 both ask for 1.67 taps a second, against the 2.1 a
+ * player supplies. The mark II is not harder per second -- a fight that asked
+ * for more than a person can produce would not be a fight -- it is harder
+ * because it is longer, because it moves, and because every one of those 4.8
+ * seconds is a second the sky is going unwatched.
+ *
+ * `points` keeps the rate honest: 2.4 a tap for both, the same deal an
+ * armoured balloon offers. A tougher boss worth the same as an easier one is
+ * a thing players learn to walk away from.
+ *
+ * `reach` is how far it may get from where you aimed while you are deciding,
+ * in its own radii, and it is the same bound a janky balloon lives under. Half
+ * a radius is the limit of what is fair; the first saucer's existing drift
+ * works out at about a quarter, so it keeps that and the mark II takes the
+ * whole allowance. `turns` is how often it picks a fresh heading -- never, for
+ * the first one, which only turns when it meets a wall.
+ *
+ * `size` and `wander` are what makes it read as a different machine: bigger,
+ * and free to move up and down as well as across.
+ */
+Ladder.SAUCERS = [
+    { mark: 1, taps: 5, fuse: 90,  points: 12, reach: 0.25, turns: 0,  size: 1.00, wander: 0.00 },
+    { mark: 2, taps: 8, fuse: 144, points: 20, reach: 0.50, turns: 15, size: 1.25, wander: 0.55 }
+];
+
+/** The saucer a level sends, clamped so an unset column means the first one. */
+Ladder.saucer = function (mark) {
+    return Ladder.SAUCERS[Math.max(1, Math.min(Ladder.SAUCERS.length, mark || 1)) - 1];
+};
 
 Ladder.skin = function (n) {
     return Ladder.SKINS[Math.max(1, Math.min(Ladder.SKINS.length, n)) - 1];
@@ -233,6 +271,24 @@ Ladder.starts = function () {
         levels.push(Ladder.MAX);
     }
     return levels;
+};
+
+/**
+ * Lives a run has been handed by the time it is playing a level.
+ *
+ * Only the levels BELOW it plus itself, because a life is awarded on arriving
+ * and arriving is what a practice run skips. A run that opens at 18 is meant
+ * to be level 18 as level 18 is played, and level 18 as it is played has
+ * collected three extra lives on the way -- so practising it with five was
+ * practising a level the game does not contain.
+ */
+Ladder.livesBy = function (level) {
+    var n = Math.max(1, Math.min(Ladder.MAX, Math.round(level || 1)));
+    var given = 0;
+    for (var i = 0; i < n; i++) {
+        given += Ladder.LEVELS[i].life || 0;
+    }
+    return given;
 };
 
 /** The row for a level, clamped at both ends. */

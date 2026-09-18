@@ -31,6 +31,17 @@
 var Entities = {};
 
 /**
+ * A person's reaction, in steps: 250ms at thirty steps a second.
+ *
+ * It lives here because it is not one kind's business any more. It is the
+ * window a janky balloon's drift is bounded by, the window the second saucer's
+ * wandering is bounded by, the number the playtest bot reacts in, and the one
+ * the fairness argument for birds rests on. Anything in the sky that moves
+ * while you are deciding where to tap is measured against this.
+ */
+var REACTION_STEPS = 7.5;
+
+/**
  * Draw order. The numbers are spaced so a new kind can slot between two
  * existing ones without renumbering the rest, and named here rather than left
  * as magic numbers in four different files.

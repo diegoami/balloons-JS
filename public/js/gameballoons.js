@@ -6,13 +6,11 @@ var ESCAPE_COORDS = -10;
 var HIT_FLASH_STEPS = 5;
 
 /**
- * A person's reaction, in steps: 250ms at thirty steps a second.
- *
- * This is the window a janky balloon's drift is measured against. It is the
- * same number the playtest harness uses for the bot, and the same one the
- * fairness argument for birds rests on.
+ * How far a janky balloon may get from where you aimed, in its own radii,
+ * while you are deciding: see REACTION_STEPS in entities.js. Half a radius is
+ * the room that leaves.
  */
-var JANKY_REACTION_STEPS = 7.5;
+var JANKY_REACH = 0.5;
 
 /** Steps between one sideways drift and the next. */
 var JANKY_TURN_STEPS = 22;
@@ -244,14 +242,15 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
      * tapping — seven and a half steps. If the balloon leaves where you aimed
      * inside that window, the tap was never yours to land and the balloon
      * reads as cheating rather than as difficult. Half a radius is the room
-     * that leaves, so the bound is `radius / 2 / 7.5` — and it scales with the
-     * balloon, because a bigger target honestly tolerates more movement.
+     * that leaves, so the bound is `radius * JANKY_REACH / REACTION_STEPS` —
+     * and it scales with the balloon, because a bigger target honestly
+     * tolerates more movement.
      *
      * At the 22px touch floor that is 1.5px a step, about 44 a second: on a
      * 390px phone, a tenth of the screen's width per second. Visibly
      * squirrelly, still hittable.
      */
-    that.jinkMax = that.size * 0.5 / JANKY_REACTION_STEPS;
+    that.jinkMax = that.size * JANKY_REACH / REACTION_STEPS;
 
     /**
      * How faint this one is right now: 1 everywhere, unless it fades.

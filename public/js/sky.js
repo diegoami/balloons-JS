@@ -356,6 +356,11 @@ Sky.faintestOver = function (fg, bg, wanted) {
  *
  * A column per thirty-second of the width, taken once and kept with the sky it
  * came from.
+ *
+ * At night the column can land on a STAR, which is a single bright pixel. That
+ * makes the floor it feeds conservative -- a balloon derived against a star
+ * has to stay more solid than it needed to -- and conservative is the harmless
+ * direction. It is worth knowing about when reading a floor that looks high.
  */
 Sky.COLUMN_BUCKETS = 32;
 

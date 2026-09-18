@@ -56,7 +56,16 @@ const OPTIONS = {
   // Pointing is not pixel perfect.
   aimError: Number(flag('aim', 12)),
   // Nobody sustains more than roughly 3.5 aimed clicks a second.
-  interval: Number(flag('interval', 280))
+  interval: Number(flag('interval', 280)),
+  // Which rung to start on, the way the level chip does.
+  //
+  // A feature that arrives at 18 cannot be measured by a bot that dies at 11,
+  // and at a thumb's aim error this one does. Starting partway up is the only
+  // way to put a number on the top of the ladder at all -- but it is a
+  // different measurement from a whole run and it is labelled as one. It has
+  // the lives a run that climbed there would have, and none of the escapes
+  // that run would have already spent.
+  from: Number(flag('from', 1))
 };
 
 const BOT = (o) => `
@@ -133,11 +142,17 @@ const BOT = (o) => `
 
     // A boss first, and everything else second.
     //
-    // It is the only thing in the sky with a deadline: five taps in three
-    // seconds, and the life is gone whatever the balloons were doing. A
-    // harness that kept popping balloons through a boss fight would report
-    // that the boss always wins, which would say more about the bot than the
-    // game -- the same trap birds set, one level earlier.
+    // It is the only thing in the sky with a deadline -- five taps in three
+    // seconds, or eight in five from level 18 -- and the life is gone whatever
+    // the balloons were doing. A harness that kept popping balloons through a
+    // boss fight would report that the boss always wins, which would say more
+    // about the bot than the game: the same trap birds set, one level earlier.
+    //
+    // What this DOES measure of the mark II is the part that matters to the
+    // ladder: eight taps instead of five, and five seconds of unwatched sky
+    // instead of three. What it does not measure is the wandering, because it
+    // aims where the saucer is rather than where it was when a person would
+    // have started moving.
     const boss = Game.entities.find(e => e.kind === 'boss');
     if (boss && boss.taps > 0) {
       window.__stats.clicks++;
@@ -241,6 +256,9 @@ async function playGame(index) {
     await page.goto(`http://localhost:${OPTIONS.port}/`, { waitUntil: 'load' });
     await page.waitForTimeout(400);
     await page.evaluate(BOT(OPTIONS));
+    if (OPTIONS.from > 1) {
+      await page.evaluate((n) => { Game.startLevel = n; }, OPTIONS.from);
+    }
     await page.keyboard.press(' ');
     await page.waitForTimeout(2300); // the countdown
 
@@ -288,6 +306,9 @@ const round = n => (Math.round(n * 10) / 10).toString();
 const all = settled;
 
 console.log(
+  (OPTIONS.from > 1
+    ? `\nstarting at level ${OPTIONS.from}: a practice run, not a whole one\n`
+    : '') +
   `\nbot: ${OPTIONS.reaction}ms reaction, ±${OPTIONS.aimError}px aim, ` +
   `${Math.round(1000 / OPTIONS.interval * 10) / 10} clicks/sec ` +
   `· ${OPTIONS.width}×${OPTIONS.height} · ${OPTIONS.capMs / 1000}s cap\n`
