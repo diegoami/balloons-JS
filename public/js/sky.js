@@ -43,6 +43,7 @@ Sky.PALETTES = {
         buttonDisabledFill: "rgba(255, 255, 255, 0.05)",
         buttonDisabledBorder: "rgba(255, 255, 255, 0.16)",
         inkDisabled: "rgba(255, 255, 255, 0.34)",
+        birdInk: "#16324A",
         stars: 0
     },
     afternoon: {
@@ -61,6 +62,7 @@ Sky.PALETTES = {
         buttonDisabledFill: "rgba(255, 255, 255, 0.05)",
         buttonDisabledBorder: "rgba(255, 255, 255, 0.16)",
         inkDisabled: "rgba(255, 255, 255, 0.34)",
+        birdInk: "#17304C",
         stars: 0
     },
     dusk: {
@@ -79,6 +81,7 @@ Sky.PALETTES = {
         buttonDisabledFill: "rgba(255, 255, 255, 0.05)",
         buttonDisabledBorder: "rgba(255, 255, 255, 0.16)",
         inkDisabled: "rgba(255, 255, 255, 0.34)",
+        birdInk: "#2A1A33",
         stars: 0
     },
     night: {
@@ -97,6 +100,7 @@ Sky.PALETTES = {
         buttonDisabledFill: "rgba(255, 255, 255, 0.05)",
         buttonDisabledBorder: "rgba(255, 255, 255, 0.16)",
         inkDisabled: "rgba(255, 255, 255, 0.34)",
+        birdInk: "#8FA4CC",
         stars: 90
     }
 };
@@ -177,7 +181,7 @@ function mixSun(from, to, t) {
 var MIXED_COLOURS = [
     "top", "mid", "horizon", "scrim", "panel", "ink", "inkSoft", "accent",
     "onAccent", "buttonFill", "buttonBorder", "buttonPressOverlay",
-    "buttonDisabledFill", "buttonDisabledBorder", "inkDisabled"
+    "buttonDisabledFill", "buttonDisabledBorder", "inkDisabled", "birdInk"
 ];
 
 /** One palette a fraction of the way to another. */

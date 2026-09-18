@@ -4,6 +4,10 @@
 var BALLOON_BASE_SIZE = 24;
 var BALLOON_SIZE_SPREAD = 50;
 
+/** A bird's body radius and its speed across the screen, before scaling. */
+var BIRD_BASE_SIZE = 13;
+var BIRD_SPEED = 7;
+
 /**
  * Balloon speed is expressed for a screen this tall and scaled from there.
  *
@@ -473,7 +477,11 @@ Game.resetRound = function () {
     this.pressed = null;
     this.entities = [];
     this.score = 0;
-    this.lostBalloons = 0;
+    // Lives spent, not balloons escaped. It was `lostBalloons` while a balloon
+    // getting away was the only way to spend one; touching a bird costs one
+    // too, and a counter named after one of the two things that fill it is the
+    // kind of name this project keeps having to fix.
+    this.livesLost = 0;
     this.allowance = Game.LIVES;
     this.won = false;
     this.end_time = null;
@@ -538,6 +546,39 @@ Game.spawnBalloon = function () {
     if (Math.random() < frequency && up < MAX_BALLOONS) {
         this.add(this.randomBalloon());
     }
+};
+
+/**
+ * Maybe releases one bird.
+ *
+ * It starts a full wingspan outside the canvas and flies in, so it is always
+ * visible for a beat before it reaches the crowded middle — a bird appearing
+ * on top of a point the player had already committed to would be a penalty
+ * for something nobody could avoid.
+ *
+ * Its height is the middle band of the sky: below the HUD, and above the strip
+ * at the bottom where balloons are released, so it crosses the crowd rather
+ * than the queue.
+ */
+Game.spawnBird = function () {
+    var chance = this.rung().birds || 0;
+    if (chance <= 0 || Math.random() >= chance) {
+        return;
+    }
+
+    var radius = Math.max(BIRD_MIN_RADIUS, BIRD_BASE_SIZE * this.ratio);
+    var span = radius * BIRD_SPAN;
+    var fromLeft = Math.random() < 0.5;
+    var band = this.height * 0.55;
+    var top = this.height * 0.18;
+
+    this.add(birdConstructor(
+        fromLeft ? -span : this.width + span,
+        top + Math.random() * band,
+        radius,
+        BIRD_SPEED * this.ratio,
+        fromLeft
+    ));
 };
 
 /**

@@ -343,7 +343,7 @@ await t('game over submits the score and shows the leaderboard', async () => {
   // Spend the allowance rather than waiting to lose it: the bottom of the
   // ladder releases about one balloon a second on purpose, so dying here
   // naturally takes most of a minute.
-  await page.evaluate(() => { Game.lostBalloons = Game.allowance; });
+  await page.evaluate(() => { Game.livesLost = Game.allowance; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
 
   await page.waitForTimeout(600);
@@ -433,7 +433,7 @@ await t('a second game after game over still responds to input', async () => {
   // Spend the allowance rather than waiting to lose it: the bottom of the
   // ladder releases about one balloon a second on purpose, so dying here
   // naturally takes most of a minute.
-  await page.evaluate(() => { Game.lostBalloons = Game.allowance; });
+  await page.evaluate(() => { Game.livesLost = Game.allowance; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
   await page.waitForTimeout(5600); // input is rebound after the lockout
   await page.keyboard.press(' ');
@@ -1056,7 +1056,7 @@ await t('the menu is dead briefly after a game, then live', async () => {
   // Spend the allowance rather than waiting to lose it: the bottom of the
   // ladder releases about one balloon a second on purpose, so dying here
   // naturally takes most of a minute.
-  await page.evaluate(() => { Game.lostBalloons = Game.allowance; });
+  await page.evaluate(() => { Game.livesLost = Game.allowance; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
 
   assert.equal(await page.evaluate(() => Game.isMenuLive()), false,
@@ -1091,7 +1091,7 @@ await t('scores are requested without waiting out the lockout', async () => {
   // Spend the allowance rather than waiting to lose it: the bottom of the
   // ladder releases about one balloon a second on purpose, so dying here
   // naturally takes most of a minute.
-  await page.evaluate(() => { Game.lostBalloons = Game.allowance; });
+  await page.evaluate(() => { Game.livesLost = Game.allowance; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
   await page.waitForTimeout(1500);
   assert.ok(apiHits.some(h => h.method === 'GET'),
@@ -1347,7 +1347,7 @@ await t('each screen keeps its own state, and gets a clean one', async () => {
   // Spend the allowance rather than waiting to lose it: the bottom of the
   // ladder releases about one balloon a second on purpose, so dying here
   // naturally takes most of a minute.
-  await page.evaluate(() => { Game.lostBalloons = Game.allowance; });
+  await page.evaluate(() => { Game.livesLost = Game.allowance; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
   const over = await page.evaluate(() => ({
     keys: Object.keys(Game.state),
@@ -1479,7 +1479,7 @@ await t('the name line opens the name screen and the new name sticks', async () 
   // Spend the allowance rather than waiting to lose it: the bottom of the
   // ladder releases about one balloon a second on purpose, so dying here
   // naturally takes most of a minute.
-  await page.evaluate(() => { Game.lostBalloons = Game.allowance; });
+  await page.evaluate(() => { Game.livesLost = Game.allowance; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
   await page.waitForTimeout(400);
   const posted = apiHits.find(h => h.method === 'POST');
@@ -1798,10 +1798,10 @@ await t('a stall is not replayed at full speed', async () => {
     Game.accumulator = 0;
     Game.ticks = 0;
     Game.entities.length = 0;
-    Game.lostBalloons = 0;
+    Game.livesLost = 0;
 
     Game.advance(60000);
-    return { ticks: Game.ticks, lost: Game.lostBalloons, cap: Game.MAX_CATCHUP_MS, step: Game.STEP_MS };
+    return { ticks: Game.ticks, lost: Game.livesLost, cap: Game.MAX_CATCHUP_MS, step: Game.STEP_MS };
   });
 
   assert.ok(m.ticks <= Math.ceil(m.cap / m.step),
@@ -1868,7 +1868,8 @@ await t('a balloon is painted by one painter, not a new one every frame', async 
   // filling at level 10's rate once the clock is wound, so "three seconds"
   // was a bet on the spawner rather than a number of balloons.
   await page.waitForFunction(
-    () => Game.entities.length + Game.score + Game.lostBalloons > 5,
+    () => Game.entities.filter(e => e.kind === 'balloon').length +
+      Game.score + Game.livesLost > 5,
     null,
     { timeout: SKY_FILLS }
   ).catch(() => { throw new Error('too few balloons in the sky to judge the painters'); });
@@ -1877,7 +1878,9 @@ await t('a balloon is painted by one painter, not a new one every frame', async 
   const m = await page.evaluate(() => ({
     painters: window.__built.painters,
     colours: window.__built.colours,
-    balloons: Game.entities.length + Game.score + Game.lostBalloons
+    // Balloons only: a bird is an entity too and builds no balloon painter.
+    balloons: Game.entities.filter(e => e.kind === 'balloon').length +
+      Game.score + Game.livesLost
   }));
 
   assert.ok(m.balloons > 3, `only ${m.balloons} balloons, too few to judge`);
@@ -1937,8 +1940,8 @@ await t('the game says what screen it is on, and what happened', async () => {
   await page.waitForTimeout(2500);
   // One balloon has to get away for real, because losing one is the thing being
   // listened for here. The rest of the allowance is spent rather than waited out.
-  await page.waitForFunction(() => Game.lostBalloons > 0, null, { timeout: 40000 });
-  await page.evaluate(() => { Game.lostBalloons = Game.allowance; });
+  await page.waitForFunction(() => Game.livesLost > 0, null, { timeout: 40000 });
+  await page.evaluate(() => { Game.livesLost = Game.allowance; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
   await page.waitForTimeout(200);
 
@@ -2728,10 +2731,10 @@ await t('the ladder hands out lives, and the run ends on the allowance', async (
 
     Game.ticks = 0;
     Game.allowance = 7;
-    Game.lostBalloons = 6;
+    Game.livesLost = 6;
     Screens.playing.update(Game);
     const atSix = Game.screen;
-    Game.lostBalloons = 7;
+    Game.livesLost = 7;
     Screens.playing.update(Game);
     const atSeven = Game.screen;
     return { start, given, end, atSix, atSeven };
@@ -3090,7 +3093,7 @@ await t('the board records how far up the ladder a score got', async () => {
   await page.evaluate(() => {
     Game.ticks = 6 * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS;
     Game.score = 380;
-    Game.lostBalloons = Game.allowance;
+    Game.livesLost = Game.allowance;
   });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
   await page.waitForTimeout(400);
@@ -3161,6 +3164,170 @@ await t('a break counts in steps, so a tab that goes away does not skip it', asy
     'spending the whole break did not resume the game');
   assert.equal(m.total, 120, 'four seconds at thirty steps a second is 120 steps');
   assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+
+await t('a bird crosses the sky and costs nothing for being there', async () => {
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+
+  const m = await page.evaluate(async () => {
+    Game.stopLoop();
+    Game.applyLevel(12);
+    Game.entities = [];
+    // spawnBird is a dice roll per step, so roll it until one lands rather
+    // than reaching into the shared ladder row to force it.
+    for (let i = 0; i < 40000 && !Game.entities.length; i++) { Game.spawnBird(); }
+    const bird = Game.entities.find(e => e.kind === 'bird');
+    const started = { x: bird.xcoord, offscreen: bird.xcoord < 0 || bird.xcoord > Game.width };
+
+    const lostBefore = Game.livesLost;
+    let steps = 0;
+    while (Game.entities.includes(bird) && steps < 2000) {
+      Game.reap();
+      Game.step(false);
+      steps++;
+    }
+    return {
+      started,
+      steps,
+      crossed: !Game.entities.includes(bird),
+      cost: Game.livesLost - lostBefore,
+      layer: bird.layer,
+      aboveBalloons: bird.layer > Entities.LAYERS.balloon
+    };
+  });
+
+  assert.ok(m.started.offscreen,
+    `a bird appeared on screen at x=${m.started.x}; it has to fly in from outside`);
+  assert.ok(m.crossed, 'the bird never left');
+  assert.ok(m.steps > 30, `the bird crossed in ${m.steps} steps, too fast to see`);
+  assert.equal(m.cost, 0, 'a bird minding its own business cost a life');
+  assert.ok(m.aboveBalloons, 'birds should pass in front of balloons, consistently');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('touching a bird costs a life, and it flies off rather than popping', async () => {
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    Game.applyLevel(12);
+    Game.entities = [];
+    for (let i = 0; i < 40000 && !Game.entities.length; i++) { Game.spawnBird(); }
+    const bird = Game.entities.find(e => e.kind === 'bird');
+    bird.xcoord = Game.width / 2;
+
+    const before = Game.livesLost;
+    const removedByTap = bird.tapped(Game);
+    const afterOne = Game.livesLost;
+
+    // Tapping it again must not charge twice: it is already leaving.
+    bird.tapped(Game);
+    const afterTwo = Game.livesLost;
+
+    const y = bird.ycoord;
+    for (let i = 0; i < 10; i++) { bird.step(Game, false); }
+    return {
+      before, afterOne, afterTwo,
+      removedByTap,
+      stillThere: Game.entities.includes(bird),
+      climbed: bird.ycoord < y,
+      said: document.getElementById('game_status').textContent
+    };
+  });
+
+  assert.equal(m.afterOne, m.before + 1, 'touching a bird did not cost a life');
+  assert.equal(m.afterTwo, m.afterOne, 'a bird already leaving charged a second life');
+  // The one thing a bird must never look like is a balloon that popped.
+  assert.equal(m.removedByTap, false, 'the bird vanished under the finger');
+  assert.ok(m.stillThere, 'the bird was removed on the spot');
+  assert.ok(m.climbed, 'a startled bird should visibly clear off');
+  assert.match(m.said, /touched a bird/i, 'the penalty is silent: ' + m.said);
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t("a bird's hitbox is inside its silhouette, which is the opposite of a balloon's", async () => {
+  // A balloon's hit shape matches its outline, because a tap aimed at one
+  // should land. Touching a bird is the mistake, so every pixel of doubt goes
+  // to the player: the wings are drawn and deliberately not tappable.
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => {
+    const ctx = Game.ctx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, Game.canvas.width, Game.canvas.height);
+
+    Game.stopLoop();
+    Game.applyLevel(12);
+    Game.palette = Object.assign({}, Game.palette, { birdInk: '#FFFFFF' });
+    const bird = birdConstructor(420, 300, 40, 4, true);
+    bird.draw(Game);
+
+    const span = 40 * BIRD_SPAN;
+    let drawn = 0, tappable = 0, tappableButBlank = 0;
+    for (let y = Math.floor(300 - span); y <= Math.ceil(300 + span); y++) {
+      for (let x = Math.floor(420 - span); x <= Math.ceil(420 + span); x++) {
+        const px = ctx.getImageData(x, y, 1, 1).data;
+        // Any ink at all. The fill is antialiased, so a pixel on the outline
+        // is partly covered -- and a partly covered pixel is not empty sky.
+        const painted = px[0] + px[1] + px[2] > 0;
+        const hit = bird.hits({ x, y });
+        if (painted) { drawn++; }
+        if (hit) { tappable++; }
+        if (hit && !painted) { tappableButBlank++; }
+      }
+    }
+    return { drawn, tappable, tappableButBlank };
+  });
+
+  assert.ok(m.drawn > 0, 'the bird drew nothing at all');
+  assert.ok(m.tappable > 0, 'the bird cannot be touched, so it costs nothing');
+  assert.ok(m.tappable < m.drawn,
+    `the hitbox (${m.tappable}px) is not smaller than the drawing (${m.drawn}px)`);
+  // Not zero: an analytic ellipse and a rasterised fill disagree by a pixel
+  // here and there along the outline, and no threshold makes that go away.
+  // Half a percent is "the outline"; the loose ellipse this replaced scored
+  // 37%, all of it in the blank notch between the wings.
+  const blank = m.tappableButBlank / m.drawn;
+  assert.ok(blank < 0.005,
+    `${m.tappableButBlank} of ${m.drawn} painted pixels' worth of empty sky ` +
+    `would cost a life (${(blank * 100).toFixed(1)}%)`);
+  await context.close();
+});
+
+await t('birds arrive at level 8, and never before it', async () => {
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => ({
+    first: Ladder.LEVELS.find(r => (r.birds || 0) > 0).level,
+    perLevel: Ladder.LEVELS.map(r => r.birds || 0),
+    news: Ladder.at(8).news,
+    // A bird costs no taps, so it must not move the demand sum.
+    demandAt8: Ladder.demand(Ladder.at(8)),
+    tapsAt8: Ladder.meanTaps(Ladder.at(8))
+  }));
+
+  assert.equal(m.first, 8, 'birds do not start at level 8');
+  m.perLevel.forEach((chance, i) => {
+    if (i + 1 < 8) {
+      assert.equal(chance, 0, `level ${i + 1} has birds before they arrive`);
+    } else {
+      assert.ok(chance > 0, `level ${i + 1} lost its birds`);
+    }
+    if (i + 1 > 8) {
+      assert.ok(chance >= m.perLevel[i - 1],
+        `level ${i + 1} has fewer birds than level ${i}`);
+    }
+  });
+  assert.ok(Array.isArray(m.news), 'level 8 does not say that birds have arrived');
+  assert.match(m.news[1], /cost a life/i, 'the break does not say what a bird costs');
+  assert.equal(m.tapsAt8, 1.24, 'birds changed what a balloon costs in taps');
   await context.close();
 });
 

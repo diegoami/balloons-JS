@@ -24,6 +24,10 @@
  *
  * `life` is a life awarded on arriving at that level.
  *
+ * `birds` is the chance per step that a bird enters. A bird costs no taps —
+ * you are meant to leave it alone — so it does not move the demand sum at all.
+ * What it costs is attention, and a life if you get it wrong.
+ *
  * `news` is a headline and a line of explanation for the thing this level
  * brings, and setting it is what makes the game BREAK before the level starts
  * (screens.js). Only the levels whose feature exists carry one: announcing a
@@ -86,20 +90,21 @@ Ladder.LEVELS = [
     { level: 5 , speed:  5.6, frequency: 0.0629, size: 0.88, reinforced: 0.18, armoured: 0.00 },
     { level: 6 , speed:  6.0, frequency: 0.0665, size: 0.85, reinforced: 0.20, armoured: 0.00 },
     { level: 7 , speed:  6.4, frequency: 0.0693, size: 0.82, reinforced: 0.22, armoured: 0.00 },
-    { level: 8 , speed:  6.9, frequency: 0.0719, size: 0.79, reinforced: 0.24, armoured: 0.00 },
-    { level: 9 , speed:  7.4, frequency: 0.0735, size: 0.76, reinforced: 0.26, armoured: 0.00 },
+    { level: 8 , speed:  6.9, frequency: 0.0719, size: 0.79, reinforced: 0.24, armoured: 0.00, birds: 0.004,
+      news: ["Birds", "Do not touch them. They cost a life."] },
+    { level: 9 , speed:  7.4, frequency: 0.0735, size: 0.76, reinforced: 0.26, armoured: 0.00, birds: 0.005 },
     { level: 10, speed:  7.9, frequency: 0.0686, size: 0.73, reinforced: 0.25, armoured: 0.08,
-      news: ["Armoured balloons", "Three taps. Worth six points."] },
-    { level: 11, speed:  8.4, frequency: 0.0680, size: 0.70, reinforced: 0.25, armoured: 0.10 },
-    { level: 12, speed:  8.9, frequency: 0.0675, size: 0.68, reinforced: 0.25, armoured: 0.12, life: 1 },
-    { level: 13, speed:  9.4, frequency: 0.0656, size: 0.66, reinforced: 0.26, armoured: 0.13 },
-    { level: 14, speed:  9.9, frequency: 0.0609, size: 0.64, reinforced: 0.26, armoured: 0.14 },
-    { level: 15, speed: 10.4, frequency: 0.0587, size: 0.62, reinforced: 0.27, armoured: 0.15, life: 1 },
-    { level: 16, speed: 10.9, frequency: 0.0565, size: 0.60, reinforced: 0.27, armoured: 0.16 },
-    { level: 17, speed: 11.4, frequency: 0.0543, size: 0.58, reinforced: 0.28, armoured: 0.17 },
-    { level: 18, speed: 11.9, frequency: 0.0521, size: 0.56, reinforced: 0.28, armoured: 0.18, life: 1 },
-    { level: 19, speed: 12.4, frequency: 0.0500, size: 0.54, reinforced: 0.30, armoured: 0.19 },
-    { level: 20, speed: 13.0, frequency: 0.0478, size: 0.52, reinforced: 0.30, armoured: 0.20 }
+      news: ["Armoured balloons", "Three taps. Worth six points."], birds: 0.005 },
+    { level: 11, speed:  8.4, frequency: 0.0680, size: 0.70, reinforced: 0.25, armoured: 0.10, birds: 0.006 },
+    { level: 12, speed:  8.9, frequency: 0.0675, size: 0.68, reinforced: 0.25, armoured: 0.12, life: 1, birds: 0.006 },
+    { level: 13, speed:  9.4, frequency: 0.0656, size: 0.66, reinforced: 0.26, armoured: 0.13, birds: 0.007 },
+    { level: 14, speed:  9.9, frequency: 0.0609, size: 0.64, reinforced: 0.26, armoured: 0.14, birds: 0.007 },
+    { level: 15, speed: 10.4, frequency: 0.0587, size: 0.62, reinforced: 0.27, armoured: 0.15, life: 1, birds: 0.008 },
+    { level: 16, speed: 10.9, frequency: 0.0565, size: 0.60, reinforced: 0.27, armoured: 0.16, birds: 0.008 },
+    { level: 17, speed: 11.4, frequency: 0.0543, size: 0.58, reinforced: 0.28, armoured: 0.17, birds: 0.009 },
+    { level: 18, speed: 11.9, frequency: 0.0521, size: 0.56, reinforced: 0.28, armoured: 0.18, life: 1, birds: 0.009 },
+    { level: 19, speed: 12.4, frequency: 0.0500, size: 0.54, reinforced: 0.30, armoured: 0.19, birds: 0.010 },
+    { level: 20, speed: 13.0, frequency: 0.0478, size: 0.52, reinforced: 0.30, armoured: 0.20, birds: 0.010 }
 ];
 
 /**

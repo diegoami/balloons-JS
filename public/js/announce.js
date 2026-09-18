@@ -71,7 +71,7 @@ Announce.levelup = function (game, awarded) {
     Announce.say(
         "Level " + game.level + ". " + news[0] + ". " + news[1] +
         (awarded > 0
-            ? " Extra life, " + Announce.lives(game.allowance - game.lostBalloons) +
+            ? " Extra life, " + Announce.lives(game.allowance - game.livesLost) +
               " left to lose."
             : "") +
         " Resuming in a moment, or press space to go now."
@@ -96,7 +96,7 @@ Announce.playing = function () {
  */
 Announce.level = function (game, awarded) {
     var life = awarded > 0
-        ? " Extra life. " + Announce.lives(game.allowance - game.lostBalloons) +
+        ? " Extra life. " + Announce.lives(game.allowance - game.livesLost) +
           " left to lose."
         : "";
     Announce.say("Level " + game.level + "." + Announce.arrivals(game) + life);
@@ -112,6 +112,9 @@ Announce.arrivals = function (game) {
     var under = Ladder.at(game.level - 1);
     var news = "";
 
+    if (rung.birds > 0 && !(under.birds > 0)) {
+        return " Birds: do not touch them.";
+    }
     if (rung.armoured > 0 && !(under.armoured > 0)) {
         news += " Armoured balloons: three taps.";
     } else if (rung.reinforced > 0 && !(under.reinforced > 0)) {
@@ -120,10 +123,24 @@ Announce.arrivals = function (game) {
     return news;
 };
 
+/**
+ * A bird was touched.
+ *
+ * Said every time, unlike most things in a round, because the cost is a life
+ * and the cause is a rule the player may not have absorbed yet. A silent
+ * penalty is a penalty nobody learns from.
+ */
+Announce.touchedBird = function (game) {
+    Announce.say(
+        "You touched a bird. " + game.livesLost + " of " + game.allowance +
+        " lost."
+    );
+};
+
 /** A balloon got away, which is the only thing in a round worth interrupting for. */
 Announce.lost = function (game) {
     Announce.say(
-        game.lostBalloons + " of " + game.allowance + " lost, " +
+        game.livesLost + " of " + game.allowance + " lost, " +
         game.score + " points."
     );
 };
