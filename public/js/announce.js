@@ -118,6 +118,9 @@ Announce.arrivals = function (game) {
     var under = Ladder.at(game.level - 1);
     var news = "";
 
+    if ((rung.bossMark || 1) > (under.bossMark || 1)) {
+        return " A bigger saucer: eight taps, and it moves.";
+    }
     if (rung.fading > 0 && !(under.fading > 0)) {
         return " Fading balloons: they thin out as they rise.";
     }
@@ -146,7 +149,11 @@ Announce.arrivals = function (game) {
  * "it is here" and "it is charging" are the whole interface for them.
  */
 Announce.bossArrived = function (game) {
-    Announce.say("A saucer. Tap it down, quickly.");
+    var kind = Ladder.saucer(Ladder.at(game.level).bossMark);
+    Announce.say(
+        (kind.mark > 1 ? "A bigger saucer. " : "A saucer. ") +
+        "Tap it down, quickly: " + kind.taps + " taps."
+    );
 };
 
 Announce.bossDestroyed = function (game) {

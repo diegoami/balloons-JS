@@ -563,7 +563,11 @@ Game.resetRound = function () {
     // Far enough back that the first boss is only waiting on the sky going
     // quiet, not on a cooldown left over from nothing.
     this.lastBoss = -Infinity;
-    this.allowance = Game.LIVES;
+    // Plus whatever a run that CLIMBED to this level would have collected on
+    // the way. A practice run at 18 that starts on five lives is not a harder
+    // level 18, it is a different game: the ladder hands out a life at 12, 15
+    // and 18 precisely because the back half costs them.
+    this.allowance = Game.LIVES + Ladder.livesBy(this.startLevel);
     this.won = false;
     this.end_time = null;
     this.ticks = 0;
@@ -691,16 +695,18 @@ Game.spawnBoss = function () {
         return;
     }
 
-    var radius = Math.max(BOSS_MIN_RADIUS, BOSS_BASE_SIZE * this.ratio);
+    var plate = this.layout.hud.plate;
     this.add(bossConstructor(
         this.width / 2,
-        // High, so the fight happens over the balloons rather than in them —
-        // but not so high that the fuse ring drawn around it disappears behind
-        // the HUD.
-        Math.max(radius * 1.6, this.height * 0.26),
-        radius,
-        BOSS_DRIFT * this.ratio * (Math.random() < 0.5 ? 1 : -1),
-        this.width
+        // High, so the fight happens over the balloons rather than in them.
+        this.height * 0.26,
+        BOSS_BASE_SIZE * this.ratio,
+        this.width,
+        rung.bossMark,
+        // ...but under the HUD, because the fuse ring is the only clock the
+        // player gets and half of it behind a chip is half a clock. One that
+        // wanders pushes itself down until its whole band clears this.
+        plate.y + plate.height
     ));
     Announce.bossArrived(this);
 };

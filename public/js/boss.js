@@ -27,39 +27,84 @@
  * player who loses a life should have watched it coming. Anything shorter than
  * a reaction time plus an aim is unfair by construction, so the charge is
  * bounded below by 600ms and the test says so.
+ *
+ * THERE ARE TWO OF THEM
+ *
+ * What a saucer is made of comes out of Ladder.SAUCERS rather than out of
+ * constants here: the one from level 6, and the mark II from 18, which is
+ * bigger, takes eight taps instead of five, wanders in both directions instead
+ * of sliding across, and gets proportionally longer to be dealt with. This
+ * file knows how a saucer behaves; the ladder knows which one turns up.
  */
-
-/** Taps to destroy it. Against about 2.1 taps a second, five in three seconds
- * is tight but payable; fewer taps or more seconds and it is a formality. */
-var BOSS_TAPS = 5;
-
-/** What destroying one is worth. It costs five taps; a three-tap armoured
- * balloon is worth six, so this keeps the rate per tap roughly honest. */
-var BOSS_POINTS = 12;
-
-/** Steps from arriving to firing: three seconds at thirty steps a second. */
-var BOSS_FUSE_STEPS = 90;
 
 /** Steps of unmistakable charge before the shot. 600ms is the floor. */
 var BOSS_CHARGE_STEPS = 24;
+
+/** Where the fuse ring is drawn, in radii. It is the outermost thing a saucer
+ * has, so it is what has to fit on the screen. */
+var RING_RADII = 1.25;
 
 /** Radius before scaling, and the floor that keeps it a real target. */
 var BOSS_BASE_SIZE = 46;
 var BOSS_MIN_RADIUS = 30;
 
-/** How far it drifts per step, before scaling. It moves so the fight is an
- * aiming problem rather than a rhythm test. */
-var BOSS_DRIFT = 1.6;
+/**
+ * The band a wandering saucer stays inside, as a share of its own height above
+ * and below where it arrived. It moves so the fight is an aiming problem
+ * rather than a rhythm test; it stays in a band so the fight stays where the
+ * player is looking, above the balloons and clear of the HUD.
+ */
+var BOSS_BAND = 2.2;
 
-var bossConstructor = function (xcoord, ycoord, radius, drift, xmax) {
+var bossConstructor = function (xcoord, ycoord, radius, xmax, mark, ceiling) {
     var that = {};
+    var kind = Ladder.saucer(mark);
+
     that.kind = "boss";
+    that.mark = kind.mark;
     that.layer = Entities.LAYERS.boss;
     that.xcoord = xcoord;
     that.ycoord = ycoord;
-    that.radius = Math.max(BOSS_MIN_RADIUS, radius);
-    that.xdelta = drift;
+    // The floor first, THEN the mark's own size: a minimum is there so a
+    // saucer stays a real target on a phone, not so that both saucers collapse
+    // onto it. Applied the other way round the mark II was exactly as big as
+    // the one it replaces on a 390px screen, which is the one place its being
+    // bigger matters most.
+    that.radius = Math.max(BOSS_MIN_RADIUS, radius) * kind.size;
     that.xmax = xmax;
+
+    /**
+     * The fastest it may travel, in pixels a step.
+     *
+     * Derived, not chosen, and derived the same way a janky balloon's wander
+     * is: whatever it does, it may not have left where you aimed by the time
+     * you get there. `reach` is how much of its own radius it is allowed to
+     * cross inside a reaction window, and half a radius is the room that
+     * leaves. Scaling it by the radius also makes the fight the same fight on
+     * a phone as on a desktop, which drifting at a fixed fraction of the
+     * window width never did.
+     */
+    that.speed = that.radius * kind.reach / REACTION_STEPS;
+
+    /**
+     * How far up and down it may get from where it arrived — and, if that
+     * band would take its gauge somewhere it cannot be read, the height it
+     * arrives at instead.
+     *
+     * Whoever spawns it picks a height that suits the balloons and a ceiling
+     * the fuse ring has to stay under; fitting between the two is this file's
+     * business. The ring IS the deadline, so a saucer that parks the top of it
+     * behind the HUD has taken the clock away from the player it is timing.
+     */
+    var band = that.radius * BOSS_BAND * kind.wander;
+    var home = Math.max(ycoord, (ceiling || 0) + band + that.radius * RING_RADII);
+    that.ycoord = home;
+
+    that.xdelta = that.speed * (Math.random() < 0.5 ? 1 : -1);
+    that.ydelta = 0;
+
+    /** Steps until it picks a fresh heading, for the one that does. */
+    var turnIn = kind.turns;
 
     /**
      * Taps left before it is destroyed.
@@ -69,10 +114,10 @@ var bossConstructor = function (xcoord, ycoord, radius, drift, xmax) {
      * shadowing the method, which would have made the boss untappable in a
      * way no test of the fight would have explained.
      */
-    that.taps = BOSS_TAPS;
+    that.taps = kind.taps;
 
     /** Steps until it fires. Counted down, like everything else here. */
-    that.fuse = BOSS_FUSE_STEPS;
+    that.fuse = kind.fuse;
 
     /** Set once it has fired or been destroyed; it then clears off upward. */
     var leaving = false;
@@ -83,6 +128,21 @@ var bossConstructor = function (xcoord, ycoord, radius, drift, xmax) {
     /** Whether the shot is charging: the last stretch of the fuse. */
     that.charging = function () {
         return !leaving && that.fuse <= BOSS_CHARGE_STEPS;
+    };
+
+    /**
+     * A fresh heading, at the one speed it is allowed.
+     *
+     * A fresh one rather than a nudge, for the reason a janky balloon picks a
+     * fresh drift: a path made of small corrections averages out into a
+     * straight line, which is the thing this is not supposed to be. The speed
+     * is fixed and only the direction is drawn, so wandering can never turn
+     * into going faster than the bound.
+     */
+    var turn = function () {
+        var angle = Math.random() * Math.PI * 2;
+        that.xdelta = Math.cos(angle) * that.speed;
+        that.ydelta = Math.sin(angle) * that.speed * (band > 0 ? 1 : 0);
     };
 
     that.step = function (game, leave) {
@@ -96,12 +156,26 @@ var bossConstructor = function (xcoord, ycoord, radius, drift, xmax) {
             return;
         }
 
+        if (turnIn > 0) {
+            turnIn--;
+            if (turnIn === 0) {
+                turn();
+                turnIn = kind.turns;
+            }
+        }
+
         that.xcoord += that.xdelta;
         // Bounce off the sides rather than leaving: the fight is meant to end
         // with a result, not with the boss wandering off the edge.
         if (that.xcoord < that.radius || that.xcoord > that.xmax - that.radius) {
             that.xdelta *= -1;
             that.xcoord = Math.min(Math.max(that.xcoord, that.radius), that.xmax - that.radius);
+        }
+
+        that.ycoord += that.ydelta;
+        if (that.ycoord < home - band || that.ycoord > home + band) {
+            that.ydelta *= -1;
+            that.ycoord = Math.min(Math.max(that.ycoord, home - band), home + band);
         }
 
         that.fuse--;
@@ -158,8 +232,19 @@ var bossConstructor = function (xcoord, ycoord, radius, drift, xmax) {
         ctx.ellipse(0, -r * 0.16, r * 0.52, r * 0.44, 0, Math.PI, Math.PI * 2);
         ctx.fill();
 
+        // The mark II wears a second hull ring, so which one you are fighting
+        // is legible from across the screen rather than only from the count of
+        // taps it is not dying to.
+        if (kind.mark > 1) {
+            ctx.strokeStyle = palette.bossDome;
+            ctx.lineWidth = Math.max(2, r * 0.06);
+            ctx.beginPath();
+            ctx.ellipse(0, 0, r * 0.78, r * 0.3, 0, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
         // Lights around the rim, brighter as the fuse runs down.
-        var lit = 1 - (that.fuse / BOSS_FUSE_STEPS);
+        var lit = 1 - (that.fuse / kind.fuse);
         ctx.fillStyle = palette.bossLight;
         ctx.globalAlpha = 0.35 + 0.65 * lit;
         [-0.66, -0.33, 0, 0.33, 0.66].forEach(function (at) {
@@ -175,9 +260,9 @@ var bossConstructor = function (xcoord, ycoord, radius, drift, xmax) {
             ctx.lineWidth = Math.max(2, r * 0.07);
             ctx.beginPath();
             ctx.arc(
-                0, 0, r * 1.25,
+                0, 0, r * RING_RADII,
                 -Math.PI / 2,
-                -Math.PI / 2 + Math.PI * 2 * (that.fuse / BOSS_FUSE_STEPS)
+                -Math.PI / 2 + Math.PI * 2 * (that.fuse / kind.fuse)
             );
             ctx.stroke();
         }
@@ -216,7 +301,7 @@ var bossConstructor = function (xcoord, ycoord, radius, drift, xmax) {
         }
 
         leaving = true;
-        game.score += BOSS_POINTS;
+        game.score += kind.points;
         game.bossSettled(game);
         Announce.bossDestroyed(game);
         // False, not true: it is not removed on the spot. It lifts out of the
