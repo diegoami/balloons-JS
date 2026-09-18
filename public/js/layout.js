@@ -33,12 +33,12 @@ Layout.INTRO_TEXT = "Pop the balloons before they get away";
  * game every time something new arrived to explain it, which was the right
  * instinct and the wrong place: four verbs cover every object in the game, and
  * a player who has read them once does not need the game to stop and say them
- * again. "Save" does the work of two rules at once — a bird and a firefly are
+ * again. "Spare" does the work of two rules at once — a bird and a firefly are
  * both things you leave alone, for different reasons that do not matter while
  * you are playing.
  */
 Layout.DESCRIPTION = [
-    "Pop the balloons, send back the saucers, save the birds and the fireflies.",
+    "Pop the balloons, send back the saucers, spare the birds and the fireflies.",
     "Twenty levels, twenty seconds each, five lives. It can be won."
 ];
 

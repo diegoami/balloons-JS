@@ -478,6 +478,45 @@ Game.cycleStartLevel = function () {
 };
 
 /**
+ * Records one tap's pointer type.
+ *
+ * A PointerEvent reports "mouse", "touch" or "pen", and an older browser that
+ * fires the event without the field reports nothing at all — which is counted
+ * as unknown rather than guessed at.
+ */
+Game.countPointer = function (kind) {
+    if (kind === "touch" || kind === "pen") {
+        this.pointers.touch++;
+    } else if (kind === "mouse") {
+        this.pointers.mouse++;
+    }
+};
+
+/**
+ * What the run was played with: "touch", "mouse", "mixed", or null.
+ *
+ * Null when nothing said — an old browser, or a run that ended without a tap.
+ * Null is not "mouse": the board already knows how to draw a fact it does not
+ * have, and inventing one here would be worse than leaving the column empty.
+ *
+ * "Mixed" needs a real minority rather than one stray tap, because a laptop
+ * with a touchscreen registers the odd touch from a palm or a scroll.
+ */
+Game.pointerKind = function () {
+    var touch = this.pointers.touch;
+    var mouse = this.pointers.mouse;
+    var total = touch + mouse;
+
+    if (total === 0) {
+        return null;
+    }
+    if (Math.min(touch, mouse) / total >= 0.2) {
+        return "mixed";
+    }
+    return touch > mouse ? "touch" : "mouse";
+};
+
+/**
  * Whether this run counts.
  *
  * A run that skipped the climb is not comparable with one that did it, and a
@@ -520,6 +559,7 @@ Game.resetRound = function () {
     // too, and a counter named after one of the two things that fill it is the
     // kind of name this project keeps having to fix.
     this.livesLost = 0;
+    this.pointers = { touch: 0, mouse: 0 };
     // Far enough back that the first boss is only waiting on the sky going
     // quiet, not on a cooldown left over from nothing.
     this.lastBoss = -Infinity;
@@ -760,6 +800,7 @@ Game.init = function () {
 
     this.entities = [];
     this.pressed = null;
+    this.pointers = { touch: 0, mouse: 0 };
 
     /**
      * Where the next run opens.

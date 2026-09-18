@@ -80,7 +80,11 @@ Scores.submit = function (game, score) {
             score: score,
             name: game.name,
             level: game.level,
-            won: game.won === true
+            won: game.won === true,
+            // What it was played with. The ladder assumes one pointer at about
+            // 2.1 taps a second; two thumbs on a touchscreen doubles that, and
+            // the board should not pretend the two are the same achievement.
+            pointer: game.pointerKind()
         })
     }).catch(function () {
         /* Ignore: a failed submission shouldn't block the game-over screen. */

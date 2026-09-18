@@ -23,6 +23,19 @@ type ScoreEntry = {
    */
   level?: number;
   won?: boolean;
+  /**
+   * What the run was played with: "touch", "mouse" or "mixed".
+   *
+   * The ladder is calibrated against roughly 2.1 taps a second from ONE
+   * pointer. A touchscreen lets you use two thumbs, which measured is the
+   * difference between dying around level 8 and finishing every run -- so a
+   * score set that way is not the same achievement as one set with a mouse,
+   * and the board says which rather than quietly mixing them.
+   *
+   * Optional, like `level`: rows written before this existed have none, and an
+   * old browser that reports no pointer type sends none.
+   */
+  pointer?: "touch" | "mouse" | "mixed";
 };
 
 const STORE_NAME = "highscores";
@@ -93,6 +106,15 @@ function cleanLevel(value: unknown): number | undefined {
   return value;
 }
 
+const POINTERS = ["touch", "mouse", "mixed"] as const;
+
+/** One of the three, or undefined. Anything else is a client we do not know. */
+function cleanPointer(value: unknown): ScoreEntry["pointer"] {
+  return (POINTERS as readonly unknown[]).includes(value)
+    ? (value as ScoreEntry["pointer"])
+    : undefined;
+}
+
 function byScoreDescending(a: ScoreEntry, b: ScoreEntry): number {
   return b.score - a.score;
 }
@@ -127,7 +149,8 @@ export default async (req: Request, context: Context) => {
     return json({ error: "body must be JSON" }, 400);
   }
 
-  const { name, score, level, won } = (payload ?? {}) as Record<string, unknown>;
+  const { name, score, level, won, pointer } =
+    (payload ?? {}) as Record<string, unknown>;
   const cleanedScore = cleanScore(score);
 
   if (cleanedScore === null) {
@@ -148,6 +171,11 @@ export default async (req: Request, context: Context) => {
   // is a client that disagrees with this function about what winning is.
   if (won === true && cleanedLevel === MAX_LEVEL) {
     entry.won = true;
+  }
+
+  const cleanedPointer = cleanPointer(pointer);
+  if (cleanedPointer !== undefined) {
+    entry.pointer = cleanedPointer;
   }
 
   // Read-modify-write. Netlify Blobs has no compare-and-swap, so two scores
