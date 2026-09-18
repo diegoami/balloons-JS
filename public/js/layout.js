@@ -119,6 +119,19 @@ Layout.GRID = {
     /** Air between the text block and the edge of the panel behind it. */
     panelPad: 0.7,
 
+    /**
+     * The ground under each run of HUD text, in line heights.
+     *
+     * It used to be one bar across the whole width, and the whole width is the
+     * problem: the HUD is drawn OVER the play area, so a lid of scrim across
+     * the top of the screen is a lid across the top of the game. A balloon
+     * behind it sat at about 1.4:1 against the sky -- under the 3:1 anything
+     * you have to find is meant to clear -- so balloons were escaping through
+     * a strip nobody could see into. The text needs a ground; the empty space
+     * either side of it does not.
+     */
+    hudPlate: { padX: 0.5, top: 0.78, height: 1.15, radius: 0.28 },
+
     /** A line height, as a multiple of the advance width of a capital M. */
     lineRatio: 1.3,
 
@@ -570,11 +583,13 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
             y: line * G.rows.hud,
 
             // The HUD is the only text drawn during play, and it is drawn over
-            // whatever the sky is doing. This is its ground: solid behind the
-            // row, then faded out, so it reads as a bar rather than a lid.
-            band: {
-                height: line * G.rows.hud + line * 1.2,
-                solid: (line * G.rows.hud + line * 0.5) / (line * G.rows.hud + line * 1.2)
+            // whatever the sky is doing. Each run of it gets a chip of ground
+            // the size of the words, rather than the whole row getting a lid.
+            plate: {
+                padX: line * G.hudPlate.padX,
+                y: line * G.rows.hud - line * G.hudPlate.top,
+                height: line * G.hudPlate.height,
+                radius: line * G.hudPlate.radius
             },
 
             caught: width * G.columns.hudCaught,

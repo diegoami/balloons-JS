@@ -2074,15 +2074,12 @@ await t('every colour the game draws text in is readable on its ground', async (
       check('score date', p.inkSoft, L.scores.columns.date + 20, L.scores.rows[2], true);
       check('score value', p.accent, L.scores.columns.value, L.scores.rows[2], true);
 
-      // The HUD is drawn during play, where it has a band of its own.
+      // The HUD is drawn during play, where each run of it has a chip of its
+      // own. Painted by the game rather than rebuilt here, so the ground the
+      // test measures is the ground the player gets.
       const hudGround = (x, y) => {
         Paint.sky(Game);
-        const strip = Game.ctx.createLinearGradient(0, 0, 0, L.hud.band.height);
-        strip.addColorStop(0, p.panel);
-        strip.addColorStop(L.hud.band.solid, p.panel);
-        strip.addColorStop(1, Sky.transparent(p.panel));
-        Game.ctx.fillStyle = strip;
-        Game.ctx.fillRect(0, 0, Game.width, L.hud.band.height);
+        Paint.hudGround(Game);
         const d = Game.ctx.getImageData(
           Math.round(x * Game.dpr), Math.round(y * Game.dpr), 1, 1).data;
         return [d[0], d[1], d[2]];
@@ -4210,6 +4207,96 @@ await t('the fade holds, then falls, and only ever on a fading balloon', async (
   assert.ok(m.lostPerReaction < 0.1,
     `a fading balloon loses ${m.lostPerReaction.toFixed(3)} of its opacity while ` +
     'you are deciding where to tap');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+
+await t('the HUD stands on the words rather than lying across the sky', async () => {
+  // It used to be one bar the full width of the screen, and the HUD is drawn
+  // OVER the play area — so that was a lid on the top of the game. A balloon
+  // behind it sat at about 1.4:1 against the sky, under the 3:1 anything you
+  // have to find is meant to clear, and balloons escaped through a strip
+  // nobody could see into.
+  const { context, page, errors } = await newGame();
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    const out = [];
+
+    // A fresh run, a long one, and a phone-sized window, because the widest
+    // the score ever gets is what decides how much sky this costs.
+    [[1420, 2, 7], [99999, 9, 9]].forEach(state => {
+      [1, 14, 20].forEach(level => {
+        Game.applyLevel(level);
+        Game.measureLayout();
+        Game.score = state[0];
+        Game.livesLost = state[1];
+        Game.allowance = state[2];
+
+        Paint.sky(Game);
+        const grounds = Paint.hudGround(Game);
+        const plate = Game.layout.hud.plate;
+        out.push({
+          level,
+          score: state[0],
+          grounds: grounds.map(g => ({ x: g.x, right: g.x + g.width })),
+          covered: grounds.reduce((a, g) => a + g.width, 0) / Game.width,
+          clearAbove: plate.y,
+          height: plate.height,
+          row: Game.layout.hud.y,
+          width: Game.width
+        });
+      });
+    });
+    return out;
+  });
+
+  m.forEach(row => {
+    // Sky either side of the words. Not most of the width: the score is the
+    // long one and it is allowed to be long, but not to be a lid.
+    assert.ok(row.covered <= 0.75,
+      `the HUD covers ${(row.covered * 100).toFixed(0)}% of the width at level ` +
+      `${row.level} with ${row.score} points`);
+
+    // Clear sky ABOVE the chips, which the old bar did not leave: a balloon
+    // escapes through the very top, and that is where it must be visible.
+    assert.ok(row.clearAbove > row.height * 0.4,
+      `only ${row.clearAbove.toFixed(0)}px of clear sky above the HUD`);
+
+    // Two chips that touch are merged into one, so they can never overlap and
+    // show their seams.
+    row.grounds.forEach((g, i) => {
+      if (i > 0) {
+        assert.ok(g.x > row.grounds[i - 1].right,
+          `HUD chips overlap at level ${row.level}`);
+      }
+    });
+  });
+
+  // And the phone, where the runs crowd together and become a bar again.
+  const narrow = await page.evaluate(() => {
+    const was = { w: Game.width, h: Game.height };
+    Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 780, configurable: true });
+    Game.applyCanvasSize();
+    Game.score = 1420; Game.livesLost = 2; Game.allowance = 7;
+    Paint.sky(Game);
+    const grounds = Paint.hudGround(Game);
+    const got = {
+      chips: grounds.length,
+      covered: grounds.reduce((a, g) => a + g.width, 0) / Game.width,
+      overlap: grounds.some((g, i) => i > 0 && g.x <= grounds[i - 1].x + grounds[i - 1].width)
+    };
+    Object.defineProperty(window, 'innerWidth', { value: was.w, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: was.h, configurable: true });
+    Game.applyCanvasSize();
+    return got;
+  });
+
+  assert.ok(narrow.chips < 3, 'the crowded runs on a phone did not merge');
+  assert.ok(!narrow.overlap, 'merged HUD chips still overlap');
+  assert.ok(narrow.covered <= 0.8,
+    `the HUD covers ${(narrow.covered * 100).toFixed(0)}% of a phone's width`);
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
