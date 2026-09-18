@@ -148,6 +148,35 @@ Layout.GRID = {
     footerReserve: 56
 };
 
+/**
+ * Breaks one sentence into lines that fit a width, at the context's font.
+ *
+ * Greedy and word-based, which is all the two sentences on the title screen
+ * need. A word longer than the whole width gets a line to itself and overflows
+ * rather than being cut in half: there is no such word here, and a hyphenated
+ * fragment would read worse than a line that is slightly too long.
+ */
+Layout.wrap = function (ctx, sentence, available) {
+    var words = String(sentence).split(" ");
+    var lines = [];
+    var current = "";
+
+    words.forEach(function (word) {
+        var candidate = current ? current + " " + word : word;
+        if (current && ctx.measureText(candidate).width > available) {
+            lines.push(current);
+            current = word;
+            return;
+        }
+        current = candidate;
+    });
+
+    if (current) {
+        lines.push(current);
+    }
+    return lines;
+};
+
 /** Grows a rect about its own centre until it meets the touch minimum. */
 function atLeastTouchSize(rect) {
     var min = Layout.GRID.minTouchTarget;
@@ -183,16 +212,22 @@ Layout.applyFont = function (ctx, width, height) {
     size = Math.round(size);
     ctx.font = size + "px Verdana";
 
-    // Whichever line is longest is what decides whether the composition fits
-    // the width. It used to be the hint, which was the only long string; the
-    // description lines are longer than it was.
+    // Only the lines that CANNOT wrap decide whether the composition fits.
+    //
+    // The description used to be measured here too, and on a 320px phone with
+    // real Verdana its second line came out eight pixels over — 3% — which
+    // scaled the entire type scale down past `minFontSize` and made a floor
+    // that is documented as a floor into a suggestion. One long sentence
+    // should cost itself a second line, not cost every other word on the
+    // screen a point of size. It wraps in `compute` instead.
+    //
+    // This only showed up on Windows: the Linux boxes this was built on have
+    // no Verdana and substitute something narrower, so the same string fitted.
     var available = width * (1 - 2 * G.columns.margin);
     var longest = 0;
-    [Layout.INTRO_TEXT, Layout.START_TEXT]
-        .concat(Layout.DESCRIPTION)
-        .forEach(function (text) {
-            longest = Math.max(longest, ctx.measureText(text).width);
-        });
+    [Layout.INTRO_TEXT, Layout.START_TEXT].forEach(function (text) {
+        longest = Math.max(longest, ctx.measureText(text).width);
+    });
 
     if (longest > available) {
         size = Math.max(1, Math.floor(size * (available / longest)));
@@ -272,13 +307,26 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
     // With no buttons, the row the menu used to occupy carries the description
     // instead, and what follows flows from the bottom of THAT rather than from
     // the height of a button that is no longer drawn.
-    var description = [];
-    for (var d = 0; d < Layout.DESCRIPTION.length; d++) {
-        description.push({ x: left, y: menuTop + line * (1 + d * G.descriptionStep) });
-    }
+    //
+    // Each sentence is wrapped to the width available, so a narrow screen gets
+    // more lines rather than smaller type. Every line carries its own text,
+    // because after wrapping there is no longer one line per entry in
+    // Layout.DESCRIPTION for a painter to index into.
+    ctx.font = fonts.label;
+    var wrapped = [];
+    Layout.DESCRIPTION.forEach(function (sentence) {
+        Layout.wrap(ctx, sentence, available).forEach(function (text) {
+            wrapped.push(text);
+        });
+    });
+    ctx.font = fonts.score;
+
+    var description = wrapped.map(function (text, d) {
+        return { x: left, y: menuTop + line * (1 + d * G.descriptionStep), text: text };
+    });
     var menuBottom = buttons.length
         ? rowTop + buttonHeight
-        : menuTop + line * (Layout.DESCRIPTION.length * G.descriptionStep + 0.4);
+        : menuTop + line * (description.length * G.descriptionStep + 0.4);
 
     // Drawn rect and hit rect are the same object now: buttons are laid out
     // rather than bracketing substrings, so both directions can meet the touch
@@ -376,10 +424,15 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
     ctx.font = fonts.score;
     var resume = {
         x: left,
-        // Under the last line of the explanation rather than on the hint row.
-        // The hint row is positioned for a screen with a score table under it,
-        // which left the button stranded halfway down an empty sky.
-        y: description[description.length - 1].y + line * 1.1,
+        // Under two lines of explanation rather than on the hint row, which is
+        // positioned for a screen with a score table under it and left the
+        // button stranded halfway down an empty sky.
+        //
+        // Two, fixed, rather than however many lines the title screen's
+        // description wrapped to: the break has its own two lines, and hanging
+        // its button off an unrelated screen's text was a coupling waiting to
+        // move the button on a narrow phone.
+        y: menuTop + line * (1 + 2 * G.descriptionStep) + line * 1.1,
         width: resumeWidth,
         height: buttonHeight,
         radius: line * G.button.radius,

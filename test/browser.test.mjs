@@ -1840,7 +1840,15 @@ await t('the time on the board is time played, not time elapsed', async () => {
 await t('a balloon is painted by one painter, not a new one every frame', async () => {
   const { context, page, errors } = await newGame({ name: 'Counter' });
   await page.evaluate(() => {
-    window.__built = { painters: 0, colours: 0 };
+    window.__built = { painters: 0, colours: 0, balloons: 0 };
+
+    // Count balloons at the source rather than inferring it downstream.
+    const made = Game.randomBalloon.bind(Game);
+    Game.randomBalloon = function () {
+      window.__built.balloons++;
+      return made();
+    };
+
     const Balloon = CANVASBALLOON.Balloon;
     CANVASBALLOON.Balloon = function (id, x, y, r, c) {
       window.__built.painters++;
@@ -1862,25 +1870,29 @@ await t('a balloon is painted by one painter, not a new one every frame', async 
   // fullest. The clock is wound forward rather than waited out.
   await page.keyboard.press(' ');
   await page.waitForTimeout(2400);
-  await page.evaluate(() => { Game.ticks = 9 * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS; });
+  await page.evaluate(() => {
+    Game.ticks = 9 * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS;
+
+    // Start counting from here, with an empty sky. The title screen plays the
+    // game to itself, so the wrapper above was already counting balloons the
+    // attract footage built — and resetRound then threw those balloons away,
+    // leaving painters with no balloon to match. It read as "one balloon
+    // needed two painters", which is exactly the defect this test is for.
+    Game.entities = [];
+    window.__built = { painters: 0, colours: 0, balloons: 0 };
+  });
 
   // Waited for rather than timed. The sky is built at level 1 and only starts
   // filling at level 10's rate once the clock is wound, so "three seconds"
   // was a bet on the spawner rather than a number of balloons.
-  await page.waitForFunction(
-    () => Game.entities.filter(e => e.kind === 'balloon').length +
-      Game.score + Game.livesLost > 5,
-    null,
-    { timeout: SKY_FILLS }
-  ).catch(() => { throw new Error('too few balloons in the sky to judge the painters'); });
+  await page.waitForFunction(() => window.__built.balloons > 5, null, { timeout: SKY_FILLS })
+    .catch(() => { throw new Error('too few balloons made to judge the painters'); });
   await page.waitForTimeout(1500);
 
   const m = await page.evaluate(() => ({
     painters: window.__built.painters,
     colours: window.__built.colours,
-    // Balloons only: a bird is an entity too and builds no balloon painter.
-    balloons: Game.entities.filter(e => e.kind === 'balloon').length +
-      Game.score + Game.livesLost
+    balloons: window.__built.balloons
   }));
 
   assert.ok(m.balloons > 3, `only ${m.balloons} balloons, too few to judge`);
@@ -3328,6 +3340,178 @@ await t('birds arrive at level 8, and never before it', async () => {
   assert.ok(Array.isArray(m.news), 'level 8 does not say that birds have arrived');
   assert.match(m.news[1], /cost a life/i, 'the break does not say what a bird costs');
   assert.equal(m.tapsAt8, 1.24, 'birds changed what a balloon costs in taps');
+  await context.close();
+});
+
+
+await t('the boss arrives when the sky goes scarce, not when it is empty', async () => {
+  // The obvious rule is "when the sky is cleared". Measured, the sky is never
+  // cleared: balloons arrive about as fast as anyone pops them, so the count
+  // hovers near its cap and touches zero roughly never. A boss on that trigger
+  // would be a feature almost nobody met.
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    Game.applyLevel(6);
+    const rung = Game.rung();
+    const out = { threshold: rung.bossAt, cooldown: rung.bossEvery };
+
+    // One more balloon up than the threshold allows: no boss.
+    Game.entities = [];
+    Game.lastBoss = -Infinity;
+    for (let i = 0; i < rung.bossAt + 1; i++) { Game.add(Game.randomBalloon()); }
+    Game.spawnBoss();
+    out.whileBusy = Game.countOf('boss');
+
+    // Down to the threshold: a boss.
+    Game.entities = Game.entities.slice(0, rung.bossAt);
+    Game.spawnBoss();
+    out.whenScarce = Game.countOf('boss');
+
+    // And only one at a time.
+    Game.spawnBoss();
+    out.twoAtOnce = Game.countOf('boss');
+    return out;
+  });
+
+  assert.ok(m.threshold >= 1, 'level 6 has no boss threshold');
+  assert.ok(m.cooldown > 0, 'level 6 has no cooldown between bosses');
+  assert.equal(m.whileBusy, 0, 'a boss arrived while the sky was still busy');
+  assert.equal(m.whenScarce, 1, 'the sky went scarce and no boss came');
+  assert.equal(m.twoAtOnce, 1, 'two bosses at once');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the threshold climbs and the cooldown falls, so bosses keep coming', async () => {
+  // A fixed threshold would mean one boss per game and never another: clearing
+  // down to one balloon is a feat at level 6 and impossible by 12.
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => ({
+    first: Ladder.LEVELS.find(r => r.bossAt).level,
+    thresholds: Ladder.LEVELS.map(r => r.bossAt || 0),
+    cooldowns: Ladder.LEVELS.map(r => r.bossEvery || 0)
+  }));
+
+  assert.equal(m.first, 6, 'the boss does not start at level 6');
+  m.thresholds.forEach((at, i) => {
+    if (i + 1 < 6) {
+      assert.equal(at, 0, `level ${i + 1} has a boss before it should`);
+      return;
+    }
+    assert.ok(at > 0, `level ${i + 1} lost its boss`);
+    if (i + 1 > 6) {
+      assert.ok(at >= m.thresholds[i - 1],
+        `level ${i + 1} is harder to trigger than level ${i}`);
+      assert.ok(m.cooldowns[i] <= m.cooldowns[i - 1],
+        `level ${i + 1} waits longer between bosses than level ${i}`);
+    }
+  });
+  assert.ok(m.thresholds[19] > m.thresholds[5],
+    'the threshold never climbs, so the top of the ladder never sees a boss');
+  await context.close();
+});
+
+await t('the boss takes five taps, and the shot is telegraphed for long enough', async () => {
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    Game.applyLevel(6);
+    Game.entities = [];
+    Game.lastBoss = -Infinity;
+    Game.score = 0;
+    Game.spawnBoss();
+    const boss = Game.entities.find(e => e.kind === 'boss');
+
+    const out = { taps: boss.taps, fuse: boss.fuse, chargeSteps: 0 };
+    const startedAt = boss.xcoord;
+
+    // Four taps must not finish it.
+    for (let i = 0; i < 4; i++) { boss.tapped(Game); }
+    out.afterFour = { taps: boss.taps, score: Game.score };
+
+    // Count the steps FIRST: `i < boss.fuse` re-reads a counter that is going
+    // down, so the two meet in the middle and it never gets to fire.
+    const steps = boss.fuse + 1;
+    const lost = Game.livesLost;
+    for (let i = 0; i < steps; i++) {
+      boss.step(Game, false);
+      if (boss.charging()) { out.chargeSteps++; }
+    }
+    out.moved = boss.xcoord !== startedAt;
+    out.cost = Game.livesLost - lost;
+    out.said = document.getElementById('game_status').textContent;
+    return out;
+  });
+
+  assert.equal(m.taps, 5, 'the boss does not take five taps');
+  assert.equal(m.fuse, 90, 'the fuse is not three seconds at thirty steps a second');
+  assert.equal(m.afterFour.taps, 1, 'four taps should not finish it');
+  assert.equal(m.afterFour.score, 0, 'a boss scored before it was destroyed');
+
+  // 600ms is the floor: anything shorter than a reaction time plus an aim is
+  // unfair by construction, so losing is something you watched coming.
+  assert.ok(m.chargeSteps * (1000 / 30) >= 600,
+    `the shot is telegraphed for only ${Math.round(m.chargeSteps * (1000 / 30))}ms`);
+  assert.ok(m.moved, 'the boss sits still, which makes the fight a rhythm test');
+  assert.equal(m.cost, 1, 'the shot did not cost a life');
+  assert.match(m.said, /saucer fired/i, 'the shot is silent: ' + m.said);
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('destroying the boss scores, and starts the cooldown', async () => {
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    Game.applyLevel(6);
+    Game.entities = [];
+    Game.lastBoss = -Infinity;
+    Game.ticks = 5000;
+    Game.score = 0;
+    Game.spawnBoss();
+    const boss = Game.entities.find(e => e.kind === 'boss');
+
+    for (let i = 0; i < 5; i++) { boss.tapped(Game); }
+    const out = {
+      score: Game.score,
+      lost: Game.livesLost,
+      said: document.getElementById('game_status').textContent,
+      // Not removed on the spot: it lifts out of the sky, so the player sees
+      // the thing they beat go rather than having it blink out under a finger.
+      stillThere: Game.entities.includes(boss),
+      cooldownFrom: Game.ticks - Game.lastBoss
+    };
+
+    // Another cannot arrive until the cooldown has run. Without it, the moment
+    // after a boss dies is the emptiest the sky ever gets, which is exactly
+    // the trigger condition, and you would fight two back to back.
+    Game.entities = [];
+    Game.spawnBoss();
+    out.straightAway = Game.countOf('boss');
+    Game.ticks += Game.rung().bossEvery;
+    Game.spawnBoss();
+    out.afterCooldown = Game.countOf('boss');
+    return out;
+  });
+
+  assert.equal(m.score, 12, 'destroying the boss is worth nothing');
+  assert.equal(m.lost, 0, 'beating the boss cost a life');
+  assert.match(m.said, /destroyed/i, 'the win is silent: ' + m.said);
+  assert.ok(m.stillThere, 'the boss blinked out under the finger');
+  assert.equal(m.cooldownFrom, 0, 'the cooldown did not start when the fight settled');
+  assert.equal(m.straightAway, 0, 'a second boss arrived with no gap at all');
+  assert.equal(m.afterCooldown, 1, 'no boss came back after the cooldown');
+  assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
 

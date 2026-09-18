@@ -192,6 +192,7 @@ Screens.playing = {
 
         game.spawnBalloon();
         game.spawnBird();
+        game.spawnBoss();
         game.step(false);
 
         // Surviving the last level is the win, so the check comes before the

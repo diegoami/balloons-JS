@@ -144,8 +144,10 @@ Paint.description = function (game) {
     var ctx = game.ctx;
     ctx.font = game.layout.fonts.label;
     ctx.fillStyle = game.palette.inkSoft;
-    game.layout.description.forEach(function (line, i) {
-        ctx.fillText(Layout.DESCRIPTION[i], line.x, line.y);
+    // Each line carries its own words: after wrapping there is no longer one
+    // line per sentence in Layout.DESCRIPTION to index into.
+    game.layout.description.forEach(function (line) {
+        ctx.fillText(line.text, line.x, line.y);
     });
 };
 

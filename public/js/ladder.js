@@ -24,16 +24,25 @@
  *
  * `life` is a life awarded on arriving at that level.
  *
+ * `bossAt` is how few balloons have to be up before a saucer arrives, and
+ * `bossEvery` the steps that must pass since the last one settled. Both from
+ * level 6. The threshold RISES as the ladder climbs: clearing down to one
+ * balloon is a real feat at level 6 and impossible by level 12, so a fixed
+ * number would mean one boss per game and never another. The cooldown falls,
+ * so they come more often at the top. Without it the moment after a boss dies
+ * is the emptiest the sky ever gets — which is the trigger condition — and you
+ * would fight two back to back.
+ *
  * `birds` is the chance per step that a bird enters. A bird costs no taps —
  * you are meant to leave it alone — so it does not move the demand sum at all.
  * What it costs is attention, and a life if you get it wrong.
  *
  * `news` is a headline and a line of explanation for the thing this level
  * brings, and setting it is what makes the game BREAK before the level starts
- * (screens.js). Only the levels whose feature exists carry one: announcing a
- * boss at level 6 before there is a boss would be a lie, so 6, 8, 12, 14, 16
+ * (screens.js). Only the levels whose feature exists carry one: announcing
+ * janky balloons at 12 before they exist would be a lie, so 12, 14, 16
  * and 18 get theirs when their phase lands. Eight breaks in a winning run is
- * the intent; two of them work today.
+ * the intent; four of them work today.
  *
  * THE ARITHMETIC THAT MATTERS
  *
@@ -88,23 +97,24 @@ Ladder.LEVELS = [
     { level: 4 , speed:  5.2, frequency: 0.0556, size: 0.91, reinforced: 0.15, armoured: 0.00,
       news: ["Reinforced balloons", "Two taps, and they rise slower."] },
     { level: 5 , speed:  5.6, frequency: 0.0629, size: 0.88, reinforced: 0.18, armoured: 0.00 },
-    { level: 6 , speed:  6.0, frequency: 0.0665, size: 0.85, reinforced: 0.20, armoured: 0.00 },
-    { level: 7 , speed:  6.4, frequency: 0.0693, size: 0.82, reinforced: 0.22, armoured: 0.00 },
+    { level: 6 , speed:  6.0, frequency: 0.0665, size: 0.85, reinforced: 0.20, armoured: 0.00, bossAt: 1, bossEvery: 540,
+      news: ["A saucer", "Tap it down before it shoots. Five taps, three seconds."] },
+    { level: 7 , speed:  6.4, frequency: 0.0693, size: 0.82, reinforced: 0.22, armoured: 0.00, bossAt: 1, bossEvery: 520 },
     { level: 8 , speed:  6.9, frequency: 0.0719, size: 0.79, reinforced: 0.24, armoured: 0.00, birds: 0.004,
-      news: ["Birds", "Do not touch them. They cost a life."] },
-    { level: 9 , speed:  7.4, frequency: 0.0735, size: 0.76, reinforced: 0.26, armoured: 0.00, birds: 0.005 },
+      news: ["Birds", "Do not touch them. They cost a life."], bossAt: 2, bossEvery: 500 },
+    { level: 9 , speed:  7.4, frequency: 0.0735, size: 0.76, reinforced: 0.26, armoured: 0.00, birds: 0.005, bossAt: 2, bossEvery: 480 },
     { level: 10, speed:  7.9, frequency: 0.0686, size: 0.73, reinforced: 0.25, armoured: 0.08,
-      news: ["Armoured balloons", "Three taps. Worth six points."], birds: 0.005 },
-    { level: 11, speed:  8.4, frequency: 0.0680, size: 0.70, reinforced: 0.25, armoured: 0.10, birds: 0.006 },
-    { level: 12, speed:  8.9, frequency: 0.0675, size: 0.68, reinforced: 0.25, armoured: 0.12, life: 1, birds: 0.006 },
-    { level: 13, speed:  9.4, frequency: 0.0656, size: 0.66, reinforced: 0.26, armoured: 0.13, birds: 0.007 },
-    { level: 14, speed:  9.9, frequency: 0.0609, size: 0.64, reinforced: 0.26, armoured: 0.14, birds: 0.007 },
-    { level: 15, speed: 10.4, frequency: 0.0587, size: 0.62, reinforced: 0.27, armoured: 0.15, life: 1, birds: 0.008 },
-    { level: 16, speed: 10.9, frequency: 0.0565, size: 0.60, reinforced: 0.27, armoured: 0.16, birds: 0.008 },
-    { level: 17, speed: 11.4, frequency: 0.0543, size: 0.58, reinforced: 0.28, armoured: 0.17, birds: 0.009 },
-    { level: 18, speed: 11.9, frequency: 0.0521, size: 0.56, reinforced: 0.28, armoured: 0.18, life: 1, birds: 0.009 },
-    { level: 19, speed: 12.4, frequency: 0.0500, size: 0.54, reinforced: 0.30, armoured: 0.19, birds: 0.010 },
-    { level: 20, speed: 13.0, frequency: 0.0478, size: 0.52, reinforced: 0.30, armoured: 0.20, birds: 0.010 }
+      news: ["Armoured balloons", "Three taps. Worth six points."], birds: 0.005, bossAt: 3, bossEvery: 460 },
+    { level: 11, speed:  8.4, frequency: 0.0680, size: 0.70, reinforced: 0.25, armoured: 0.10, birds: 0.006, bossAt: 3, bossEvery: 440 },
+    { level: 12, speed:  8.9, frequency: 0.0675, size: 0.68, reinforced: 0.25, armoured: 0.12, life: 1, birds: 0.006, bossAt: 4, bossEvery: 420 },
+    { level: 13, speed:  9.4, frequency: 0.0656, size: 0.66, reinforced: 0.26, armoured: 0.13, birds: 0.007, bossAt: 4, bossEvery: 400 },
+    { level: 14, speed:  9.9, frequency: 0.0609, size: 0.64, reinforced: 0.26, armoured: 0.14, birds: 0.007, bossAt: 4, bossEvery: 390 },
+    { level: 15, speed: 10.4, frequency: 0.0587, size: 0.62, reinforced: 0.27, armoured: 0.15, life: 1, birds: 0.008, bossAt: 5, bossEvery: 380 },
+    { level: 16, speed: 10.9, frequency: 0.0565, size: 0.60, reinforced: 0.27, armoured: 0.16, birds: 0.008, bossAt: 5, bossEvery: 370 },
+    { level: 17, speed: 11.4, frequency: 0.0543, size: 0.58, reinforced: 0.28, armoured: 0.17, birds: 0.009, bossAt: 5, bossEvery: 360 },
+    { level: 18, speed: 11.9, frequency: 0.0521, size: 0.56, reinforced: 0.28, armoured: 0.18, life: 1, birds: 0.009, bossAt: 6, bossEvery: 340 },
+    { level: 19, speed: 12.4, frequency: 0.0500, size: 0.54, reinforced: 0.30, armoured: 0.19, birds: 0.010, bossAt: 6, bossEvery: 320 },
+    { level: 20, speed: 13.0, frequency: 0.0478, size: 0.52, reinforced: 0.30, armoured: 0.20, birds: 0.010, bossAt: 6, bossEvery: 300 }
 ];
 
 /**
