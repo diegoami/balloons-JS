@@ -32,6 +32,10 @@ Layout.DESCRIPTION = [
 ];
 
 Layout.START_TEXT = "Tap anywhere to play";
+Layout.RESUME_TEXT = "Resume";
+Layout.PLAY_INSTRUCTION = "Pop the balloons!";
+Layout.PAUSED_TEXT = "Paused";
+Layout.PAUSED_HINT = "You looked away, so the game waited.";
 Layout.HIGH_SCORES_TEXT = "High Scores";
 
 /** The name line along the bottom, and the screen it opens. */
@@ -47,7 +51,8 @@ Layout.GRID = {
         margin: 0.05,
         scoresHeading: 0.28,
         scoreDate: 0.05,
-        scoreName: 0.5,
+        scoreName: 0.38,
+        scoreLevel: 0.62,
         scoreValue: 0.8,
         hudCaught: 0.1,
         hudLevel: 0.45,
@@ -360,6 +365,40 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
         label: Layout.SAVE_TEXT
     };
 
+    // --- the break between levels, on the row below its explanation
+
+    ctx.font = fonts.menu;
+    var resumeWidth = Math.max(
+        ctx.measureText(Layout.RESUME_TEXT).width + padX * 2,
+        available * G.button.minWidth,
+        G.minTouchTarget
+    );
+    ctx.font = fonts.score;
+    var resume = {
+        x: left,
+        // Under the last line of the explanation rather than on the hint row.
+        // The hint row is positioned for a screen with a score table under it,
+        // which left the button stranded halfway down an empty sky.
+        y: description[description.length - 1].y + line * 1.1,
+        width: resumeWidth,
+        height: buttonHeight,
+        radius: line * G.button.radius,
+        label: Layout.RESUME_TEXT
+    };
+    resume.hit = {
+        x: resume.x, y: resume.y, width: resume.width, height: resume.height
+    };
+    // And the panel behind the break, which has to reach past its button.
+    // Declared here rather than beside the others so it comes after the
+    // button it is measured from: `var` hoisting made an earlier version of
+    // this assign into an undefined object.
+    var breakPanel = {
+        x: panel.x,
+        y: panel.y,
+        width: panel.width,
+        height: resume.y + resume.height - panel.y + panelPad * 2
+    };
+
     // Every tappable thing carries an id: the button starts a game, so does
     // the high-score line, and the name line opens the name screen.
     var targets = buttons.map(function (button) {
@@ -381,12 +420,14 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
         height: hintY + line - panel.y + panelPad
     };
 
+
     return {
         line: line,
         fonts: fonts,
 
         panel: panel,
         splash: splash,
+        breakPanel: breakPanel,
 
         intro: { x: left, y: line * G.rows.intro },
 
@@ -405,6 +446,7 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
         player: player,
 
         name: { field: field, save: save },
+        resume: resume,
 
         countdown: { x: width / 2, y: headingY + line * 1.4 },
 
@@ -414,6 +456,7 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
             columns: {
                 date: width * G.columns.scoreDate,
                 name: width * G.columns.scoreName,
+                level: width * G.columns.scoreLevel,
                 value: width * G.columns.scoreValue
             },
             rows: rows

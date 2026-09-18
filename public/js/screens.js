@@ -144,8 +144,15 @@ Screens.starting = {
 Screens.playing = {
     animated: true,
 
+    /**
+     * The clock is NOT reset here.
+     *
+     * It used to be, which was harmless while a round entered this screen
+     * exactly once. A break between levels leaves and comes back, and resetting
+     * the clock on the way back would put the player at level 1 again, for
+     * ever. resetRound owns the clock; this screen only reads it.
+     */
     enter: function (game) {
-        game.ticks = 0;
         Announce.playing();
     },
 
@@ -162,7 +169,19 @@ Screens.playing = {
             // the ladder climbs, so how far up you are is visible without
             // reading anything.
             game.applyLevel(climbed);
-            Announce.level(game, game.awardLife(climbed));
+            var awarded = game.awardLife(climbed);
+            Announce.level(game, awarded);
+
+            // A level that brings something new stops the game and says so.
+            // Eight new things across six and a half minutes is one every
+            // forty seconds, and a line in a live region that scrolls past
+            // while balloons are escaping is not how anyone learns that a
+            // balloon can take three taps.
+            if (game.rung().news) {
+                game.state.awarded = awarded;
+                game.enter("levelup");
+                return;
+            }
         }
 
         var escaped = game.reap();
@@ -189,6 +208,86 @@ Screens.playing = {
         Paint.sky(game);
         Paint.entities(game);
         Paint.hud(game);
+    },
+
+    menuLive: function () {
+        return false;
+    }
+};
+
+/**
+ * The break between levels.
+ *
+ * The frame loop keeps running, because the countdown has to tick — but
+ * nothing here steps the simulation, so the sky holds exactly where it was.
+ * You resume into the balloons you left, under the new level's rules, which is
+ * the honest version of a level change and the harder one.
+ *
+ * It resumes by itself. A break you have to dismiss is a break you can park
+ * on, and a player who glanced away would come back to a stopped game waiting
+ * for a click. The button skips the remainder; it never holds it open.
+ */
+Screens.levelup = {
+    animated: true,
+
+    enter: function (game) {
+        game.pressed = null;
+        game.state.stepsLeft = Game.BREAK_STEPS;
+        Announce.levelup(game, game.state.awarded);
+    },
+
+    bind: function (game, signal) {
+        Input.resume(game, signal);
+    },
+
+    update: function (game) {
+        game.state.stepsLeft--;
+        if (game.state.stepsLeft <= 0) {
+            game.enter("playing");
+        }
+    },
+
+    draw: function (game) {
+        Paint.sky(game);
+        Paint.entities(game);
+        Paint.panel(game, game.layout.breakPanel);
+        Paint.levelup(game, game.state.stepsLeft);
+    },
+
+    menuLive: function () {
+        return false;
+    }
+};
+
+/**
+ * A tab that was away.
+ *
+ * Backgrounding a tab already stopped the game and always will: rAF stops
+ * firing, and time played is counted in simulation steps, so the clock and the
+ * level stop with it. This screen does not add a pause — it makes the one that
+ * already existed visible, so a player who looks away comes back to a game
+ * that is plainly waiting rather than to one that restarts under them.
+ *
+ * It is not on a timer. A break between levels resumes itself because the
+ * player is there; this one is up precisely because they were not.
+ */
+Screens.paused = {
+    animated: false,
+
+    enter: function (game) {
+        game.pressed = null;
+        Announce.paused(game);
+    },
+
+    bind: function (game, signal) {
+        Input.resume(game, signal);
+    },
+
+    draw: function (game) {
+        Paint.sky(game);
+        Paint.entities(game);
+        Paint.panel(game, game.layout.breakPanel);
+        Paint.paused(game);
     },
 
     menuLive: function () {

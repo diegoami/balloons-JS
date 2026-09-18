@@ -92,6 +92,52 @@ await t('missing or non-string name falls back to anonymous', async () => {
   assert.deepEqual(board.map(e => e.name), ['anonymous', 'anonymous', 'anonymous']);
 });
 
+await t('a score records the level it reached', async () => {
+  __reset();
+  await post({ name: 'Diego', score: 380, level: 7 });
+  const board = await (await get()).json();
+  assert.equal(board[0].level, 7, 'the level was not stored');
+  assert.equal(board[0].won, undefined, 'a run that died was recorded as a win');
+});
+
+await t('a level that is not on the ladder is not recorded at all', async () => {
+  // Undefined rather than a fallback: a level we cannot trust is a level we do
+  // not have, and the board already knows how to draw a row without one.
+  __reset();
+  for (const level of [0, 21, -3, 4.5, '7', null, undefined, {}]) {
+    await post({ name: 'Diego', score: 10, level });
+  }
+  const board = await (await get()).json();
+  assert.equal(board.length, 8, 'a bad level should not cost the score');
+  board.forEach((row, i) => {
+    assert.equal(row.level, undefined, `row ${i} kept a level it should not have`);
+  });
+});
+
+await t('a win only counts at the top of the ladder', async () => {
+  // Anything else claiming one is a client that disagrees with this function
+  // about what winning is.
+  __reset();
+  await post({ name: 'Honest', score: 1000, level: 20, won: true });
+  await post({ name: 'Hopeful', score: 900, level: 11, won: true });
+  await post({ name: 'Confused', score: 800, won: true });
+  const board = await (await get()).json();
+  const by = (name) => board.find(r => r.name === name);
+  assert.equal(by('Honest').won, true, 'surviving level 20 was not recorded as a win');
+  assert.equal(by('Hopeful').won, undefined, 'a win was recorded at level 11');
+  assert.equal(by('Confused').won, undefined, 'a win was recorded with no level at all');
+});
+
+await t('rows written before levels existed are left alone', async () => {
+  __reset();
+  await post({ name: 'Old', score: 500 });
+  const board = await (await get()).json();
+  assert.equal(board[0].level, undefined);
+  assert.equal(board[0].won, undefined);
+  assert.deepEqual(Object.keys(board[0]).sort(), ['name', 'score', 'score_day'],
+    'a row with no level should carry no level key at all');
+});
+
 await t('unsupported methods are rejected with 405', async () => {
   const r = await handler(new Request('https://x/api/scores', { method: 'DELETE' }), ctx());
   assert.equal(r.status, 405);

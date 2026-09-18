@@ -27,8 +27,13 @@ const server = http.createServer((req, res) => {
       let body = '';
       req.on('data', c => { body += c; });
       req.on('end', () => {
-        const { name, score } = JSON.parse(body);
-        const next = [...board, { name, score, score_day: '2026-09-15' }]
+        const sent = JSON.parse(body);
+        apiHits[apiHits.length - 1].body = sent;
+        const { name, score, level, won } = sent;
+        const row = { name, score, score_day: '2026-09-15' };
+        if (level !== undefined) { row.level = level; }
+        if (won === true && level === 20) { row.won = true; }
+        const next = [...board, row]
           .sort((a, b) => b.score - a.score).slice(0, 10);
         boards.set('all', next);
         res.writeHead(200, { 'content-type': 'application/json' });
@@ -2931,6 +2936,231 @@ await t('a tap beside the tail no longer pops the balloon', async () => {
   assert.equal(m.theWaist, true, 'the widest part of the balloon does not pop it');
   assert.equal(m.downTheTail, true, 'the tail does not pop it');
   assert.equal(m.belowTheTip, false, 'the knot below the balloon pops it');
+  await context.close();
+});
+
+
+await t('a level that brings something new stops the game and says so', async () => {
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+
+  // One step short of the boundary into level 4, where reinforced balloons
+  // arrive. Wound rather than waited: three levels is a minute of play.
+  const before = await page.evaluate(() => {
+    Game.ticks = 3 * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS - 2;
+    return { level: Game.level, ticks: Game.ticks };
+  });
+  await page.waitForFunction(() => Game.screen === 'levelup', null, { timeout: 5000 });
+
+  const during = await page.evaluate(() => ({
+    level: Game.level,
+    ticks: Game.ticks,
+    stepsLeft: Game.state.stepsLeft,
+    news: Game.rung().news,
+    frozen: Game.entities.map(e => e.ycoord),
+    running: Game.running,
+    said: document.getElementById('game_status').textContent
+  }));
+  assert.equal(during.level, 4, 'the break came up on the wrong level');
+  assert.ok(during.stepsLeft > 0, 'the break has no wait left to count down');
+  assert.ok(Array.isArray(during.news), 'level 4 has nothing to announce');
+  assert.match(during.said, /Reinforced balloons/, 'the break is silent: ' + during.said);
+  assert.ok(during.running, 'the loop stopped, so the countdown cannot tick');
+
+  // The sky holds exactly where it was, and the clock does not advance.
+  await page.waitForTimeout(700);
+  const held = await page.evaluate(() => ({
+    ticks: Game.ticks,
+    positions: Game.entities.map(e => e.ycoord)
+  }));
+  assert.deepEqual(held.positions, during.frozen,
+    'the balloons kept rising through the break');
+  assert.equal(held.ticks, during.ticks, 'the clock ran during the break');
+
+  // It resumes by itself, and picks the clock up where it left it.
+  await page.waitForFunction(() => Game.screen === 'playing', null, { timeout: 8000 });
+  const after = await page.evaluate(() => ({ level: Game.level, ticks: Game.ticks }));
+  assert.equal(after.level, 4, 'the level changed across the break');
+  assert.ok(after.ticks >= during.ticks,
+    `the clock went backwards across the break: ${during.ticks} then ${after.ticks}`);
+  assert.ok(after.ticks > before.ticks,
+    'the clock was reset on the way back into play, which would trap a run at level 1');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the Resume button skips the rest of the break', async () => {
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+  await page.evaluate(() => { Game.ticks = 3 * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS - 2; });
+  await page.waitForFunction(() => Game.screen === 'levelup', null, { timeout: 5000 });
+
+  // A tap on the frozen sky is not "get on with it": the balloons behind this
+  // screen are the ones the player was about to pop.
+  const sky = await page.evaluate(() => ({ x: Game.width * 0.8, y: Game.height * 0.7 }));
+  await page.mouse.click(sky.x, sky.y);
+  await page.waitForTimeout(150);
+  assert.equal(await page.evaluate(() => Game.screen), 'levelup',
+    'a tap on the sky skipped the break');
+
+  const button = await page.evaluate(() => Game.layout.resume);
+  await page.mouse.click(button.x + button.width / 2, button.y + button.height / 2);
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => Game.screen), 'playing',
+    'the Resume button did not resume');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the countdown says what to do', async () => {
+  const { context, page } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(400);
+
+  const m = await page.evaluate(() => ({
+    screen: Game.screen,
+    instruction: Layout.PLAY_INSTRUCTION,
+    said: document.getElementById('game_status').textContent
+  }));
+  assert.equal(m.screen, 'starting');
+  assert.equal(m.instruction, 'Pop the balloons!',
+    'the one instruction the game gives has changed wording');
+  assert.match(m.said, /Get ready/, 'the countdown is silent: ' + m.said);
+  await context.close();
+});
+
+await t('looking away pauses the game and says so on the way back', async () => {
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+  await page.waitForFunction(() => Game.entities.length > 0, null, { timeout: SKY_FILLS });
+
+  const playing = await page.evaluate(() => ({
+    ticks: Game.ticks,
+    positions: Game.entities.map(e => e.ycoord)
+  }));
+
+  // Playwright cannot background a tab, so this drives the event the browser
+  // would fire. What it checks is the handler, which is the part that is ours.
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.waitForTimeout(300);
+
+  const away = await page.evaluate(() => ({
+    screen: Game.screen,
+    said: document.getElementById('game_status').textContent
+  }));
+  assert.equal(away.screen, 'paused', 'a backgrounded tab left the game running');
+  assert.match(away.said, /Paused/, 'the pause is silent: ' + away.said);
+
+  // It waits. A break between levels resumes itself because the player is
+  // there; this screen is up precisely because they were not.
+  await page.waitForTimeout(900);
+  const still = await page.evaluate(() => ({
+    screen: Game.screen,
+    ticks: Game.ticks,
+    positions: Game.entities.map(e => e.ycoord)
+  }));
+  assert.equal(still.screen, 'paused', 'the pause resumed on its own');
+  assert.equal(still.ticks, playing.ticks, 'the clock ran while the tab was away');
+  assert.deepEqual(still.positions, playing.positions,
+    'the balloons kept rising while the tab was away');
+
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => Game.screen), 'playing',
+    'the game did not carry on when asked');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+
+await t('the board records how far up the ladder a score got', async () => {
+  boards.clear();
+  apiHits.length = 0;
+  const { context, page, errors } = await newGame({ name: 'Diego' });
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+
+  // Die at a known level rather than at whichever one the clock reaches.
+  await page.evaluate(() => {
+    Game.ticks = 6 * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS;
+    Game.score = 380;
+    Game.lostBalloons = Game.allowance;
+  });
+  await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
+  await page.waitForTimeout(400);
+
+  const posted = apiHits.find(h => h.method === 'POST');
+  assert.ok(posted && posted.body, 'no score was posted');
+  assert.equal(posted.body.level, 7, 'the level was not sent with the score');
+  assert.equal(posted.body.won, false, 'a run that died claimed a win');
+  assert.equal(boards.get('all')[0].level, 7, 'the board did not keep the level');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('a row says won, a level, or nothing, and never invents one', async () => {
+  boards.clear();
+  apiHits.length = 0;
+  boards.set('all', [
+    { name: 'Winner', score: 1100, score_day: '2026-09-17', level: 20, won: true },
+    { name: 'Climber', score: 700, score_day: '2026-09-16', level: 14 },
+    { name: 'Ancient', score: 500, score_day: '2026-09-01' }
+  ]);
+  const { context, page } = await newGame({ name: 'Diego' });
+  await page.waitForTimeout(500);
+
+  const m = await page.evaluate(() => ({
+    reached: Scores.board.map(row => Paint.reached(row)),
+    hasLevelColumn: typeof Game.layout.scores.columns.level === 'number',
+    levelLeftOfValue: Game.layout.scores.columns.level < Game.layout.scores.columns.value
+  }));
+
+  // An em dash, not a zero: a row written before levels existed has no level,
+  // and that is different from having reached none.
+  assert.deepEqual(m.reached, ['WON', 'L14', '\u2014']);
+  assert.ok(m.hasLevelColumn, 'there is nowhere to draw the level');
+  assert.ok(m.levelLeftOfValue, 'the level should read before the score, not after it');
+  await context.close();
+});
+
+
+await t('a break counts in steps, so a tab that goes away does not skip it', async () => {
+  // A wall-clock deadline would already have passed on the way back: the loop
+  // stops when the page is hidden, so the player would never see what the
+  // level brought. Everything else in this game measures time in steps for
+  // the same reason.
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+  await page.evaluate(() => { Game.ticks = 3 * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS - 2; });
+  await page.waitForFunction(() => Game.screen === 'levelup', null, { timeout: 5000 });
+
+  const m = await page.evaluate(async () => {
+    Game.stopLoop();
+    const before = Game.state.stepsLeft;
+
+    // Six seconds of wall clock with the loop stopped, which is longer than
+    // the whole break.
+    await new Promise(r => setTimeout(r, 600));
+    const after = Game.state.stepsLeft;
+
+    // And the break still has to be spendable.
+    for (let i = 0; i < Game.BREAK_STEPS; i++) { Screens.levelup.update(Game); }
+    return { before, after, screen: Game.screen, total: Game.BREAK_STEPS };
+  });
+
+  assert.equal(m.after, m.before,
+    'the break drained while nothing was stepping it');
+  assert.equal(m.screen, 'playing',
+    'spending the whole break did not resume the game');
+  assert.equal(m.total, 120, 'four seconds at thirty steps a second is 120 steps');
+  assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
 

@@ -60,6 +60,31 @@ Announce.starting = function (game) {
     );
 };
 
+/**
+ * The break between levels, read out.
+ *
+ * The screen says this too, but a reader cannot see the balloons hanging in
+ * the air waiting, so it also says that the game will carry on by itself.
+ */
+Announce.levelup = function (game, awarded) {
+    var news = game.rung().news || ["", ""];
+    Announce.say(
+        "Level " + game.level + ". " + news[0] + ". " + news[1] +
+        (awarded > 0
+            ? " Extra life, " + Announce.lives(game.allowance - game.lostBalloons) +
+              " left to lose."
+            : "") +
+        " Resuming in a moment, or press space to go now."
+    );
+};
+
+Announce.paused = function (game) {
+    Announce.say(
+        "Paused at level " + game.level + ". " + game.score +
+        " points. Press space to carry on."
+    );
+};
+
 Announce.playing = function () {
     Announce.say("Go.");
 };
