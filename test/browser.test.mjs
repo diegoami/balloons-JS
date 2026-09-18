@@ -3636,6 +3636,159 @@ await t('a practice run is shorter, because it has fewer levels left to climb', 
 });
 
 
+await t('fireflies arrive in numbers at 16, and there are more of them higher up', async () => {
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => ({
+    first: Ladder.LEVELS.find(r => r.fireflies).level,
+    counts: Ladder.LEVELS.map(r => r.fireflies || 0),
+    news: Ladder.at(16).news,
+    // They cost no taps of their own, so they must not move the demand sum.
+    tapsAt16: Ladder.meanTaps(Ladder.at(16)),
+    tapsAt15: Ladder.meanTaps(Ladder.at(15))
+  }));
+
+  assert.equal(m.first, 16, 'fireflies do not start at level 16');
+  assert.ok(m.counts[15] > 1, 'level 16 has a single firefly, not fireflies');
+  m.counts.forEach((n, i) => {
+    if (i + 1 < 16) {
+      assert.equal(n, 0, `level ${i + 1} has fireflies before they arrive`);
+    } else {
+      assert.ok(n > 1, `level ${i + 1} is down to one firefly`);
+      assert.ok(n >= m.counts[i - 1], `level ${i + 1} has fewer than level ${i}`);
+    }
+  });
+  assert.ok(m.counts[19] > m.counts[15], 'the swarm never grows');
+  assert.ok(Array.isArray(m.news), 'level 16 does not announce them');
+  assert.equal(m.tapsAt16, m.tapsAt15 + 0.02,
+    'fireflies changed what a balloon costs in taps');
+  await context.close();
+});
+
+await t('the sky is topped up to the number of fireflies, and no further', async () => {
+  // A population, not a rate: they are never removed and never reach the top,
+  // so once the count is met the spawner has nothing left to do.
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    Game.applyLevel(20);
+    Game.entities = [];
+
+    Game.spawnFireflies();
+    const first = Game.countOf('firefly');
+    for (let i = 0; i < 50; i++) { Game.spawnFireflies(); }
+    const after = Game.countOf('firefly');
+
+    // One taken away is replaced; the population is the target.
+    const flies = Game.entities.filter(e => e.kind === 'firefly');
+    Game.entities.splice(Game.entities.indexOf(flies[0]), 1);
+    Game.spawnFireflies();
+
+    return { wanted: Game.rung().fireflies, first, after, topped: Game.countOf('firefly') };
+  });
+
+  assert.equal(m.first, m.wanted, 'the sky did not fill to the level\'s number');
+  assert.equal(m.after, m.wanted, 'fireflies kept arriving after the sky was full');
+  assert.equal(m.topped, m.wanted, 'a firefly that went was not replaced');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('a firefly costs the tap and nothing else, and cannot be waited out', async () => {
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    Game.applyLevel(20);
+    Game.entities = [];
+    Game.spawnFireflies();
+    const fly = Game.entities.find(e => e.kind === 'firefly');
+
+    const before = { lost: Game.livesLost, score: Game.score };
+    const removed = fly.tapped(Game);
+    const out = {
+      removed,
+      costLife: Game.livesLost - before.lost,
+      costScore: Game.score - before.score,
+      stillThere: Game.entities.includes(fly),
+      // A bird punishes touching; a firefly punishes carelessness. If both
+      // cost a life the second one is not a new idea.
+      goneNow: fly.gone(Game)
+    };
+
+    // It wanders, stays on screen, and is still there a long time later --
+    // which is what makes it a tax rather than an event.
+    const from = { x: fly.xcoord, y: fly.ycoord };
+    let offScreen = 0;
+    for (let i = 0; i < 1200; i++) {
+      fly.step(Game, false);
+      if (fly.xcoord < 0 || fly.xcoord > Game.width ||
+          fly.ycoord < 0 || fly.ycoord > Game.height) { offScreen++; }
+    }
+    out.wandered = Math.round(Math.hypot(fly.xcoord - from.x, fly.ycoord - from.y));
+    out.offScreen = offScreen;
+    out.leftAfterAges = fly.gone(Game);
+
+    // A round ending does clear them out.
+    for (let i = 0; i < 400; i++) { fly.step(Game, true); }
+    out.leftOnRoundEnd = fly.gone(Game);
+    return out;
+  });
+
+  assert.equal(m.costLife, 0, 'a firefly cost a life');
+  assert.equal(m.costScore, 0, 'a firefly scored');
+  assert.equal(m.removed, false, 'a firefly popped');
+  assert.ok(m.stillThere, 'the firefly was removed by a tap');
+  assert.equal(m.goneNow, null, 'the firefly left the moment it was tapped');
+  assert.equal(m.offScreen, 0, 'a firefly wandered off the screen');
+  assert.ok(m.wandered > 0, 'the firefly never moved, so it can be learned once and ignored');
+  assert.equal(m.leftAfterAges, null, 'a firefly can be waited out');
+  assert.equal(m.leftOnRoundEnd, 'left', 'fireflies stay after the round is over');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('a firefly takes a tap aimed at the balloon beside it', async () => {
+  // This is the whole feature: nearest-centre dispatch means a firefly parked
+  // next to a balloon quietly takes every sloppy tap aimed at that balloon.
+  // What it costs is precision, not recognition.
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    Game.applyLevel(20);
+    Game.entities = [];
+
+    const balloon = Game.randomBalloon();
+    balloon.xcoord = 600;
+    balloon.ycoord = 400;
+    Game.add(balloon);
+
+    const fly = fireflyConstructor(600 + balloon.size + 18, 400, 20, 0.5, Game.width, Game.height);
+    Game.add(fly);
+
+    // Dead centre of the balloon still gets the balloon.
+    const onBalloon = Entities.pick(Game.entities, { x: 600, y: 400 });
+    // A tap that drifted towards the firefly gets the firefly.
+    const drifted = Entities.pick(Game.entities, { x: fly.xcoord, y: fly.ycoord });
+
+    return {
+      onBalloon: onBalloon && onBalloon.kind,
+      drifted: drifted && drifted.kind,
+      layerAbove: fly.layer > balloon.layer
+    };
+  });
+
+  assert.equal(m.onBalloon, 'balloon', 'a tap on the balloon did not reach it');
+  assert.equal(m.drifted, 'firefly', 'a tap that drifted onto a firefly missed it entirely');
+  assert.ok(m.layerAbove, 'fireflies should be drawn over balloons, so you can see one coming');
+  await context.close();
+});
+
+
 await browser.close();
 server.close();
 

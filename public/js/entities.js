@@ -37,6 +37,7 @@ var Entities = {};
  */
 Entities.LAYERS = {
     balloon: 10,
+    firefly: 15,
     bird: 20,
     boss: 30,
     shot: 40
