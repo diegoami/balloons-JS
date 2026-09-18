@@ -57,6 +57,16 @@ const t = async (name, fn) => {
   catch (e) { console.log('  FAIL ' + name + '\n       ' + e.message); failed++; }
 };
 
+/**
+ * How long to allow for the sky to fill.
+ *
+ * Level 1 releases about 1.2 balloons a second on purpose, and spawning is a
+ * coin flip per step rather than a metronome — so waiting five seconds for
+ * three balloons came up short about one run in twenty, and for two about one
+ * in eighty. None of the tests that wait are about the spawn rate.
+ */
+const SKY_FILLS = 15000;
+
 async function newGame({ width = 1280, height = 720, name = 'TestPlayer', dpr = 1 } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr });
   const page = await context.newPage();
@@ -220,26 +230,37 @@ await t('buttons never overlap each other', async () => {
 
 await t('the title screen is playing the game behind its own text', async () => {
   const { context, page, errors } = await newGame();
-  await page.waitForTimeout(900);
+
+  // Waited for, not sampled: the demo is popping and a few are getting away,
+  // so the count at any one instant is a moving number.
+  await page.waitForFunction(
+    () => Game.entities.filter(e => e.kind === 'balloon').length >= 3,
+    null,
+    { timeout: SKY_FILLS }
+  ).catch(() => { throw new Error('the title screen sky never had three balloons in it'); });
 
   const first = await page.evaluate(() => ({
     screen: Game.screen,
-    balloons: Game.entities.filter(e => e.kind === 'balloon').length,
     level: Game.level,
-    positions: Game.entities.map(e => e.y)
+    positions: Game.entities.map(e => e.ycoord)
   }));
   assert.equal(first.screen, 'title', 'the footage started a game by itself');
-  assert.ok(first.balloons >= 3,
-    `only ${first.balloons} balloons on the title screen; the sky opens empty`);
+  // A balloon's position is `ycoord`. Reading `e.y` gave undefined, and the
+  // comparison that used it passed by accident for a while: two arrays of NaN
+  // are deeply equal, so "it moved" only failed once the count held still.
+  assert.ok(first.positions.every(Number.isFinite),
+    'balloons have no readable position: ' + first.positions.join(', '));
 
   // Nobody has touched anything, and it is still moving.
   await page.waitForTimeout(700);
-  const later = await page.evaluate(() => Game.entities.map(e => e.y));
+  const later = await page.evaluate(() => Game.entities.map(e => e.ycoord));
   assert.notDeepEqual(later, first.positions, 'the footage is a still image');
 
   // And it is being played, not just left to drift: balloons are popping.
-  assert.ok(await page.evaluate(() => Game.score) > 0,
-    'nothing is being popped, so the footage shows a game nobody is playing');
+  // Waited for rather than sampled, because the demo taps at the level's own
+  // pace and a reinforced balloon costs it two taps before anything scores.
+  await page.waitForFunction(() => Game.score > 0, null, { timeout: SKY_FILLS })
+    .catch(() => { throw new Error('nothing is being popped, so the footage shows a game nobody is playing'); });
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
@@ -272,7 +293,7 @@ await t('balloons spawn and rise during play', async () => {
   const { context, page, errors } = await newGame();
   await page.keyboard.press(' ');
   await page.waitForTimeout(2500);
-  await page.waitForFunction(() => Game.entities.length > 0, null, { timeout: 5000 });
+  await page.waitForFunction(() => Game.entities.length > 0, null, { timeout: SKY_FILLS });
   const before = await page.evaluate(() => Game.entities.map(b => b.ycoord));
   await page.waitForTimeout(500);
   const after = await page.evaluate(() => Game.entities.map(b => b.ycoord));
@@ -286,7 +307,7 @@ await t('clicking a balloon pops it and scores a point', async () => {
   const { context, page } = await newGame();
   await page.keyboard.press(' ');
   await page.waitForTimeout(2500);
-  await page.waitForFunction(() => Game.entities.length > 0, null, { timeout: 5000 });
+  await page.waitForFunction(() => Game.entities.length > 0, null, { timeout: SKY_FILLS });
 
   const popped = await page.evaluate(async () => {
     // Freeze the loop so the balloon can't drift between reading and clicking.
@@ -387,7 +408,7 @@ await t('no listeners leak across repeated restarts', async () => {
 
   // And functionally: one click must pop exactly one balloon, not one per stacked handler.
   await page.waitForTimeout(2600);
-  await page.waitForFunction(() => Game.entities.length > 1, null, { timeout: 5000 });
+  await page.waitForFunction(() => Game.entities.length > 1, null, { timeout: SKY_FILLS });
   const popped = await page.evaluate(() => {
     Game.stopLoop();
     const b = Game.entities[0];
@@ -507,7 +528,7 @@ await t('game still works when the score API is unreachable', async () => {
   await page.waitForTimeout(400);
   await page.keyboard.press(' ');
   await page.waitForTimeout(2600);
-  await page.waitForFunction(() => Game.entities.length > 0, null, { timeout: 5000 });
+  await page.waitForFunction(() => Game.entities.length > 0, null, { timeout: SKY_FILLS });
   assert.deepEqual(errors, [], 'a dead leaderboard must not break the game: ' + errors.join(' | '));
   await context.close();
 });
@@ -567,7 +588,7 @@ await t('clicking a balloon still pops it at 2x (no double-applied ratio)', asyn
   const { context, page, errors } = await newGame({ dpr: 2 });
   await page.keyboard.press(' ');
   await page.waitForTimeout(2500);
-  await page.waitForFunction(() => Game.entities.length > 0, null, { timeout: 5000 });
+  await page.waitForFunction(() => Game.entities.length > 0, null, { timeout: SKY_FILLS });
   const popped = await page.evaluate(() => {
     Game.stopLoop();
     const b = Game.entities[0];
@@ -615,7 +636,7 @@ await t('rotating mid-game keeps play running and balloons in bounds', async () 
   const { context, page, errors } = await newGame({ width: 900, height: 500 });
   await page.keyboard.press(' ');
   await page.waitForTimeout(2500);
-  await page.waitForFunction(() => Game.entities.length > 2, null, { timeout: 5000 });
+  await page.waitForFunction(() => Game.entities.length > 2, null, { timeout: SKY_FILLS });
   await page.setViewportSize({ width: 500, height: 900 }); // portrait
   await page.waitForTimeout(400);
   const m = await page.evaluate(() => ({
@@ -1837,7 +1858,16 @@ await t('a balloon is painted by one painter, not a new one every frame', async 
   await page.keyboard.press(' ');
   await page.waitForTimeout(2400);
   await page.evaluate(() => { Game.ticks = 9 * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS; });
-  await page.waitForTimeout(3000);
+
+  // Waited for rather than timed. The sky is built at level 1 and only starts
+  // filling at level 10's rate once the clock is wound, so "three seconds"
+  // was a bet on the spawner rather than a number of balloons.
+  await page.waitForFunction(
+    () => Game.entities.length + Game.score + Game.lostBalloons > 5,
+    null,
+    { timeout: SKY_FILLS }
+  ).catch(() => { throw new Error('too few balloons in the sky to judge the painters'); });
+  await page.waitForTimeout(1500);
 
   const m = await page.evaluate(() => ({
     painters: window.__built.painters,
@@ -1845,8 +1875,8 @@ await t('a balloon is painted by one painter, not a new one every frame', async 
     balloons: Game.entities.length + Game.score + Game.lostBalloons
   }));
 
-  assert.ok(m.balloons > 3, `only ${m.balloons} balloons in three seconds, too few to judge`);
-  // Three seconds at thirty frames is ninety chances to rebuild each one.
+  assert.ok(m.balloons > 3, `only ${m.balloons} balloons, too few to judge`);
+  // Every frame since each was born was a chance to rebuild it.
   assert.equal(m.painters, m.balloons,
     `${m.balloons} balloons needed ${m.painters} painters`);
   assert.equal(m.colours, m.balloons * 3,
@@ -2382,10 +2412,7 @@ await t('everything in the sky answers the same questions', async () => {
   const { context, page } = await newGame();
   await page.keyboard.press(' ');
   await page.waitForTimeout(2500);
-  // Generous, because level 1 releases about 1.2 balloons a second and spawning
-  // is a coin flip per step: five seconds came up short about one run in
-  // twenty, and what this test is about is the contract, not the spawn rate.
-  await page.waitForFunction(() => Game.entities.length > 2, null, { timeout: 15000 });
+  await page.waitForFunction(() => Game.entities.length > 2, null, { timeout: SKY_FILLS });
 
   const m = await page.evaluate(() => {
     const contract = ['step', 'draw', 'hits', 'tapped', 'gone'];
