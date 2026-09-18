@@ -130,6 +130,9 @@ Announce.arrivals = function (game) {
     var under = Ladder.at(game.level - 1);
     var news = "";
 
+    if (rung.fireflies > 0 && !(under.fireflies > 0)) {
+        return " Fireflies: harmless, but taps land on them.";
+    }
     if (rung.birds > 0 && !(under.birds > 0)) {
         return " Birds: do not touch them.";
     }

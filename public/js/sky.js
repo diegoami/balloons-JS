@@ -48,6 +48,8 @@ Sky.PALETTES = {
         bossLight: "#FFD98A",
         bossBeam: "rgba(255, 120, 60, 0.75)",
         bossHot: "#C4543A",
+        fireflyCore: "#FFF6C8",
+        fireflyGlow: "rgba(255, 224, 130, 0.55)",
         birdInk: "#16324A",
         stars: 0
     },
@@ -72,6 +74,8 @@ Sky.PALETTES = {
         bossLight: "#FFCE73",
         bossBeam: "rgba(255, 120, 60, 0.75)",
         bossHot: "#C4543A",
+        fireflyCore: "#FFF2BC",
+        fireflyGlow: "rgba(255, 216, 118, 0.55)",
         birdInk: "#17304C",
         stars: 0
     },
@@ -96,6 +100,8 @@ Sky.PALETTES = {
         bossLight: "#FFB870",
         bossBeam: "rgba(255, 150, 90, 0.8)",
         bossHot: "#D4603C",
+        fireflyCore: "#FFE9B0",
+        fireflyGlow: "rgba(255, 196, 108, 0.6)",
         birdInk: "#2A1A33",
         stars: 0
     },
@@ -120,6 +126,8 @@ Sky.PALETTES = {
         bossLight: "#8FB6FF",
         bossBeam: "rgba(150, 190, 255, 0.8)",
         bossHot: "#6E86C8",
+        fireflyCore: "#FFF3C0",
+        fireflyGlow: "rgba(255, 214, 120, 0.65)",
         birdInk: "#8FA4CC",
         stars: 90
     }
@@ -202,7 +210,8 @@ var MIXED_COLOURS = [
     "top", "mid", "horizon", "scrim", "panel", "ink", "inkSoft", "accent",
     "onAccent", "buttonFill", "buttonBorder", "buttonPressOverlay",
     "buttonDisabledFill", "buttonDisabledBorder", "inkDisabled", "birdInk",
-    "bossHull", "bossDome", "bossLight", "bossBeam", "bossHot"
+    "bossHull", "bossDome", "bossLight", "bossBeam", "bossHot",
+    "fireflyCore", "fireflyGlow"
 ];
 
 /** One palette a fraction of the way to another. */

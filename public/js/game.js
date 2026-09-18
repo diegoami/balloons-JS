@@ -589,6 +589,34 @@ Game.spawnBalloon = function () {
 };
 
 /**
+ * Tops the sky up to the number of fireflies this level wants.
+ *
+ * A population, not a rate. They are never removed and never reach the top, so
+ * there is nothing to keep respawning: once the count is met this does nothing
+ * for the rest of the level.
+ *
+ * They arrive in the middle band rather than at an edge, because unlike a bird
+ * they are not passing through — and one drifting in from off screen would
+ * spend its first seconds somewhere nobody is aiming.
+ */
+Game.spawnFireflies = function () {
+    var wanted = this.rung().fireflies || 0;
+    var radius = Math.max(FIREFLY_MIN_RADIUS, FIREFLY_BASE_SIZE * this.ratio);
+    var edge = radius * FIREFLY_GLOW;
+
+    while (this.countOf("firefly") < wanted) {
+        this.add(fireflyConstructor(
+            edge + Math.random() * Math.max(1, this.width - edge * 2),
+            this.height * 0.2 + Math.random() * Math.max(1, this.height * 0.55),
+            radius,
+            FIREFLY_DRIFT * this.ratio,
+            this.width,
+            this.height
+        ));
+    }
+};
+
+/**
  * Maybe sends in a saucer.
  *
  * Two conditions, both from the ladder: the sky has to be down to `bossAt`

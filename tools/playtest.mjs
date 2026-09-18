@@ -66,7 +66,7 @@ const BOT = (o) => `
   const seen = new Map();
   window.__stats = {
     clicks: 0, hits: 0, lifetimes: [], sky: [], byLevel: {},
-    birdsTouched: 0, bossesMet: 0, bossesLost: 0
+    birdsTouched: 0, bossesMet: 0, bossesLost: 0, fireflyTaps: 0
   };
 
   // How the boss fights went. Counted by watching, because a fight settles
@@ -182,13 +182,21 @@ const BOT = (o) => `
     // the centre. Against the balloon's real outline those taps land on sky,
     // so the harness was measuring its own failure to track rather than the
     // game's difficulty.
-    const aimX = target.ref.xcoord;
-    const aimY = target.ref.ycoord;
+    const aimX = target.ref.xcoord + (Math.random() * 2 - 1) * AIM_ERROR;
+    const aimY = target.ref.ycoord + (Math.random() * 2 - 1) * AIM_ERROR;
+
+    // Fireflies are NOT avoided, unlike birds. Touching a bird costs a life,
+    // so a person waits for it; a firefly costs only the tap, so a person
+    // takes the tap and misses. Measuring that is the point -- ask the game
+    // what this tap is about to land on, rather than inferring it after.
+    const landsOn = Entities.pick(Game.entities, { x: aimX, y: aimY });
+    if (landsOn && landsOn.kind === 'firefly') { window.__stats.fireflyTaps++; }
+
     const before = Game.score;
     const lostBefore = Game.livesLost;
     Game.canvas.dispatchEvent(new MouseEvent('click', {
-      clientX: aimX + (Math.random() * 2 - 1) * AIM_ERROR,
-      clientY: aimY + (Math.random() * 2 - 1) * AIM_ERROR,
+      clientX: aimX,
+      clientY: aimY,
       bubbles: true
     }));
     window.__stats.clicks++;
@@ -246,6 +254,7 @@ async function playGame(index) {
       birdsTouched: window.__stats.birdsTouched,
       bossesMet: window.__stats.bossesMet,
       bossesLost: window.__stats.bossesLost,
+      fireflyTaps: window.__stats.fireflyTaps,
       // The allowance rather than the constant: a run that reached 12, 15 or 18
       // was handed a life there, and a table saying 5 would be hiding it.
       lives: Game.allowance,
@@ -283,7 +292,7 @@ console.log(
   `${Math.round(1000 / OPTIONS.interval * 10) / 10} clicks/sec ` +
   `· ${OPTIONS.width}×${OPTIONS.height} · ${OPTIONS.capMs / 1000}s cap\n`
 );
-console.log('run   lives  survived   points  pops/tap   sky    lost  birds  boss     rung   outcome');
+console.log('run   lives  survived   points  pops/tap   sky    lost  birds  boss     flies  rung   outcome');
 
 const mean = list => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
 
@@ -299,6 +308,7 @@ settled.forEach(r => {
     String(r.lost).padEnd(5),
     String(r.birdsTouched).padEnd(6),
     ((r.bossesMet - r.bossesLost) + '/' + r.bossesMet).padEnd(8),
+    String(r.fireflyTaps).padEnd(6),
     String(r.rung).padEnd(6),
     r.won ? 'WON' : (r.ended ? 'died' : 'survived the cap')
   );
