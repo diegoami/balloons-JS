@@ -33,6 +33,9 @@ Attract.CLIPS = [5, 10, 15, 20];
 /** How long one clip holds before cutting to the next. */
 Attract.CLIP_MS = 6500;
 
+/** How far up the screen a clip's opening sky is scattered. */
+Attract.FILL_DEPTH = 0.5;
+
 /**
  * How hard the demo player works, as a share of what the level is releasing.
  *
@@ -104,9 +107,11 @@ Attract.cut = function (game) {
 Attract.fill = function (game, count) {
     for (var i = 0; i < count; i++) {
         var balloon = game.randomBalloon();
-        // Spread over the lower four-fifths: nothing starts about to escape,
-        // because a clip opening on a lost balloon sells the wrong thing.
-        balloon.y -= Math.random() * game.height * 0.8;
+        // Spread over the lower half only. Four-fifths looked like more of the
+        // screen in use, but a balloon placed a fifth from the top has under a
+        // second before it leaves — so a cut was followed by the sky visibly
+        // draining, and the clip was thinnest exactly when it was newest.
+        balloon.ycoord -= Math.random() * game.height * Attract.FILL_DEPTH;
         game.add(balloon);
     }
 };
@@ -130,7 +135,7 @@ Attract.tap = function (game) {
         if (entity.kind !== "balloon") {
             continue;
         }
-        if (!best || entity.y < best.y) {
+        if (!best || entity.ycoord < best.ycoord) {
             best = entity;
         }
     }
