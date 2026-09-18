@@ -201,12 +201,12 @@ Paint.scores = function (game) {
  * A screen that interrupts play: the break between levels, or a tab that was
  * backgrounded and has come back.
  *
- * Both are the same composition — a label, a headline, a line or two under it,
- * and one button over a sky frozen exactly where it was. `remaining` draws the
- * wait draining under the button; pass null for a screen that waits for the
- * player rather than for the clock.
+ * A label, a headline, a line or two under it, and one button over a sky
+ * frozen exactly where it was. It had a second user — the break between
+ * levels — which drew a bar showing the wait draining. The break is gone, so
+ * the bar and the parameter that fed it are too.
  */
-Paint.interlude = function (game, label, headline, lines, stepsLeft) {
+Paint.interlude = function (game, label, headline, lines) {
     var ctx = game.ctx;
     var palette = game.palette;
     var L = game.layout;
@@ -246,38 +246,6 @@ Paint.interlude = function (game, label, headline, lines, stepsLeft) {
     ctx.fillText(button.label, button.x + button.width / 2, button.y + button.height / 2);
     ctx.restore();
 
-    if (stepsLeft === null) {
-        return;
-    }
-
-    // The wait, draining left to right under the button. A break that resumes
-    // itself has to show that it is going to.
-    var left = Math.max(0, Math.min(1, stepsLeft / Game.BREAK_STEPS));
-    var barHeight = Math.max(2, L.line * 0.12);
-    ctx.fillStyle = palette.accent;
-    ctx.fillRect(
-        button.x,
-        button.y + button.height + barHeight,
-        button.width * left,
-        barHeight
-    );
-};
-
-/** The break between levels: the level, what it brings, and any life awarded. */
-Paint.levelup = function (game, stepsLeft) {
-    var news = game.rung().news || ["", ""];
-    Paint.interlude(
-        game,
-        "LEVEL " + game.level,
-        news[0],
-        [
-            news[1],
-            game.state.awarded > 0
-                ? "Extra life. " + (game.allowance - game.livesLost) + " left to lose."
-                : ""
-        ],
-        stepsLeft
-    );
 };
 
 /**
@@ -295,8 +263,7 @@ Paint.paused = function (game) {
         game,
         "LEVEL " + game.level,
         Layout.PAUSED_TEXT,
-        [Layout.PAUSED_HINT, ""],
-        null
+        [Layout.PAUSED_HINT, ""]
     );
 };
 

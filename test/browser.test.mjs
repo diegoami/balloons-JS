@@ -1353,7 +1353,8 @@ await t('each screen keeps its own state, and gets a clean one', async () => {
     keys: Object.keys(Game.state),
     locked: Game.state.liveAt > Date.now()
   }));
-  assert.deepEqual(over.keys, ['liveAt']);
+  assert.deepEqual(over.keys.sort(), ['liveAt', 'stepsHome'],
+    'game over should hold the menu lockout and the walk back to the title');
   assert.ok(over.locked, 'the menu lockout deadline was not set on arrival');
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
@@ -2957,79 +2958,7 @@ await t('a tap beside the tail no longer pops the balloon', async () => {
 });
 
 
-await t('a level that brings something new stops the game and says so', async () => {
-  const { context, page, errors } = await newGame();
-  await page.keyboard.press(' ');
-  await page.waitForTimeout(2500);
 
-  // One step short of the boundary into level 4, where reinforced balloons
-  // arrive. Wound rather than waited: three levels is a minute of play.
-  const before = await page.evaluate(() => {
-    Game.ticks = 3 * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS - 2;
-    return { level: Game.level, ticks: Game.ticks };
-  });
-  await page.waitForFunction(() => Game.screen === 'levelup', null, { timeout: 5000 });
-
-  const during = await page.evaluate(() => ({
-    level: Game.level,
-    ticks: Game.ticks,
-    stepsLeft: Game.state.stepsLeft,
-    news: Game.rung().news,
-    frozen: Game.entities.map(e => e.ycoord),
-    running: Game.running,
-    said: document.getElementById('game_status').textContent
-  }));
-  assert.equal(during.level, 4, 'the break came up on the wrong level');
-  assert.ok(during.stepsLeft > 0, 'the break has no wait left to count down');
-  assert.ok(Array.isArray(during.news), 'level 4 has nothing to announce');
-  assert.match(during.said, /Reinforced balloons/, 'the break is silent: ' + during.said);
-  assert.ok(during.running, 'the loop stopped, so the countdown cannot tick');
-
-  // The sky holds exactly where it was, and the clock does not advance.
-  await page.waitForTimeout(700);
-  const held = await page.evaluate(() => ({
-    ticks: Game.ticks,
-    positions: Game.entities.map(e => e.ycoord)
-  }));
-  assert.deepEqual(held.positions, during.frozen,
-    'the balloons kept rising through the break');
-  assert.equal(held.ticks, during.ticks, 'the clock ran during the break');
-
-  // It resumes by itself, and picks the clock up where it left it.
-  await page.waitForFunction(() => Game.screen === 'playing', null, { timeout: 8000 });
-  const after = await page.evaluate(() => ({ level: Game.level, ticks: Game.ticks }));
-  assert.equal(after.level, 4, 'the level changed across the break');
-  assert.ok(after.ticks >= during.ticks,
-    `the clock went backwards across the break: ${during.ticks} then ${after.ticks}`);
-  assert.ok(after.ticks > before.ticks,
-    'the clock was reset on the way back into play, which would trap a run at level 1');
-  assert.deepEqual(errors, [], errors.join(' | '));
-  await context.close();
-});
-
-await t('the Resume button skips the rest of the break', async () => {
-  const { context, page, errors } = await newGame();
-  await page.keyboard.press(' ');
-  await page.waitForTimeout(2500);
-  await page.evaluate(() => { Game.ticks = 3 * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS - 2; });
-  await page.waitForFunction(() => Game.screen === 'levelup', null, { timeout: 5000 });
-
-  // A tap on the frozen sky is not "get on with it": the balloons behind this
-  // screen are the ones the player was about to pop.
-  const sky = await page.evaluate(() => ({ x: Game.width * 0.8, y: Game.height * 0.7 }));
-  await page.mouse.click(sky.x, sky.y);
-  await page.waitForTimeout(150);
-  assert.equal(await page.evaluate(() => Game.screen), 'levelup',
-    'a tap on the sky skipped the break');
-
-  const button = await page.evaluate(() => Game.layout.resume);
-  await page.mouse.click(button.x + button.width / 2, button.y + button.height / 2);
-  await page.waitForTimeout(200);
-  assert.equal(await page.evaluate(() => Game.screen), 'playing',
-    'the Resume button did not resume');
-  assert.deepEqual(errors, [], errors.join(' | '));
-  await context.close();
-});
 
 await t('the countdown says what to do', async () => {
   const { context, page } = await newGame();
@@ -3147,39 +3076,6 @@ await t('a row says won, a level, or nothing, and never invents one', async () =
 });
 
 
-await t('a break counts in steps, so a tab that goes away does not skip it', async () => {
-  // A wall-clock deadline would already have passed on the way back: the loop
-  // stops when the page is hidden, so the player would never see what the
-  // level brought. Everything else in this game measures time in steps for
-  // the same reason.
-  const { context, page, errors } = await newGame();
-  await page.keyboard.press(' ');
-  await page.waitForTimeout(2500);
-  await page.evaluate(() => { Game.ticks = 3 * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS - 2; });
-  await page.waitForFunction(() => Game.screen === 'levelup', null, { timeout: 5000 });
-
-  const m = await page.evaluate(async () => {
-    Game.stopLoop();
-    const before = Game.state.stepsLeft;
-
-    // Six seconds of wall clock with the loop stopped, which is longer than
-    // the whole break.
-    await new Promise(r => setTimeout(r, 600));
-    const after = Game.state.stepsLeft;
-
-    // And the break still has to be spendable.
-    for (let i = 0; i < Game.BREAK_STEPS; i++) { Screens.levelup.update(Game); }
-    return { before, after, screen: Game.screen, total: Game.BREAK_STEPS };
-  });
-
-  assert.equal(m.after, m.before,
-    'the break drained while nothing was stepping it');
-  assert.equal(m.screen, 'playing',
-    'spending the whole break did not resume the game');
-  assert.equal(m.total, 120, 'four seconds at thirty steps a second is 120 steps');
-  assert.deepEqual(errors, [], errors.join(' | '));
-  await context.close();
-});
 
 
 await t('a bird crosses the sky and costs nothing for being there', async () => {

@@ -96,20 +96,21 @@ Game.COUNTDOWN_MS = 2000;
 Game.MENU_LOCKOUT_MS = 1200;
 
 /**
- * How long the break between levels holds before resuming itself, in
+ * How long the game-over screen holds before going back to the title, in
  * simulation steps.
  *
- * Long enough to read a headline and a line under it, short enough not to
- * break the rhythm of a run. Four seconds is a guess and the only number here
- * that playing it will settle.
+ * Long enough to read your score, watch the sky clear and find yourself on the
+ * board; short enough that a machine nobody is sitting at ends up showing the
+ * game playing itself rather than somebody else's result. A tap still restarts
+ * immediately once the menu lockout has passed — this is only what happens if
+ * nothing does.
  *
  * Steps rather than milliseconds, like everything else that measures time in
- * this game. A wall clock would let a break drain away while the tab was in
- * the background: the loop stops when the page is hidden, so a deadline set in
- * real time would already have passed on the way back and the player would
- * never see what the level brought.
+ * this game: a wall clock would run down while the tab was in the background,
+ * and the player would come back to a title screen having never seen how they
+ * did.
  */
-Game.BREAK_STEPS = Math.round(4000 / Game.STEP_MS);
+Game.GAMEOVER_STEPS = Math.round(10000 / Game.STEP_MS);
 
 /**
  * Balloons you may lose before the game ends, at the start of a run.
