@@ -6,6 +6,21 @@ var ESCAPE_COORDS = -10;
 var HIT_FLASH_STEPS = 5;
 
 /**
+ * A person's reaction, in steps: 250ms at thirty steps a second.
+ *
+ * This is the window a janky balloon's drift is measured against. It is the
+ * same number the playtest harness uses for the bot, and the same one the
+ * fairness argument for birds rests on.
+ */
+var JANKY_REACTION_STEPS = 7.5;
+
+/** Steps between one sideways drift and the next. */
+var JANKY_TURN_STEPS = 22;
+
+/** How much bigger a janky balloon is than a steady one of the same skin. */
+var JANKY_SIZE = 1.18;
+
+/**
  * A balloon: the one thing in the sky that is worth points.
  *
  * It answers the entity contract in entities.js, so the list that holds it can
@@ -15,7 +30,7 @@ var HIT_FLASH_STEPS = 5;
  * some arrive reinforced and from rung seven armoured, and those take two or
  * three taps, thinning visibly as the skins come off.
  */
-var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, speedScale, skin) {
+var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, speedScale, skin, janky) {
     var that;
     that = {};
     that.kind = "balloon";
@@ -24,10 +39,15 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
     that.ycoord = ycoord ;
     that.skin = Math.max(1, skin || 1);
 
+    /** Whether this one wanders sideways as it rises. */
+    that.janky = janky === true;
+
     /** What popping it is worth, fixed at what it took to pop. */
     that.points = Ladder.skin(that.skin).points;
 
-    that.size = size * Ladder.skin(that.skin).size;
+    // A moving target and a small target are the same tax charged twice, so a
+    // janky balloon is bigger for the same reason a thick one is.
+    that.size = size * Ladder.skin(that.skin).size * (that.janky ? JANKY_SIZE : 1);
     that.color = color;
     // speedScale makes the rise proportional to screen height, so the time a
     // balloon takes to cross does not depend on how tall the window is. A
@@ -38,8 +58,31 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
     that.xdelta = -.5+ Math.random();
     that.xmax = xmax;
 
+    /**
+     * The fastest this one may wander sideways, in pixels per step.
+     *
+     * Derived, not chosen. A person needs about 250ms between seeing and
+     * tapping — seven and a half steps. If the balloon leaves where you aimed
+     * inside that window, the tap was never yours to land and the balloon
+     * reads as cheating rather than as difficult. Half a radius is the room
+     * that leaves, so the bound is `radius / 2 / 7.5` — and it scales with the
+     * balloon, because a bigger target honestly tolerates more movement.
+     *
+     * At the 22px touch floor that is 1.5px a step, about 44 a second: on a
+     * 390px phone, a tenth of the screen's width per second. Visibly
+     * squirrelly, still hittable.
+     */
+    that.jinkMax = that.size * 0.5 / JANKY_REACTION_STEPS;
+
     /** Steps left of the squash that says a tap landed. */
     var flash = 0;
+
+    /** Steps until this one picks a new sideways drift. */
+    var turnIn = Math.floor(Math.random() * JANKY_TURN_STEPS) + 1;
+
+    if (that.janky) {
+        that.xdelta = (Math.random() * 2 - 1) * that.jinkMax;
+    }
 
     that.step = function(game, leave) {
         if (leave) {
@@ -48,6 +91,18 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
         if (flash > 0) {
             flash--;
         }
+
+        if (that.janky && !leave) {
+            turnIn--;
+            if (turnIn <= 0) {
+                // A fresh drift rather than a nudge: a wander made of small
+                // corrections averages out into a straight line, which is
+                // exactly what this is not supposed to be.
+                that.xdelta = (Math.random() * 2 - 1) * that.jinkMax;
+                turnIn = JANKY_TURN_STEPS;
+            }
+        }
+
         that.ycoord = that.ycoord +that.delta;
         that.xcoord = that.xcoord +that.xdelta;
         if (that.xcoord < 0) {

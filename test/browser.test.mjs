@@ -3540,8 +3540,8 @@ await t('fireflies arrive in numbers at 16, and there are more of them higher up
     counts: Ladder.LEVELS.map(r => r.fireflies || 0),
     news: Ladder.at(16).news,
     // They cost no taps of their own, so they must not move the demand sum.
-    tapsAt16: Ladder.meanTaps(Ladder.at(16)),
-    tapsAt15: Ladder.meanTaps(Ladder.at(15))
+    withFlies: Ladder.meanTaps({ reinforced: 0.27, armoured: 0.16, fireflies: 9 }),
+    without: Ladder.meanTaps({ reinforced: 0.27, armoured: 0.16 })
   }));
 
   assert.equal(m.first, 16, 'fireflies do not start at level 16');
@@ -3556,7 +3556,7 @@ await t('fireflies arrive in numbers at 16, and there are more of them higher up
   });
   assert.ok(m.counts[19] > m.counts[15], 'the swarm never grows');
   assert.ok(Array.isArray(m.news), 'level 16 does not announce them');
-  assert.equal(m.tapsAt16, m.tapsAt15 + 0.02,
+  assert.equal(m.withFlies, m.without,
     'fireflies changed what a balloon costs in taps');
   await context.close();
 });
@@ -3820,6 +3820,134 @@ await t('a real touch is recorded as touch, and a real mouse as mouse', async ()
   // The tap that STARTED each game is not counted: it landed on the title
   // screen, and what the board wants is what the run was played with.
   assert.ok(touched.pointers.touch < 7, 'the tap that started the game was counted');
+});
+
+
+await t('janky balloons arrive at 12, and more of the sky wanders higher up', async () => {
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => ({
+    first: Ladder.LEVELS.find(r => r.janky).level,
+    shares: Ladder.LEVELS.map(r => r.janky || 0),
+    news: Ladder.at(12).news,
+    // Wandering costs no extra taps, so it must not move the demand sum.
+    withJanky: Ladder.meanTaps({ reinforced: 0.25, armoured: 0.12, janky: 0.9 }),
+    without: Ladder.meanTaps({ reinforced: 0.25, armoured: 0.12 })
+  }));
+
+  assert.equal(m.first, 12, 'janky balloons do not start at level 12');
+  m.shares.forEach((share, i) => {
+    if (i + 1 < 12) {
+      assert.equal(share, 0, `level ${i + 1} wanders before it should`);
+    } else {
+      assert.ok(share > 0, `level ${i + 1} lost its janky balloons`);
+      assert.ok(share >= m.shares[i - 1], `level ${i + 1} wanders less than level ${i}`);
+    }
+  });
+
+  // Not most of them: a sky where everything jinks stops reading as "some of
+  // these are awkward" and starts reading as the game being unsteady.
+  assert.ok(m.shares[19] <= 0.5, 'more than half the sky wanders at the top');
+  assert.ok(m.shares[19] > m.shares[11], 'the share never grows');
+  assert.ok(Array.isArray(m.news), 'level 12 does not announce them');
+  assert.equal(m.withJanky, m.without,
+    'janky balloons changed what a balloon costs in taps');
+  await context.close();
+});
+
+await t('a janky balloon cannot leave where you aimed inside a reaction time', async () => {
+  // The whole fairness argument. A person needs about 250ms between seeing and
+  // tapping; if the balloon is gone from where they aimed by then, the tap was
+  // never theirs to land and it reads as cheating rather than as difficult.
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    const worst = { share: 0, level: 0, radius: 0 };
+    const smallest = { radius: Infinity, drift: 0 };
+
+    for (let level = 12; level <= Ladder.MAX; level++) {
+      Game.applyLevel(level);
+      for (let i = 0; i < 300; i++) {
+        const b = Game.randomBalloon();
+        if (!b.janky) { continue; }
+
+        // How far it can travel while a person is deciding, as a share of its
+        // own radius. Bigger targets honestly tolerate more movement.
+        const reach = b.jinkMax * 7.5;
+        const share = reach / b.size;
+        if (share > worst.share) {
+          worst.share = share;
+          worst.level = level;
+          worst.radius = b.size;
+        }
+        if (b.size < smallest.radius) {
+          smallest.radius = b.size;
+          smallest.drift = b.jinkMax;
+        }
+      }
+    }
+    return { worst, smallest, floor: Layout.GRID.minTouchTarget / 2 };
+  });
+
+  assert.ok(m.worst.share <= 0.5 + 1e-9,
+    `a janky balloon can travel ${(m.worst.share * 100).toFixed(0)}% of its own ` +
+    `radius while you decide (level ${m.worst.level}, radius ${m.worst.radius.toFixed(0)})`);
+  assert.ok(m.worst.share > 0.4, 'the bound is so tight that nothing really wanders');
+
+  // And the smallest balloon in the game is the case the bound was derived
+  // from: at the touch floor it is about 1.5px a step, 44 a second.
+  assert.ok(m.smallest.radius <= m.floor * 1.6,
+    'no balloon anywhere near the touch floor was sampled');
+  assert.ok(m.smallest.drift < 3,
+    `the smallest janky balloon drifts ${m.smallest.drift.toFixed(2)}px a step`);
+  await context.close();
+});
+
+await t('a janky balloon is bigger, and wanders both ways rather than drifting', async () => {
+  const { context, page, errors } = await newGame();
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    Game.applyLevel(20);
+
+    // Same skin on both sides, so the comparison is about jankiness alone.
+    const sizes = { janky: [], steady: [] };
+    for (let i = 0; i < 1500; i++) {
+      const b = Game.randomBalloon();
+      if (b.skin !== 1) { continue; }
+      (b.janky ? sizes.janky : sizes.steady).push(b.size);
+    }
+    const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+
+    // Watch one wander.
+    let b = null;
+    for (let i = 0; i < 8000 && !b; i++) {
+      const made = Game.randomBalloon();
+      if (made.janky && made.skin === 1) { b = made; }
+    }
+    Game.entities = [b];
+    const headings = new Set();
+    const speeds = [];
+    for (let step = 0; step < 400; step++) {
+      b.step(Game, false);
+      headings.add(Math.sign(b.xdelta));
+      speeds.push(Math.abs(b.xdelta));
+    }
+
+    return {
+      jankyMean: mean(sizes.janky),
+      steadyMean: mean(sizes.steady),
+      bothWays: headings.size > 1,
+      neverExceeded: Math.max(...speeds) <= b.jinkMax + 1e-9
+    };
+  });
+
+  assert.ok(m.jankyMean > m.steadyMean,
+    `a janky balloon (${m.jankyMean.toFixed(0)}px) is no bigger than a steady one ` +
+    `(${m.steadyMean.toFixed(0)}px); a moving target and a small target are the ` +
+    'same tax charged twice');
+  assert.ok(m.bothWays, 'it only ever drifts one way, which is a drift and not a wander');
+  assert.ok(m.neverExceeded, 'it wandered faster than its own bound allows');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
 });
 
 

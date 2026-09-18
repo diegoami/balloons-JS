@@ -599,7 +599,8 @@ Game.randomBalloon = function () {
 
     return balloonConstructor(
         xcoord, ycoord, randomSize, randomColor, max_width, balloonSpeed, heightScale,
-        Ladder.rollSkin(rung)
+        Ladder.rollSkin(rung),
+        Math.random() < (rung.janky || 0)
     );
 };
 

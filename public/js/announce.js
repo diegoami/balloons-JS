@@ -118,6 +118,9 @@ Announce.arrivals = function (game) {
     var under = Ladder.at(game.level - 1);
     var news = "";
 
+    if (rung.janky > 0 && !(under.janky > 0)) {
+        return " Janky balloons: some of them wander.";
+    }
     if (rung.fireflies > 0 && !(under.fireflies > 0)) {
         return " Fireflies: harmless, but taps land on them.";
     }
