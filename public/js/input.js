@@ -103,6 +103,41 @@ Input.menu = function (game, signal) {
 };
 
 /**
+ * The break between levels: one button, which skips the wait.
+ *
+ * A tap anywhere would do here too, but this is the one screen where a tap is
+ * ambiguous — the sky behind it is full of frozen balloons the player was
+ * about to pop, and a stray tap on one of those should not be read as "get on
+ * with it". So it is the button, or the keys, or nothing.
+ */
+Input.resume = function (game, signal) {
+    var resume = function () {
+        game.enter("playing");
+    };
+
+    // The paused screen is reached by looking away, so it can be arrived at
+    // with the pointer already down on the button. Ignore a release that had
+    // no press behind it on this screen.
+    game.canvas.addEventListener("pointerdown", function (event) {
+        var hit = Layout.hitRect(game.layout.resume.hit, Input.point(game, event));
+        game.pressed = hit ? "resume" : null;
+    }, { signal: signal });
+
+    game.canvas.addEventListener("click", function (event) {
+        game.pressed = null;
+        if (Layout.hitRect(game.layout.resume.hit, Input.point(game, event))) {
+            resume();
+        }
+    }, { signal: signal });
+
+    document.addEventListener("keydown", function (event) {
+        if (event.key === " " || event.key === "Enter") {
+            resume();
+        }
+    }, { signal: signal });
+};
+
+/**
  * The name screen: a text field, a Save button drawn on the canvas, and the
  * two keys that finish.
  */

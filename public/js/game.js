@@ -92,6 +92,22 @@ Game.COUNTDOWN_MS = 2000;
 Game.MENU_LOCKOUT_MS = 1200;
 
 /**
+ * How long the break between levels holds before resuming itself, in
+ * simulation steps.
+ *
+ * Long enough to read a headline and a line under it, short enough not to
+ * break the rhythm of a run. Four seconds is a guess and the only number here
+ * that playing it will settle.
+ *
+ * Steps rather than milliseconds, like everything else that measures time in
+ * this game. A wall clock would let a break drain away while the tab was in
+ * the background: the loop stops when the page is hidden, so a deadline set in
+ * real time would already have passed on the way back and the player would
+ * never see what the level brought.
+ */
+Game.BREAK_STEPS = Math.round(4000 / Game.STEP_MS);
+
+/**
  * Balloons you may lose before the game ends, at the start of a run.
  *
  * One number for everyone. There were four, from fifteen down to one, and they
@@ -426,7 +442,9 @@ Game.rung = function () {
  * by surviving 20, not by arriving at it.
  */
 Game.runTicks = function () {
-    return Ladder.MAX * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS;
+    // Rounded: STEP_MS is 1000/30, so the division lands a fraction off a
+    // whole number of steps and the count of something countable should not.
+    return Math.round(Ladder.MAX * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS);
 };
 
 /** Whether the run has been played all the way to the end of the last level. */
@@ -554,6 +572,23 @@ Game.step = function (leave) {
 
 // --------------------------------------------------------------------- boot
 
+/**
+ * Notices the tab going away.
+ *
+ * Installed once for the life of the page rather than per screen, because the
+ * thing it watches for is the page itself losing focus. It only acts during
+ * play: every other screen is either already waiting for the player or is
+ * happy to be left running.
+ */
+Game.watchVisibility = function () {
+    var that = this;
+    document.addEventListener("visibilitychange", function () {
+        if (document.hidden && that.screen === "playing") {
+            that.enter("paused");
+        }
+    });
+};
+
 Game.init = function () {
     // Asked once on first visit and remembered afterwards. This used to be a
     // window.prompt(), which is a browser modal: it blocked the first paint, so
@@ -577,6 +612,7 @@ Game.init = function () {
     this.applyCanvasSize();
     this.enter(stored ? "title" : "name");
     this.watchViewport();
+    this.watchVisibility();
 };
 
 window.addEventListener("load", function () {

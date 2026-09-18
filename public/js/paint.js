@@ -149,6 +149,14 @@ Paint.description = function (game) {
     });
 };
 
+/** How a row says where it got to: won, a level, or nothing recorded. */
+Paint.reached = function (row) {
+    if (row["won"]) {
+        return "WON";
+    }
+    return row["level"] ? "L" + row["level"] : "\u2014";
+};
+
 /** The board, if one has arrived. Nothing is drawn before then. */
 Paint.scores = function (game) {
     var scores = game.layout.scores;
@@ -169,11 +177,125 @@ Paint.scores = function (game) {
             game.ctx.fillText(data[i]["score_day"], scores.columns.date, scores.rows[i]);
             game.ctx.fillStyle = game.palette.ink;
             game.ctx.fillText(data[i]["name"], scores.columns.name, scores.rows[i]);
+
+            // How far up the ladder that score got. Rows already on the board
+            // were set before this was recorded, so they get a dash: a missing
+            // fact is not a level of nothing.
+            game.ctx.fillStyle = data[i]["won"] ? game.palette.accent : game.palette.inkSoft;
+            game.ctx.fillText(
+                Paint.reached(data[i]),
+                scores.columns.level,
+                scores.rows[i]
+            );
+
             game.ctx.fillStyle = game.palette.accent;
             game.ctx.fillText(data[i]["score"], scores.columns.value, scores.rows[i]);
         }
     }
     game.ctx.font = game.layout.fonts.menu;
+};
+
+/**
+ * A screen that interrupts play: the break between levels, or a tab that was
+ * backgrounded and has come back.
+ *
+ * Both are the same composition — a label, a headline, a line or two under it,
+ * and one button over a sky frozen exactly where it was. `remaining` draws the
+ * wait draining under the button; pass null for a screen that waits for the
+ * player rather than for the clock.
+ */
+Paint.interlude = function (game, label, headline, lines, stepsLeft) {
+    var ctx = game.ctx;
+    var palette = game.palette;
+    var L = game.layout;
+
+    ctx.font = L.fonts.label;
+    ctx.fillStyle = palette.inkSoft;
+    ctx.fillText(label, L.intro.x, L.intro.y);
+
+    ctx.font = L.fonts.intro;
+    ctx.fillStyle = palette.ink;
+    ctx.fillText(headline, L.intro.x, L.intro.y + L.line * 1.5);
+
+    ctx.font = L.fonts.label;
+    lines.forEach(function (line, i) {
+        if (!line || !L.description[i]) {
+            return;
+        }
+        ctx.fillStyle = i === 0 ? palette.inkSoft : palette.accent;
+        ctx.fillText(line, L.description[i].x, L.description[i].y);
+    });
+
+    var button = L.resume;
+    var pressed = game.pressed === "resume";
+
+    ctx.save();
+    ctx.lineWidth = Math.max(1, L.line * 0.06);
+    ctx.fillStyle = pressed ? palette.buttonPressOverlay : palette.buttonFill;
+    ctx.strokeStyle = palette.buttonBorder;
+    Layout.roundedRect(ctx, button, button.radius);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = L.fonts.menu;
+    ctx.fillStyle = palette.ink;
+    ctx.fillText(button.label, button.x + button.width / 2, button.y + button.height / 2);
+    ctx.restore();
+
+    if (stepsLeft === null) {
+        return;
+    }
+
+    // The wait, draining left to right under the button. A break that resumes
+    // itself has to show that it is going to.
+    var left = Math.max(0, Math.min(1, stepsLeft / Game.BREAK_STEPS));
+    var barHeight = Math.max(2, L.line * 0.12);
+    ctx.fillStyle = palette.accent;
+    ctx.fillRect(
+        button.x,
+        button.y + button.height + barHeight,
+        button.width * left,
+        barHeight
+    );
+};
+
+/** The break between levels: the level, what it brings, and any life awarded. */
+Paint.levelup = function (game, stepsLeft) {
+    var news = game.rung().news || ["", ""];
+    Paint.interlude(
+        game,
+        "LEVEL " + game.level,
+        news[0],
+        [
+            news[1],
+            game.state.awarded > 0
+                ? "Extra life. " + (game.allowance - game.lostBalloons) + " left to lose."
+                : ""
+        ],
+        stepsLeft
+    );
+};
+
+/**
+ * A tab that was away and has come back.
+ *
+ * Backgrounding a tab already stopped the game: requestAnimationFrame stops
+ * firing, and because time played is counted in simulation steps the clock and
+ * the level stop with it. What it did NOT do was say so — the game restarted
+ * the instant the tab was focused, so you could come back to balloons already
+ * escaping before you had registered that it was live. This is that behaviour
+ * made honest rather than a new feature.
+ */
+Paint.paused = function (game) {
+    Paint.interlude(
+        game,
+        "LEVEL " + game.level,
+        Layout.PAUSED_TEXT,
+        [Layout.PAUSED_HINT, ""],
+        null
+    );
 };
 
 Paint.countdown = function (game, remaining) {
@@ -182,9 +304,15 @@ Paint.countdown = function (game, remaining) {
     ctx.save();
     ctx.textAlign = "center";
 
+    // The game has never told anyone what to do. This is the one line it gets,
+    // and the countdown is when a new player is looking at nothing else.
     ctx.font = game.layout.fonts.label;
     ctx.fillStyle = game.palette.inkSoft;
-    ctx.fillText("Get ready", game.layout.countdown.x, game.layout.countdown.y - game.layout.line * 1.5);
+    ctx.fillText(
+        Layout.PLAY_INSTRUCTION,
+        game.layout.countdown.x,
+        game.layout.countdown.y - game.layout.line * 1.5
+    );
 
     ctx.font = game.layout.fonts.countdown;
     ctx.fillStyle = game.palette.accent;

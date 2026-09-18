@@ -73,7 +73,15 @@ Scores.submit = function (game, score) {
     Scores.submitted = fetch(Scores.URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ score: score, name: game.name })
+        // The level and the outcome go with the score. 380 points means one
+        // thing if you died on level 7 and another if you survived to 20, and
+        // the board could not tell you which.
+        body: JSON.stringify({
+            score: score,
+            name: game.name,
+            level: game.level,
+            won: game.won === true
+        })
     }).catch(function () {
         /* Ignore: a failed submission shouldn't block the game-over screen. */
     });

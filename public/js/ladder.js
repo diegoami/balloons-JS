@@ -24,6 +24,13 @@
  *
  * `life` is a life awarded on arriving at that level.
  *
+ * `news` is a headline and a line of explanation for the thing this level
+ * brings, and setting it is what makes the game BREAK before the level starts
+ * (screens.js). Only the levels whose feature exists carry one: announcing a
+ * boss at level 6 before there is a boss would be a lie, so 6, 8, 12, 14, 16
+ * and 18 get theirs when their phase lands. Eight breaks in a winning run is
+ * the intent; two of them work today.
+ *
  * THE ARITHMETIC THAT MATTERS
  *
  * A player supplies about 2.1 taps a second: the bot clicks 3.6 times a second
@@ -74,13 +81,15 @@ Ladder.LEVELS = [
     { level: 1 , speed:  4.0, frequency: 0.0422, size: 1.00, reinforced: 0.00, armoured: 0.00 },
     { level: 2 , speed:  4.4, frequency: 0.0502, size: 0.97, reinforced: 0.00, armoured: 0.00 },
     { level: 3 , speed:  4.8, frequency: 0.0569, size: 0.94, reinforced: 0.00, armoured: 0.00 },
-    { level: 4 , speed:  5.2, frequency: 0.0556, size: 0.91, reinforced: 0.15, armoured: 0.00 },
+    { level: 4 , speed:  5.2, frequency: 0.0556, size: 0.91, reinforced: 0.15, armoured: 0.00,
+      news: ["Reinforced balloons", "Two taps, and they rise slower."] },
     { level: 5 , speed:  5.6, frequency: 0.0629, size: 0.88, reinforced: 0.18, armoured: 0.00 },
     { level: 6 , speed:  6.0, frequency: 0.0665, size: 0.85, reinforced: 0.20, armoured: 0.00 },
     { level: 7 , speed:  6.4, frequency: 0.0693, size: 0.82, reinforced: 0.22, armoured: 0.00 },
     { level: 8 , speed:  6.9, frequency: 0.0719, size: 0.79, reinforced: 0.24, armoured: 0.00 },
     { level: 9 , speed:  7.4, frequency: 0.0735, size: 0.76, reinforced: 0.26, armoured: 0.00 },
-    { level: 10, speed:  7.9, frequency: 0.0686, size: 0.73, reinforced: 0.25, armoured: 0.08 },
+    { level: 10, speed:  7.9, frequency: 0.0686, size: 0.73, reinforced: 0.25, armoured: 0.08,
+      news: ["Armoured balloons", "Three taps. Worth six points."] },
     { level: 11, speed:  8.4, frequency: 0.0680, size: 0.70, reinforced: 0.25, armoured: 0.10 },
     { level: 12, speed:  8.9, frequency: 0.0675, size: 0.68, reinforced: 0.25, armoured: 0.12, life: 1 },
     { level: 13, speed:  9.4, frequency: 0.0656, size: 0.66, reinforced: 0.26, armoured: 0.13 },
