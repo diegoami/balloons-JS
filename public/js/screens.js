@@ -186,11 +186,12 @@ Screens.playing = {
 
         var escaped = game.reap();
         if (escaped > 0) {
-            game.lostBalloons += escaped;
+            game.livesLost += escaped;
             Announce.lost(game);
         }
 
         game.spawnBalloon();
+        game.spawnBird();
         game.step(false);
 
         // Surviving the last level is the win, so the check comes before the
@@ -199,7 +200,7 @@ Screens.playing = {
         if (game.finished()) {
             game.won = true;
             game.enter("gameover");
-        } else if (game.lostBalloons >= game.allowance) {
+        } else if (game.livesLost >= game.allowance) {
             game.enter("gameover");
         }
     },

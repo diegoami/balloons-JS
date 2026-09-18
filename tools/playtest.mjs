@@ -64,7 +64,7 @@ const BOT = (o) => `
   const REACTION = ${o.reaction}, AIM_ERROR = ${o.aimError}, INTERVAL = ${o.interval};
   const history = [];
   const seen = new Map();
-  window.__stats = { clicks: 0, hits: 0, lifetimes: [], sky: [], byLevel: {} };
+  window.__stats = { clicks: 0, hits: 0, lifetimes: [], sky: [], byLevel: {}, birdsTouched: 0 };
 
   setInterval(() => {
     if (!Game.entities) return;
@@ -114,9 +114,28 @@ const BOT = (o) => `
     }
     if (!memory || !memory.balloons.length) return;
 
-    // Go for whatever looked closest to escaping, a reaction time ago.
-    const target = memory.balloons.reduce((a, b) => (b.y < a.y ? b : a));
-    if (!Game.entities.includes(target.ref)) return;
+    // Go for whatever looked closest to escaping, a reaction time ago -- but
+    // not one with a bird next to it.
+    //
+    // Touching a bird costs a life, and nearest-centre dispatch means a tap
+    // aimed at a balloon can land on a bird beside it. A person seeing that
+    // waits for the bird to pass; a harness that did not would report that
+    // birds are impossible, and the number would say more about the bot than
+    // about the game.
+    const birds = Game.entities.filter(e => e.kind === 'bird');
+    const clear = memory.balloons.filter(b => {
+      if (!Game.entities.includes(b.ref)) return false;
+      return !birds.some(bird => {
+        const reach = bird.radius * 1.2 + AIM_ERROR + (b.ref.size || 0);
+        const dx = bird.xcoord - b.ref.xcoord;
+        const dy = bird.ycoord - b.ref.ycoord;
+        return dx * dx + dy * dy < reach * reach;
+      });
+    });
+
+    // Nothing safe to go for is a real answer: hold the tap.
+    if (!clear.length) return;
+    const target = clear.reduce((a, b) => (b.y < a.y ? b : a));
 
     // And aim where it is NOW. Aiming at the remembered position instead meant
     // aiming some sixty pixels below the balloon at the upper levels, which the
@@ -127,6 +146,7 @@ const BOT = (o) => `
     const aimX = target.ref.xcoord;
     const aimY = target.ref.ycoord;
     const before = Game.score;
+    const lostBefore = Game.livesLost;
     Game.canvas.dispatchEvent(new MouseEvent('click', {
       clientX: aimX + (Math.random() * 2 - 1) * AIM_ERROR,
       clientY: aimY + (Math.random() * 2 - 1) * AIM_ERROR,
@@ -134,6 +154,7 @@ const BOT = (o) => `
     }));
     window.__stats.clicks++;
     if (Game.score > before) window.__stats.hits++;
+    if (Game.livesLost > lostBefore) window.__stats.birdsTouched++;
   }, INTERVAL);
 })();
 `;
@@ -182,7 +203,8 @@ async function playGame(index) {
 
     const result = await page.evaluate(() => ({
       score: Game.score,
-      lost: Game.lostBalloons,
+      lost: Game.livesLost,
+      birdsTouched: window.__stats.birdsTouched,
       // The allowance rather than the constant: a run that reached 12, 15 or 18
       // was handed a life there, and a table saying 5 would be hiding it.
       lives: Game.allowance,
@@ -220,7 +242,7 @@ console.log(
   `${Math.round(1000 / OPTIONS.interval * 10) / 10} clicks/sec ` +
   `· ${OPTIONS.width}×${OPTIONS.height} · ${OPTIONS.capMs / 1000}s cap\n`
 );
-console.log('run   lives  survived   points  pops/tap   sky    lost   rung   outcome');
+console.log('run   lives  survived   points  pops/tap   sky    lost  birds  rung   outcome');
 
 const mean = list => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
 
@@ -233,7 +255,8 @@ settled.forEach(r => {
     String(r.score).padEnd(7),
     (round(accuracy) + '%').padEnd(10),
     round(mean(r.stats.sky)).padEnd(6),
-    String(r.lost).padEnd(6),
+    String(r.lost).padEnd(5),
+    String(r.birdsTouched).padEnd(6),
     String(r.rung).padEnd(6),
     r.won ? 'WON' : (r.ended ? 'died' : 'survived the cap')
   );

@@ -271,7 +271,7 @@ Paint.levelup = function (game, stepsLeft) {
         [
             news[1],
             game.state.awarded > 0
-                ? "Extra life. " + (game.allowance - game.lostBalloons) + " left to lose."
+                ? "Extra life. " + (game.allowance - game.livesLost) + " left to lose."
                 : ""
         ],
         stepsLeft
@@ -415,7 +415,7 @@ Paint.hud = function (game) {
     game.ctx.font = game.layout.fonts.hud;
     game.ctx.fillStyle = game.palette.ink;
     game.ctx.fillText(
-        game.score + " points, " + game.lostBalloons + " of " +
+        game.score + " points, " + game.livesLost + " of " +
             game.allowance + " lost",
         hud.caught, hud.y
     );
