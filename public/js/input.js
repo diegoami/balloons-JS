@@ -82,11 +82,13 @@ Input.menu = function (game, signal) {
 
         // A tap anywhere starts a game. There is one game to start and the
         // screen behind this is already showing it being played, so asking
-        // someone to find a button first is a step for its own sake. The name
-        // chip is the one thing that means something else.
+        // someone to find a button first is a step for its own sake. The two
+        // chips along the bottom are the things that mean something else.
         var target = Layout.pick(game.layout.targets, Input.point(game, event));
         if (target && target.id === "player") {
             game.enter("name");
+        } else if (target && target.id === "start") {
+            game.cycleStartLevel();
         } else {
             game.restart();
         }

@@ -33,6 +33,11 @@ Layout.DESCRIPTION = [
 
 Layout.START_TEXT = "Tap anywhere to play";
 Layout.RESUME_TEXT = "Resume";
+
+/** The level chip, and what it warns when it is not on level 1. */
+Layout.START_FROM_ONE = "From level 1";
+Layout.START_PREFIX = "From level ";
+Layout.PRACTICE_WARNING = "Practice run — this score will not be saved.";
 Layout.PLAY_INSTRUCTION = "Pop the balloons!";
 Layout.PAUSED_TEXT = "Paused";
 Layout.PAUSED_HINT = "You looked away, so the game waited.";
@@ -242,7 +247,14 @@ Layout.applyFont = function (ctx, width, height) {
  * Regions that are both drawn and clicked return a single rect, so the two can
  * never drift apart the way the menu boxes used to.
  */
-Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
+/** What the level chip says. Level 1 is the real game, so it says so. */
+Layout.startLabel = function (level) {
+    return (level > 1)
+        ? Layout.START_PREFIX + level
+        : Layout.START_FROM_ONE;
+};
+
+Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel) {
     var G = Layout.GRID;
     var line = ctx.measureText("M").width * G.lineRatio;
     var left = width * G.columns.margin;
@@ -389,6 +401,31 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
         label: playerLabel || ""
     };
 
+    // --- the level chip, beside the name and anchored to the same edge
+    //
+    // Down here rather than up in the text block on purpose: it is a thing you
+    // touch, and everything in the block above is a thing you read, on a
+    // screen where touching anything else starts a game.
+    var startLabel = Layout.startLabel(startLevel);
+    var start = {
+        x: left + player.width + line * G.footer.padX,
+        y: player.y,
+        width: Math.max(
+            ctx.measureText(startLabel).width + line * G.footer.padX * 2,
+            G.minTouchTarget
+        ),
+        height: footerHeight,
+        radius: line * G.footer.radius,
+        label: startLabel
+    };
+
+    // The warning sits above both chips, because a score that will not be
+    // saved is not a detail to discover afterwards.
+    var practice = {
+        x: left,
+        y: player.y - line * 0.7
+    };
+
     // --- the name screen, on the row the menu button occupies elsewhere
 
     ctx.font = fonts.menu;
@@ -459,6 +496,7 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
     });
     targets.push({ id: "replay", hit: scoresHit });
     targets.push({ id: "player", hit: player });
+    targets.push({ id: "start", hit: start });
 
     panel.height = rows[rows.length - 1] + line - panel.y + panelPad;
 
@@ -497,6 +535,8 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel) {
         description: description,
 
         player: player,
+        start: start,
+        practice: practice,
 
         name: { field: field, save: save },
         resume: resume,

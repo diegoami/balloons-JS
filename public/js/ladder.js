@@ -163,6 +163,31 @@ Ladder.MAX = Ladder.LEVELS.length;
  */
 Ladder.CLIMB_SECONDS = 20;
 
+/**
+ * The levels a practice run can open at.
+ *
+ * Not all twenty. Stepping one at a time to reach 18 is seventeen taps, and
+ * the levels anyone wants to practise are the ones where something new
+ * arrives — which the ladder already knows, because those are exactly the
+ * rows carrying `news`. So the list derives itself, and grows as each phase
+ * lands rather than needing to be kept in step by hand.
+ *
+ * One at the front because that is the real game, and the top at the back
+ * because the last rung is the one worth rehearsing.
+ */
+Ladder.starts = function () {
+    var levels = [1];
+    Ladder.LEVELS.forEach(function (row) {
+        if (row.news && levels.indexOf(row.level) < 0) {
+            levels.push(row.level);
+        }
+    });
+    if (levels.indexOf(Ladder.MAX) < 0) {
+        levels.push(Ladder.MAX);
+    }
+    return levels;
+};
+
 /** The row for a level, clamped at both ends. */
 Ladder.at = function (level) {
     var n = Math.max(1, Math.min(Ladder.MAX, Math.round(level || 1)));

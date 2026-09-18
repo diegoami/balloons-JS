@@ -63,6 +63,7 @@ Screens.title = {
         Paint.intro(game, Layout.INTRO_TEXT);
         Paint.description(game);
         Paint.menu(game);
+        Paint.startLevel(game);
         Paint.player(game);
     },
 
@@ -310,7 +311,12 @@ Screens.gameover = {
         // while nothing is listening.
         game.state.liveAt = Date.now() + Game.MENU_LOCKOUT_MS;
 
-        Scores.submit(game, game.score);
+        // A practice run is not submitted at all. A board mixing runs that
+        // skipped the climb with runs that did it is worse than no board, and
+        // the honest way to keep them apart is to not post one of them.
+        if (!game.isPractice()) {
+            Scores.submit(game, game.score);
+        }
         Scores.load(game);
         Announce.gameover(game);
     },
@@ -332,10 +338,12 @@ Screens.gameover = {
         Paint.intro(
             game,
             (game.won ? "You win! Score: " : "Game Over. Score: ") +
-                game.score + ", Time: " + game.end_time
+                game.score + ", Time: " + game.end_time +
+                (game.isPractice() ? " (practice, not saved)" : "")
         );
         Paint.menu(game);
         Paint.scores(game);
+        Paint.startLevel(game);
         Paint.player(game);
         Paint.entities(game);
     },
