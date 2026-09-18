@@ -314,7 +314,8 @@ Game.measureLayout = function () {
     this.fontSize = Layout.applyFont(this.ctx, this.width, this.height);
     this.layout = Layout.compute(
         this.ctx, this.width, this.height, this.fontSize,
-        Layout.PLAYER_PREFIX + this.name
+        Layout.PLAYER_PREFIX + this.name,
+        this.startLevel
     );
 };
 
@@ -430,7 +431,7 @@ Game.elapsed = function () {
 Game.levelFor = function (ticks) {
     var seconds = ticks * Game.STEP_MS / 1000;
     var climbed = Math.floor(seconds / Ladder.CLIMB_SECONDS);
-    return Math.min(Ladder.MAX, 1 + climbed);
+    return Math.min(Ladder.MAX, this.startLevel + climbed);
 };
 
 /** The row of the ladder the game is being played on right now. */
@@ -439,16 +440,52 @@ Game.rung = function () {
 };
 
 /**
- * Steps in a whole run: every level of the ladder, played out.
+ * Steps in a whole run: every level from where it started, played out.
  *
  * `levelFor` clamps at the top, so it cannot tell level 20 from the end of
  * level 20 — and the difference is the whole point of a finish line. You win
  * by surviving 20, not by arriving at it.
+ *
+ * Counted from `startLevel` rather than from 1, so a practice run that opens
+ * at 16 ends after five levels rather than sitting on the top rung for four
+ * minutes with nothing left to climb.
  */
 Game.runTicks = function () {
     // Rounded: STEP_MS is 1000/30, so the division lands a fraction off a
     // whole number of steps and the count of something countable should not.
-    return Math.round(Ladder.MAX * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS);
+    var levels = Ladder.MAX - this.startLevel + 1;
+    return Math.round(levels * Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS);
+};
+
+/**
+ * Moves the level chip on to the next level worth practising, wrapping round.
+ *
+ * One target that cycles rather than a stepper with two: twenty levels is
+ * seventeen taps to reach 18, and the list is short because it holds only the
+ * levels where something new arrives.
+ */
+Game.cycleStartLevel = function () {
+    var levels = Ladder.starts();
+    var at = levels.indexOf(this.startLevel);
+    this.startLevel = levels[(at + 1) % levels.length];
+
+    // The chip's own width depends on what it says, so the layout has to be
+    // measured again before anything is drawn on top of the old one.
+    this.measureLayout();
+    Announce.startLevel(this);
+    this.paint();
+};
+
+/**
+ * Whether this run counts.
+ *
+ * A run that skipped the climb is not comparable with one that did it, and a
+ * board mixing the two is worse than no board. So the score is simply not
+ * submitted — the run still plays, still shows its points, and still says at
+ * the end that it was practice.
+ */
+Game.isPractice = function () {
+    return this.startLevel > 1;
 };
 
 /** Whether the run has been played all the way to the end of the last level. */
@@ -489,7 +526,7 @@ Game.resetRound = function () {
     this.won = false;
     this.end_time = null;
     this.ticks = 0;
-    this.applyLevel(1);
+    this.applyLevel(this.startLevel);
 };
 
 Game.randomBalloon = function () {
@@ -694,6 +731,16 @@ Game.init = function () {
 
     this.entities = [];
     this.pressed = null;
+
+    /**
+     * Where the next run opens.
+     *
+     * Deliberately NOT remembered between visits. The difficulty setting this
+     * game used to carry was, and a returning player was silently put back on
+     * a choice they made once; a practice level is a stronger version of the
+     * same trap, because it also stops their scores counting.
+     */
+    this.startLevel = 1;
     this.applyLevel(1);
 
     this.applyCanvasSize();

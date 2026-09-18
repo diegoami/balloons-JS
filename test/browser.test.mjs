@@ -732,8 +732,8 @@ await t('there are no buttons left, and the name line is the only exception', as
     described: Game.layout.description.length
   }));
   assert.equal(m.buttons, 0, 'a button came back');
-  assert.deepEqual(m.targets, ['replay', 'player'],
-    'the only named targets should be the high-score line and the name line');
+  assert.deepEqual(m.targets, ['replay', 'player', 'start'],
+    'the only named targets should be the high-score line and the two chips');
   assert.equal(m.described, m.lines,
     'the description has no baseline for every line it wants to draw');
   await context.close();
@@ -1960,7 +1960,9 @@ await t('the game says what screen it is on, and what happened', async () => {
   const said = await page.evaluate(() => window.__said);
   const heard = said.join(' | ');
   assert.match(heard, /Get ready/, 'the countdown is silent: ' + heard);
-  assert.match(heard, /Level one/, 'the level is never said: ' + heard);
+  // Numerals, like every other announcement. The countdown used to spell it,
+  // which was the only place in the game that did.
+  assert.match(heard, /Level 1\b/, 'the level is never said: ' + heard);
   assert.match(heard, /\d+ of 5 lost/, 'losing a balloon is silent: ' + heard);
   assert.match(heard, /Game over\. \d+ points in [\d.]+ seconds/,
     'the result is never said: ' + heard);
@@ -3512,6 +3514,124 @@ await t('destroying the boss scores, and starts the cooldown', async () => {
   assert.equal(m.straightAway, 0, 'a second boss arrived with no gap at all');
   assert.equal(m.afterCooldown, 1, 'no boss came back after the cooldown');
   assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+
+await t('the level chip cycles through the levels worth practising', async () => {
+  // Not all twenty: stepping one at a time to reach 18 is seventeen taps. The
+  // list is the levels where something new arrives, which the ladder already
+  // knows, so it grows on its own as each phase lands.
+  const { context, page, errors } = await newGame();
+  const m = await page.evaluate(() => {
+    const out = { offered: Ladder.starts(), seen: [], start: Game.startLevel };
+    const news = Ladder.LEVELS.filter(r => r.news).map(r => r.level);
+    out.news = news;
+    for (let i = 0; i < out.offered.length + 1; i++) {
+      out.seen.push(Game.startLevel);
+      Game.cycleStartLevel();
+    }
+    out.wrapped = Game.startLevel;
+    return out;
+  });
+
+  assert.equal(m.start, 1, 'a fresh visit does not start at level 1');
+  assert.equal(m.offered[0], 1, 'level 1 is not the first thing offered');
+  assert.ok(m.offered.includes(20), 'the top rung is not offered');
+  m.news.forEach(level => {
+    assert.ok(m.offered.includes(level),
+      `level ${level} brings something new but cannot be practised`);
+  });
+  assert.deepEqual(m.seen, m.offered.concat([1]),
+    'the chip does not cycle through the list and wrap: ' + m.seen.join(', '));
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('tapping the level chip changes the level instead of starting a game', async () => {
+  // Everywhere else on this screen a tap starts a game, so the two chips along
+  // the bottom are the whole exception and it has to hold.
+  const { context, page, errors } = await newGame();
+  const chip = await page.evaluate(() => Game.layout.start);
+  await page.mouse.click(chip.x + chip.width / 2, chip.y + chip.height / 2);
+  await page.waitForTimeout(200);
+
+  const m = await page.evaluate(() => ({
+    screen: Game.screen,
+    startLevel: Game.startLevel,
+    practice: Game.isPractice(),
+    label: Game.layout.start.label,
+    said: document.getElementById('game_status').textContent
+  }));
+
+  assert.equal(m.screen, 'title', 'the level chip started a game');
+  assert.ok(m.startLevel > 1, 'the level chip did not move');
+  assert.equal(m.practice, true, 'starting above level 1 is not a practice run');
+  assert.match(m.label, new RegExp('' + m.startLevel), 'the chip does not say its level');
+  assert.match(m.said, /not be saved/i, 'the warning is never said: ' + m.said);
+
+  // And a tap on the sky still starts the game, from the chosen level.
+  await page.mouse.click(await page.evaluate(() => Game.width * 0.7), 300);
+  await page.waitForTimeout(2600);
+  const playing = await page.evaluate(() => ({ screen: Game.screen, level: Game.level }));
+  assert.equal(playing.screen, 'playing');
+  assert.equal(playing.level, m.startLevel, 'the game did not open on the chosen level');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('a practice run is never posted to the board', async () => {
+  boards.clear();
+  apiHits.length = 0;
+  const { context, page, errors } = await newGame({ name: 'Practiser' });
+  await page.evaluate(() => { Game.startLevel = 12; Game.measureLayout(); });
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+  await page.evaluate(() => {
+    Game.score = 500;
+    Game.livesLost = Game.allowance;
+  });
+  await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
+  await page.waitForTimeout(500);
+
+  const posted = apiHits.filter(h => h.method === 'POST');
+  assert.deepEqual(posted, [], 'a practice score was posted to the board');
+  assert.equal((boards.get('all') || []).length, 0, 'the board took a practice score');
+
+  const said = await page.evaluate(() => document.getElementById('game_status').textContent);
+  assert.match(said, /not saved/i, 'the game over does not say it was practice: ' + said);
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('a practice run is shorter, because it has fewer levels left to climb', async () => {
+  // runTicks used to count from level 1 always, so a run opening at 16 would
+  // have sat on the top rung for four minutes with nothing left to climb.
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => {
+    const at = (level) => {
+      Game.startLevel = level;
+      return {
+        run: Game.runTicks(),
+        opensAt: Game.levelFor(0),
+        topAfter: Game.levelFor(Game.runTicks() - 1)
+      };
+    };
+    const out = { one: at(1), twelve: at(12), top: at(20) };
+    // One level's worth of steps, worked out where Game.STEP_MS lives.
+    out.oneLevel = Math.round(Ladder.CLIMB_SECONDS * 1000 / Game.STEP_MS);
+    Game.startLevel = 1;
+    return out;
+  });
+
+  assert.equal(m.one.opensAt, 1);
+  assert.equal(m.twelve.opensAt, 12, 'a run starting at 12 does not open on 12');
+  assert.equal(m.one.topAfter, 20, 'a full run does not end on the top rung');
+  assert.equal(m.twelve.topAfter, 20, 'a practice run does not reach the top rung');
+  assert.ok(m.twelve.run < m.one.run,
+    'a run starting at 12 is no shorter than a run starting at 1');
+  assert.equal(m.top.run, m.oneLevel,
+    'a run starting at the top is not one level long');
   await context.close();
 });
 

@@ -50,13 +50,31 @@ Announce.title = function (game) {
     );
 };
 
+/**
+ * The level chip moved.
+ *
+ * The warning is repeated every time rather than said once, because the chip
+ * cycles and a player who cannot see it needs to know what the current choice
+ * costs, not what the last one did.
+ */
+Announce.startLevel = function (game) {
+    Announce.say(
+        game.isPractice()
+            ? "Starting at level " + game.startLevel +
+              ". Practice run: this score will not be saved."
+            : "Starting at level 1. Scores count."
+    );
+};
+
 Announce.name = function () {
     Announce.say("Your name. Type a name, then Enter to save or Escape to cancel.");
 };
 
 Announce.starting = function (game) {
     Announce.say(
-        "Get ready. Level one, and " + Announce.lives(Game.LIVES) + " to lose."
+        "Get ready. Level " + game.startLevel + ", and " +
+        Announce.lives(Game.LIVES) + " to lose." +
+        (game.isPractice() ? " Practice run: this score will not be saved." : "")
     );
 };
 
@@ -171,8 +189,11 @@ Announce.gameover = function (game) {
         (game.won
             ? "You win. Level " + Ladder.MAX + " survived. "
             : "Game over. ") +
-        game.score + " points in " + game.end_time +
-        " seconds. Press space to play again."
+        game.score + " points in " + game.end_time + " seconds. " +
+        (game.isPractice()
+            ? "Practice run: not saved. "
+            : "") +
+        "Press space to play again."
     );
 };
 

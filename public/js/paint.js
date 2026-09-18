@@ -332,6 +332,51 @@ Paint.countdown = function (game, remaining) {
  * in to changing it. Underlined because it is the only text on the screen you
  * can tap that is not obviously a button.
  */
+/**
+ * The level chip, and the warning that comes with it.
+ *
+ * The warning is only drawn when it applies, and in the accent rather than the
+ * soft ink: "this will not be saved" is the one thing on this screen a player
+ * must not skim past.
+ */
+Paint.startLevel = function (game) {
+    var rect = game.layout.start;
+    var ctx = game.ctx;
+    var live = game.isMenuLive();
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = game.layout.fonts.label;
+
+    Layout.roundedRect(ctx, rect, rect.radius);
+    ctx.fillStyle = game.palette.panel;
+    ctx.fill();
+
+    if (live && game.pressed === "start") {
+        ctx.fillStyle = game.palette.buttonPressOverlay;
+        ctx.fill();
+    }
+
+    ctx.fillStyle = live
+        ? (game.isPractice() ? game.palette.accent : game.palette.ink)
+        : game.palette.inkDisabled;
+    ctx.fillText(rect.label, rect.x + rect.width / 2, rect.y + rect.height / 2);
+    ctx.restore();
+
+    if (!game.isPractice()) {
+        return;
+    }
+
+    ctx.font = game.layout.fonts.label;
+    ctx.fillStyle = game.palette.accent;
+    ctx.fillText(
+        Layout.PRACTICE_WARNING,
+        game.layout.practice.x,
+        game.layout.practice.y
+    );
+};
+
 Paint.player = function (game) {
     var rect = game.layout.player;
     var ctx = game.ctx;
