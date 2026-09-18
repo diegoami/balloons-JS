@@ -11,9 +11,9 @@
 "use strict";
 var Paint = {};
 
-/** The backdrop, from the cache Sky keeps per size and difficulty. */
+/** The backdrop, from the cache Sky keeps per size and time of day. */
 Paint.sky = function (game) {
-    var sky = Sky.render(game.width, game.height, game.dpr, game.difficulty.level);
+    var sky = Sky.render(game.width, game.height, game.dpr, game.level);
     game.ctx.drawImage(sky, 0, 0, game.width, game.height);
 };
 
@@ -26,8 +26,8 @@ Paint.sky = function (game) {
  * composition that lived in the top half of the screen. This is the same idea
  * sized to what is actually drawn.
  */
-Paint.panel = function (game) {
-    var box = game.layout.panel;
+Paint.panel = function (game, box) {
+    box = box || game.layout.panel;
     var ctx = game.ctx;
 
     // It fades in rather than sitting there as a card, because the sky it has
@@ -58,7 +58,7 @@ Paint.intro = function (game, text) {
 };
 
 /**
- * Draws the difficulty buttons in whichever of four states they are in.
+ * Draws the menu button in whichever of its states it is in.
  *
  * A button used to look identical whether or not pressing it would do
  * anything: after a game ended the menu was repainted every frame for five
@@ -78,8 +78,10 @@ Paint.menu = function (game) {
 
     for (var i = 0; i < buttons.length; i++) {
         var button = buttons[i];
-        var selected = button.level === game.difficulty.level;
-        var pressed = live && button.level === game.pressed;
+        // There is one button and it is the thing to press, so it is drawn the
+        // way the selected difficulty used to be.
+        var selected = true;
+        var pressed = live && button.id === game.pressed;
 
         var fill, border, label;
         if (!live) {
@@ -126,10 +128,45 @@ Paint.menu = function (game) {
     ctx.font = game.layout.fonts.label;
     ctx.fillStyle = live ? palette.inkSoft : palette.inkDisabled;
     ctx.fillText(
-        live ? Layout.HINT_TEXT : "Hold on...",
+        live ? Layout.START_TEXT : "Hold on...",
         game.layout.hint.x,
         game.layout.hint.y
     );
+};
+
+/**
+ * What the game is, in two lines, where the Play button used to be.
+ *
+ * The footage behind this shows how the game moves; these say what a run is,
+ * which is the one thing watching it cannot tell you.
+ */
+Paint.description = function (game) {
+    var ctx = game.ctx;
+    ctx.font = game.layout.fonts.label;
+    ctx.fillStyle = game.palette.inkSoft;
+    // Each line carries its own words: after wrapping there is no longer one
+    // line per sentence in Layout.DESCRIPTION to index into.
+    game.layout.description.forEach(function (line) {
+        ctx.fillText(line.text, line.x, line.y);
+    });
+};
+
+/** How a row says where it got to: won, a level, or nothing recorded. */
+Paint.reached = function (row) {
+    var got = row["won"] ? "WON" : (row["level"] ? "L" + row["level"] : "\u2014");
+    var pointer = row["pointer"];
+
+    // Only when it is not a mouse.
+    //
+    // A fifth column would not fit a phone, and a marker on every row would be
+    // noise. One pointer at about 2.1 taps a second is what the ladder is
+    // calibrated against, so a mouse is the baseline and needs no label; two
+    // thumbs is the thing worth flagging. Same rule as the practice warning:
+    // say it when it applies and stay quiet when it does not.
+    if (pointer === "touch" || pointer === "mixed") {
+        return got + " " + pointer;
+    }
+    return got;
 };
 
 /** The board, if one has arrived. Nothing is drawn before then. */
@@ -143,7 +180,7 @@ Paint.scores = function (game) {
 
     game.ctx.font = game.layout.fonts.label;
     game.ctx.fillStyle = game.palette.inkSoft;
-    game.ctx.fillText(Layout.HIGH_SCORES_TEXT + game.difficulty.level, scores.heading.x, scores.heading.y);
+    game.ctx.fillText(Layout.HIGH_SCORES_TEXT, scores.heading.x, scores.heading.y);
 
     game.ctx.font = game.layout.fonts.score;
     for (var i = 0; i < scores.rows.length; i++) {
@@ -152,11 +189,92 @@ Paint.scores = function (game) {
             game.ctx.fillText(data[i]["score_day"], scores.columns.date, scores.rows[i]);
             game.ctx.fillStyle = game.palette.ink;
             game.ctx.fillText(data[i]["name"], scores.columns.name, scores.rows[i]);
+
+            // How far up the ladder that score got. Rows already on the board
+            // were set before this was recorded, so they get a dash: a missing
+            // fact is not a level of nothing.
+            game.ctx.fillStyle = data[i]["won"] ? game.palette.accent : game.palette.inkSoft;
+            game.ctx.fillText(
+                Paint.reached(data[i]),
+                scores.columns.level,
+                scores.rows[i]
+            );
+
             game.ctx.fillStyle = game.palette.accent;
             game.ctx.fillText(data[i]["score"], scores.columns.value, scores.rows[i]);
         }
     }
     game.ctx.font = game.layout.fonts.menu;
+};
+
+/**
+ * A screen that interrupts play: the break between levels, or a tab that was
+ * backgrounded and has come back.
+ *
+ * A label, a headline, a line or two under it, and one button over a sky
+ * frozen exactly where it was. It had a second user — the break between
+ * levels — which drew a bar showing the wait draining. The break is gone, so
+ * the bar and the parameter that fed it are too.
+ */
+Paint.interlude = function (game, label, headline, lines) {
+    var ctx = game.ctx;
+    var palette = game.palette;
+    var L = game.layout;
+
+    ctx.font = L.fonts.label;
+    ctx.fillStyle = palette.inkSoft;
+    ctx.fillText(label, L.intro.x, L.intro.y);
+
+    ctx.font = L.fonts.intro;
+    ctx.fillStyle = palette.ink;
+    ctx.fillText(headline, L.intro.x, L.intro.y + L.line * 1.5);
+
+    ctx.font = L.fonts.label;
+    lines.forEach(function (line, i) {
+        if (!line || !L.description[i]) {
+            return;
+        }
+        ctx.fillStyle = i === 0 ? palette.inkSoft : palette.accent;
+        ctx.fillText(line, L.description[i].x, L.description[i].y);
+    });
+
+    var button = L.resume;
+    var pressed = game.pressed === "resume";
+
+    ctx.save();
+    ctx.lineWidth = Math.max(1, L.line * 0.06);
+    ctx.fillStyle = pressed ? palette.buttonPressOverlay : palette.buttonFill;
+    ctx.strokeStyle = palette.buttonBorder;
+    Layout.roundedRect(ctx, button, button.radius);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = L.fonts.menu;
+    ctx.fillStyle = palette.ink;
+    ctx.fillText(button.label, button.x + button.width / 2, button.y + button.height / 2);
+    ctx.restore();
+
+};
+
+/**
+ * A tab that was away and has come back.
+ *
+ * Backgrounding a tab already stopped the game: requestAnimationFrame stops
+ * firing, and because time played is counted in simulation steps the clock and
+ * the level stop with it. What it did NOT do was say so — the game restarted
+ * the instant the tab was focused, so you could come back to balloons already
+ * escaping before you had registered that it was live. This is that behaviour
+ * made honest rather than a new feature.
+ */
+Paint.paused = function (game) {
+    Paint.interlude(
+        game,
+        "LEVEL " + game.level,
+        Layout.PAUSED_TEXT,
+        [Layout.PAUSED_HINT, ""]
+    );
 };
 
 Paint.countdown = function (game, remaining) {
@@ -165,9 +283,15 @@ Paint.countdown = function (game, remaining) {
     ctx.save();
     ctx.textAlign = "center";
 
+    // The game has never told anyone what to do. This is the one line it gets,
+    // and the countdown is when a new player is looking at nothing else.
     ctx.font = game.layout.fonts.label;
     ctx.fillStyle = game.palette.inkSoft;
-    ctx.fillText("Get ready", game.layout.countdown.x, game.layout.countdown.y - game.layout.line * 1.5);
+    ctx.fillText(
+        Layout.PLAY_INSTRUCTION,
+        game.layout.countdown.x,
+        game.layout.countdown.y - game.layout.line * 1.5
+    );
 
     ctx.font = game.layout.fonts.countdown;
     ctx.fillStyle = game.palette.accent;
@@ -185,6 +309,51 @@ Paint.countdown = function (game, remaining) {
  * in to changing it. Underlined because it is the only text on the screen you
  * can tap that is not obviously a button.
  */
+/**
+ * The level chip, and the warning that comes with it.
+ *
+ * The warning is only drawn when it applies, and in the accent rather than the
+ * soft ink: "this will not be saved" is the one thing on this screen a player
+ * must not skim past.
+ */
+Paint.startLevel = function (game) {
+    var rect = game.layout.start;
+    var ctx = game.ctx;
+    var live = game.isMenuLive();
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = game.layout.fonts.label;
+
+    Layout.roundedRect(ctx, rect, rect.radius);
+    ctx.fillStyle = game.palette.panel;
+    ctx.fill();
+
+    if (live && game.pressed === "start") {
+        ctx.fillStyle = game.palette.buttonPressOverlay;
+        ctx.fill();
+    }
+
+    ctx.fillStyle = live
+        ? (game.isPractice() ? game.palette.accent : game.palette.ink)
+        : game.palette.inkDisabled;
+    ctx.fillText(rect.label, rect.x + rect.width / 2, rect.y + rect.height / 2);
+    ctx.restore();
+
+    if (!game.isPractice()) {
+        return;
+    }
+
+    ctx.font = game.layout.fonts.label;
+    ctx.fillStyle = game.palette.accent;
+    ctx.fillText(
+        Layout.PRACTICE_WARNING,
+        game.layout.practice.x,
+        game.layout.practice.y
+    );
+};
+
 Paint.player = function (game) {
     var rect = game.layout.player;
     var ctx = game.ctx;
@@ -246,9 +415,10 @@ Paint.nameScreen = function (game) {
     ctx.fillText(Layout.NAME_HINT, game.layout.hint.x, game.layout.hint.y);
 };
 
-Paint.balloons = function (game) {
-    for (var i = 0; i < game.balloons.length; i++) {
-        game.balloons[i].draw();
+/** Everything in the sky, in the order the list keeps: lowest layer first. */
+Paint.entities = function (game) {
+    for (var i = 0; i < game.entities.length; i++) {
+        game.entities[i].draw(game);
     }
 };
 
@@ -269,11 +439,12 @@ Paint.hud = function (game) {
     game.ctx.font = game.layout.fonts.hud;
     game.ctx.fillStyle = game.palette.ink;
     game.ctx.fillText(
-        game.balloons_caught + " popped, " + game.lostBalloons + " lost",
+        game.score + " points, " + game.livesLost + " of " +
+            game.allowance + " lost",
         hud.caught, hud.y
     );
     game.ctx.fillStyle = game.palette.inkSoft;
-    game.ctx.fillText(game.difficulty.name, hud.level, hud.y);
+    game.ctx.fillText("LEVEL " + game.level, hud.level, hud.y);
     game.ctx.fillStyle = game.palette.accent;
     game.ctx.fillText(game.elapsed() + "s", hud.time, hud.y);
 };

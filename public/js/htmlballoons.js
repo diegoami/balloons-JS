@@ -16,6 +16,16 @@ CANVASBALLOON.GRADIENT_FACTOR = 0.3;
 CANVASBALLOON.GRADIENT_CIRCLE_RADIUS = 3;
 
 /**
+ * How the tapered bottom half of a balloon is described to the hit test.
+ *
+ * The bottom is two cubic beziers from the balloon's waist down to a point,
+ * and `(dx/r)^2 + (dy/reach)^TAPER_POWER = 1` follows that curve to within
+ * 0.7% of the radius at every point along it — fitted against the beziers
+ * rather than guessed, and checked against the drawn pixels by a test.
+ */
+CANVASBALLOON.TAPER_POWER = 1.6;
+
+/**
  * Creates a new Balloon
  * @class	Represents a balloon displayed on a HTML5 canvas
  * @param	{String}	canvasElementID		Unique ID of the canvas element displaying the balloon
@@ -36,35 +46,73 @@ CANVASBALLOON.Balloon = function(canvasElementID, centerX, centerY, radius, colo
     this.centerX = centerX;
     this.centerY = centerY;
     this.radius = radius;
+    this.rgb = color;
     this.baseColor = new Color(color);
     this.darkColor = (new Color(color)).darken(CANVASBALLOON.GRADIENT_FACTOR);
     this.lightColor = (new Color(color)).lighten(CANVASBALLOON.GRADIENT_FACTOR);
 
     // The gradient is rebuilt every frame because it moves with the balloon,
-    // but its two colours never change, so they are worked out once here.
+    // but its two colours only change when the balloon is hit, so they are
+    // worked out here and again on a hit rather than on every frame.
     this.darkString = this.darkColor.rgbString();
     this.lightString = this.lightColor.rgbString();
+
+    // A balloon with more than one skin wears a rim. Nothing draws one unless
+    // it is set, so an ordinary balloon is untouched.
+    this.rimWidth = 0;
+    this.rimColor = "rgba(0, 0, 0, 0.45)";
 };
 
+/**
+ * Re-mixes the gradient, for a balloon that has been hit and is thinning.
+ * Lightening towards the sky is what makes a skin coming off legible without a
+ * meter: the balloon looks progressively emptier.
+ */
+CANVASBALLOON.Balloon.prototype.thin = function (amount) {
+    this.darkString = (new Color(this.rgb))
+        .darken(Math.max(0, CANVASBALLOON.GRADIENT_FACTOR - amount)).rgbString();
+    this.lightString = (new Color(this.rgb))
+        .lighten(CANVASBALLOON.GRADIENT_FACTOR + amount).rgbString();
+};
+
+/**
+ * Whether a point is on the balloon.
+ *
+ * This used to be the bounding RECTANGLE: anywhere within a radius either side
+ * of the centre and anywhere from the top of the head down to the tip of the
+ * tail. A balloon is a disc with a tapered tail, and the rectangle around that
+ * is 31% larger than the shape inside it — so a third of the taps that popped
+ * a balloon landed on empty sky beside it, most of them in the two wide bands
+ * of nothing either side of the tail.
+ *
+ * Now it is the shape. The top half is the circle it is drawn as, and the
+ * bottom half follows the taper of the beziers that draw it, so a tap has to
+ * land on a balloon to pop one.
+ *
+ * The knot below the tail is not included. It is a couple of pixels of string
+ * and aiming at it is aiming below the balloon.
+ */
 CANVASBALLOON.Balloon.prototype.check_hit = function(last_x, last_y) {
-    var centerX = this.centerX;
-    var centerY = this.centerY;
     var radius = this.radius;
+    var dx = last_x - this.centerX;
+    var dy = last_y - this.centerY;
 
-    var handleLength = CANVASBALLOON.KAPPA * radius;
+    if (Math.abs(dx) > radius) {
+        return false;
+    }
 
-    var widthDiff = (radius * CANVASBALLOON.WIDTH_FACTOR);
-    var heightDiff = (radius * CANVASBALLOON.HEIGHT_FACTOR);
+    // The head: the circle the two top beziers approximate.
+    if (dy <= 0) {
+        return dx * dx + dy * dy <= radius * radius;
+    }
 
-    var balloonBottomY = centerY + radius + heightDiff;
-
-    var collision = Math.abs(last_x - centerX) <= radius
-        && (
-            ((last_y <= centerY) && (centerY - last_y <= radius)) ||
-            ((centerY <= last_y) && (centerY - last_y <= radius + heightDiff))
-        );
-
-    return collision;
+    // The tail: as wide as the balloon at the waist, nothing at the tip.
+    var reach = radius * (1 + CANVASBALLOON.HEIGHT_FACTOR);
+    if (dy > reach) {
+        return false;
+    }
+    return (dx * dx) / (radius * radius) +
+        Math.pow(dy / reach, CANVASBALLOON.TAPER_POWER) <= 1;
 };
 
 /**
@@ -155,6 +203,14 @@ CANVASBALLOON.Balloon.prototype.draw = function() {
 
     gfxContext.fillStyle = balloonGradient;
     gfxContext.fill();
+
+    // The rim, for a balloon that takes more than one tap. Drawn on the path
+    // that is already traced, so it costs a stroke and nothing else.
+    if (this.rimWidth > 0) {
+        gfxContext.lineWidth = this.rimWidth;
+        gfxContext.strokeStyle = this.rimColor;
+        gfxContext.stroke();
+    }
 
     // End balloon path
 

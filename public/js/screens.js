@@ -22,30 +22,48 @@
  *   update(game)        one frame of whatever moves. Absent on static screens.
  *   draw(game)          paints the whole screen, from the sky up.
  *   animated            whether the frame loop runs while this screen is up.
- *   menuLive(game)      whether pressing a difficulty button does anything.
+ *   menuLive(game)      whether pressing a menu button does anything.
  */
 
 "use strict";
 var Screens = {};
 
 Screens.title = {
-    animated: false,
+    // The game plays itself here, so the loop runs — unless the viewer has
+    // asked for less movement, in which case the footage holds on one frame.
+    animated: !Attract.reducedMotion(),
 
     enter: function (game) {
         Scores.load(game);
         Announce.title(game);
+        Attract.begin(game);
     },
 
     bind: function (game, signal) {
         Input.menu(game, signal);
     },
 
+    update: function (game) {
+        Attract.step(game);
+    },
+
+    /**
+     * Sky, then the footage, then a short panel with the words on it.
+     *
+     * The high scores are not here any more. The full panel reaches the bottom
+     * of the score table, which covered almost the whole window — so the
+     * footage this screen exists to show was behind it, dimmed to nothing. The
+     * board is drawn on the game-over screen, which is where you have just
+     * earned a place on it and where it is worth reading.
+     */
     draw: function (game) {
         Paint.sky(game);
-        Paint.panel(game);
+        Paint.entities(game);
+        Paint.panel(game, game.layout.splash);
         Paint.intro(game, Layout.INTRO_TEXT);
+        Paint.description(game);
         Paint.menu(game);
-        Paint.scores(game);
+        Paint.startLevel(game);
         Paint.player(game);
     },
 
@@ -91,8 +109,8 @@ Screens.name = {
 
 /**
  * The countdown. It exists because starting used to be instant: the tap that
- * chose a difficulty was also the first frame of play, on a screen that had
- * shown nothing since.
+ * started a game was also the first frame of play, on a screen that had shown
+ * nothing since.
  */
 Screens.starting = {
     animated: true,
@@ -127,8 +145,15 @@ Screens.starting = {
 Screens.playing = {
     animated: true,
 
+    /**
+     * The clock is NOT reset here.
+     *
+     * It used to be, which was harmless while a round entered this screen
+     * exactly once. A break between levels leaves and comes back, and resetting
+     * the clock on the way back would put the player at level 1 again, for
+     * ever. resetRound owns the clock; this screen only reads it.
+     */
     enter: function (game) {
-        game.ticks = 0;
         Announce.playing();
     },
 
@@ -139,24 +164,78 @@ Screens.playing = {
     update: function (game) {
         game.ticks++;
 
-        var escaped = game.removeEscaped();
+        var climbed = game.levelFor(game.ticks);
+        if (climbed !== game.level) {
+            // The sky belongs to the rung: it goes from morning to night as
+            // the ladder climbs, so how far up you are is visible without
+            // reading anything.
+            game.applyLevel(climbed);
+            Announce.level(game, game.awardLife(climbed));
+        }
+
+        var escaped = game.reap();
         if (escaped > 0) {
-            game.lostBalloons += escaped;
+            game.livesLost += escaped;
             Announce.lost(game);
         }
 
         game.spawnBalloon();
-        game.moveBalloons(false);
+        game.spawnBird();
+        game.spawnBoss();
+        game.spawnFireflies();
+        game.step(false);
 
-        if (game.lostBalloons >= game.difficulty.maxLost) {
+        // Surviving the last level is the win, so the check comes before the
+        // one that ends a run: a player who clears level 20 on the same step
+        // their last life goes has still finished it.
+        if (game.finished()) {
+            game.won = true;
+            game.enter("gameover");
+        } else if (game.livesLost >= game.allowance) {
             game.enter("gameover");
         }
     },
 
     draw: function (game) {
         Paint.sky(game);
-        Paint.balloons(game);
+        Paint.entities(game);
         Paint.hud(game);
+    },
+
+    menuLive: function () {
+        return false;
+    }
+};
+
+/**
+ * A tab that was away.
+ *
+ * Backgrounding a tab already stopped the game and always will: rAF stops
+ * firing, and time played is counted in simulation steps, so the clock and the
+ * level stop with it. This screen does not add a pause — it makes the one that
+ * already existed visible, so a player who looks away comes back to a game
+ * that is plainly waiting rather than to one that restarts under them.
+ *
+ * It is not on a timer. A break between levels resumes itself because the
+ * player is there; this one is up precisely because they were not.
+ */
+Screens.paused = {
+    animated: false,
+
+    enter: function (game) {
+        game.pressed = null;
+        Announce.paused(game);
+    },
+
+    bind: function (game, signal) {
+        Input.resume(game, signal);
+    },
+
+    draw: function (game) {
+        Paint.sky(game);
+        Paint.entities(game);
+        Paint.panel(game, game.layout.breakPanel);
+        Paint.paused(game);
     },
 
     menuLive: function () {
@@ -177,7 +256,18 @@ Screens.gameover = {
         // while nothing is listening.
         game.state.liveAt = Date.now() + Game.MENU_LOCKOUT_MS;
 
-        Scores.submit(game, game.balloons_caught);
+        // And it does not sit here for ever. Left alone, the game goes back to
+        // the title and starts playing itself again — which is what the
+        // attract screen is for, and what a machine nobody is sitting at
+        // should be showing.
+        game.state.stepsHome = Game.GAMEOVER_STEPS;
+
+        // A practice run is not submitted at all. A board mixing runs that
+        // skipped the climb with runs that did it is worse than no board, and
+        // the honest way to keep them apart is to not post one of them.
+        if (!game.isPractice()) {
+            Scores.submit(game, game.score);
+        }
         Scores.load(game);
         Announce.gameover(game);
     },
@@ -189,8 +279,13 @@ Screens.gameover = {
     // Nothing spawns any more; the balloons still in the air accelerate and
     // leave, which is how the board clears itself behind the text.
     update: function (game) {
-        game.removeEscaped();
-        game.moveBalloons(true);
+        game.reap();
+        game.step(true);
+
+        game.state.stepsHome--;
+        if (game.state.stepsHome <= 0) {
+            game.enter("title");
+        }
     },
 
     draw: function (game) {
@@ -198,12 +293,15 @@ Screens.gameover = {
         Paint.panel(game);
         Paint.intro(
             game,
-            "Game Over. Score: " + game.balloons_caught + ", Time: " + game.end_time
+            (game.won ? "You win! Score: " : "Game Over. Score: ") +
+                game.score + ", Time: " + game.end_time +
+                (game.isPractice() ? " (practice, not saved)" : "")
         );
         Paint.menu(game);
         Paint.scores(game);
+        Paint.startLevel(game);
         Paint.player(game);
-        Paint.balloons(game);
+        Paint.entities(game);
     },
 
     menuLive: function (game) {

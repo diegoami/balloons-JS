@@ -3,7 +3,7 @@
  *
  * The whole game is one canvas. To a screen reader that is a single element
  * with nothing in it, so everything the picture says — which screen is up,
- * which difficulty is selected, that a balloon got away, what the final score
+ * which level it has climbed to, that a balloon got away, what the final score
  * was — has to be said somewhere it can be read. That somewhere is a live
  * region in the page, and this is everything that writes to it.
  *
@@ -37,12 +37,32 @@ Announce.say = function (text) {
     Announce.region.textContent = text;
 };
 
-/** The title screen: what this is, what is selected, and how to start. */
+/**
+ * The title screen: what this is, who is playing, and how to start.
+ *
+ * The screen behind these words is the game playing itself, which a screen
+ * reader cannot convey at all — so this says what the footage is showing.
+ */
 Announce.title = function (game) {
     Announce.say(
-        "Balloons. Difficulty " + game.difficulty.label + ", playing as " +
-        game.name + ". Press E, S, H or V to choose a difficulty and start, " +
-        "or space to play."
+        "Balloons. " + Layout.DESCRIPTION.join(" ") +
+        " Playing as " + game.name + ". Tap anywhere to play."
+    );
+};
+
+/**
+ * The level chip moved.
+ *
+ * The warning is repeated every time rather than said once, because the chip
+ * cycles and a player who cannot see it needs to know what the current choice
+ * costs, not what the last one did.
+ */
+Announce.startLevel = function (game) {
+    Announce.say(
+        game.isPractice()
+            ? "Starting at level " + game.startLevel +
+              ". Practice run: this score will not be saved."
+            : "Starting at level 1. Scores count."
     );
 };
 
@@ -52,8 +72,22 @@ Announce.name = function () {
 
 Announce.starting = function (game) {
     Announce.say(
-        game.difficulty.label + ". Get ready. " +
-        Announce.lives(game.difficulty.maxLost) + " to lose."
+        "Get ready. Level " + game.startLevel + ", and " +
+        Announce.lives(Game.LIVES) + " to lose." +
+        (game.isPractice() ? " Practice run: this score will not be saved." : "")
+    );
+};
+
+/**
+ * A tab that was away, said out loud.
+ *
+ * The screen says this too, but a reader cannot see the sky hanging frozen, so
+ * it also says the game is waiting rather than over.
+ */
+Announce.paused = function (game) {
+    Announce.say(
+        "Paused at level " + game.level + ". " + game.score +
+        " points. Press space to carry on."
     );
 };
 
@@ -61,18 +95,96 @@ Announce.playing = function () {
     Announce.say("Go.");
 };
 
+/**
+ * A level arrived. This is the only thing said during a round other than a
+ * balloon getting away, and it earns that: the game just got harder and
+ * nothing else on the screen announces it.
+ */
+Announce.level = function (game, awarded) {
+    var life = awarded > 0
+        ? " Extra life. " + Announce.lives(game.allowance - game.livesLost) +
+          " left to lose."
+        : "";
+    Announce.say("Level " + game.level + "." + Announce.arrivals(game) + life);
+};
+
+/**
+ * What a rung brought that the one below it did not. Said once, when it
+ * arrives: a balloon that does not pop is the kind of surprise a player who
+ * cannot see the rim deserves to be told about.
+ */
+Announce.arrivals = function (game) {
+    var rung = Ladder.at(game.level);
+    var under = Ladder.at(game.level - 1);
+    var news = "";
+
+    if (rung.fireflies > 0 && !(under.fireflies > 0)) {
+        return " Fireflies: harmless, but taps land on them.";
+    }
+    if (rung.birds > 0 && !(under.birds > 0)) {
+        return " Birds: do not touch them.";
+    }
+    if (rung.armoured > 0 && !(under.armoured > 0)) {
+        news += " Armoured balloons: three taps.";
+    } else if (rung.reinforced > 0 && !(under.reinforced > 0)) {
+        news += " Reinforced balloons: two taps.";
+    }
+    return news;
+};
+
+/**
+ * The boss, all three moments of it.
+ *
+ * A mechanic that punishes you silently is one a player who cannot see the
+ * canvas can only learn about by losing to it — and this one has a clock, so
+ * "it is here" and "it is charging" are the whole interface for them.
+ */
+Announce.bossArrived = function (game) {
+    Announce.say("A saucer. Tap it down, quickly.");
+};
+
+Announce.bossDestroyed = function (game) {
+    Announce.say("Saucer destroyed. " + game.score + " points.");
+};
+
+Announce.bossFired = function (game) {
+    Announce.say(
+        "The saucer fired. " + game.livesLost + " of " + game.allowance + " lost."
+    );
+};
+
+/**
+ * A bird was touched.
+ *
+ * Said every time, unlike most things in a round, because the cost is a life
+ * and the cause is a rule the player may not have absorbed yet. A silent
+ * penalty is a penalty nobody learns from.
+ */
+Announce.touchedBird = function (game) {
+    Announce.say(
+        "You touched a bird. " + game.livesLost + " of " + game.allowance +
+        " lost."
+    );
+};
+
 /** A balloon got away, which is the only thing in a round worth interrupting for. */
 Announce.lost = function (game) {
     Announce.say(
-        game.lostBalloons + " of " + game.difficulty.maxLost + " lost, " +
-        game.balloons_caught + " popped."
+        game.livesLost + " of " + game.allowance + " lost, " +
+        game.score + " points."
     );
 };
 
 Announce.gameover = function (game) {
     Announce.say(
-        "Game over. " + game.balloons_caught + " popped in " + game.end_time +
-        " seconds. Press space to play again."
+        (game.won
+            ? "You win. Level " + Ladder.MAX + " survived. "
+            : "Game over. ") +
+        game.score + " points in " + game.end_time + " seconds. " +
+        (game.isPractice()
+            ? "Practice run: not saved. "
+            : "") +
+        "Press space to play again."
     );
 };
 

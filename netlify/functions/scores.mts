@@ -2,7 +2,7 @@ import { getDeployStore, getStore } from "@netlify/blobs";
 import type { Config, Context } from "@netlify/functions";
 
 /**
- * High-score board, one list per difficulty level.
+ * The high-score board.
  *
  * Replaces the old Redis + Node scoreboard service (DA_redis_nodejs_Scoreboard)
  * that used to run in a sibling Docker container on port 5000. Same shape of
@@ -14,16 +14,50 @@ type ScoreEntry = {
   name: string;
   score: number;
   score_day: string;
+  /**
+   * How far up the ladder the run got, and whether it finished.
+   *
+   * Both optional, because every row written before this existed has neither
+   * and nothing here rewrites history: the game draws a dash for a row with no
+   * level rather than inventing one.
+   */
+  level?: number;
+  won?: boolean;
+  /**
+   * What the run was played with: "touch", "mouse" or "mixed".
+   *
+   * The ladder is calibrated against roughly 2.1 taps a second from ONE
+   * pointer. A touchscreen lets you use two thumbs, which measured is the
+   * difference between dying around level 8 and finishing every run -- so a
+   * score set that way is not the same achievement as one set with a mouse,
+   * and the board says which rather than quietly mixing them.
+   *
+   * Optional, like `level`: rows written before this existed have none, and an
+   * old browser that reports no pointer type sends none.
+   */
+  pointer?: "touch" | "mouse" | "mixed";
 };
 
 const STORE_NAME = "highscores";
-const VALID_DIFFICULTIES = new Set(["e", "s", "h", "v"]);
+/**
+ * One board, under one key.
+ *
+ * There were four, one per difficulty, and they could not be compared with
+ * each other: a score on Easy and a score on VHard were different games. One
+ * game means one board, and every row on it was earned the same way. The four
+ * old lists are still in the store under their own keys, unread; nothing here
+ * deletes them.
+ */
+const BOARD = "all";
 
 /** How many entries we keep. The game only draws the top 3. */
 const MAX_SCORES = 10;
 
 const MAX_NAME_LENGTH = 24;
 const MAX_SCORE = 1_000_000;
+
+/** The top of the ladder. A level outside 1..MAX_LEVEL is not recorded. */
+const MAX_LEVEL = 20;
 
 /**
  * Production writes to the global store; previews and branch deploys get their
@@ -60,6 +94,27 @@ function cleanScore(value: unknown): number | null {
   return score;
 }
 
+/**
+ * The level reached, or undefined.
+ *
+ * Undefined rather than a fallback: a level we cannot trust is a level we do
+ * not have, and the board already knows how to draw that.
+ */
+function cleanLevel(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isInteger(value)) return undefined;
+  if (value < 1 || value > MAX_LEVEL) return undefined;
+  return value;
+}
+
+const POINTERS = ["touch", "mouse", "mixed"] as const;
+
+/** One of the three, or undefined. Anything else is a client we do not know. */
+function cleanPointer(value: unknown): ScoreEntry["pointer"] {
+  return (POINTERS as readonly unknown[]).includes(value)
+    ? (value as ScoreEntry["pointer"])
+    : undefined;
+}
+
 function byScoreDescending(a: ScoreEntry, b: ScoreEntry): number {
   return b.score - a.score;
 }
@@ -75,15 +130,9 @@ function json(body: unknown, status = 200): Response {
 }
 
 export default async (req: Request, context: Context) => {
-  const difficulty = String(context.params.difficulty || "").toLowerCase();
-
-  if (!VALID_DIFFICULTIES.has(difficulty)) {
-    return json({ error: "unknown difficulty" }, 404);
-  }
-
   const store = getScoreStore(context);
   const existing =
-    ((await store.get(difficulty, { type: "json" })) as ScoreEntry[] | null) ?? [];
+    ((await store.get(BOARD, { type: "json" })) as ScoreEntry[] | null) ?? [];
 
   if (req.method === "GET") {
     return json(existing);
@@ -100,7 +149,8 @@ export default async (req: Request, context: Context) => {
     return json({ error: "body must be JSON" }, 400);
   }
 
-  const { name, score } = (payload ?? {}) as Record<string, unknown>;
+  const { name, score, level, won, pointer } =
+    (payload ?? {}) as Record<string, unknown>;
   const cleanedScore = cleanScore(score);
 
   if (cleanedScore === null) {
@@ -113,15 +163,30 @@ export default async (req: Request, context: Context) => {
     score_day: new Date().toISOString().slice(0, 10),
   };
 
+  const cleanedLevel = cleanLevel(level);
+  if (cleanedLevel !== undefined) {
+    entry.level = cleanedLevel;
+  }
+  // A win is only a win at the top of the ladder. Anything else claiming one
+  // is a client that disagrees with this function about what winning is.
+  if (won === true && cleanedLevel === MAX_LEVEL) {
+    entry.won = true;
+  }
+
+  const cleanedPointer = cleanPointer(pointer);
+  if (cleanedPointer !== undefined) {
+    entry.pointer = cleanedPointer;
+  }
+
   // Read-modify-write. Netlify Blobs has no compare-and-swap, so two scores
   // landing in the same instant can drop one of them. For a leaderboard on a
   // toy game that is an acceptable trade against pulling in a real database.
   const updated = [...existing, entry].sort(byScoreDescending).slice(0, MAX_SCORES);
-  await store.setJSON(difficulty, updated);
+  await store.setJSON(BOARD, updated);
 
   return json(updated);
 };
 
 export const config: Config = {
-  path: "/api/scores/:difficulty",
+  path: "/api/scores",
 };

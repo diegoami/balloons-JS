@@ -12,7 +12,7 @@
  * just differently numbered.
  *
  *   npm run playtest
- *   npm run playtest -- --runs=5 --cap=120 --reaction=200 --levels=H,V
+ *   npm run playtest -- --runs=5 --cap=120 --reaction=200
  *   npm run playtest -- --width=390 --height=844 --port=8911
  *
  * What it found on first use, against master at the time:
@@ -46,8 +46,7 @@ function flag(name, fallback) {
 
 const OPTIONS = {
   runs: Number(flag('runs', 3)),
-  capMs: Number(flag('cap', 70)) * 1000,
-  levels: String(flag('levels', 'E,S,H,V')).split(','),
+  capMs: Number(flag('cap', 420)) * 1000,
   width: Number(flag('width', 1280)),
   height: Number(flag('height', 720)),
   // So several viewport sizes can be measured concurrently.
@@ -65,26 +64,58 @@ const BOT = (o) => `
   const REACTION = ${o.reaction}, AIM_ERROR = ${o.aimError}, INTERVAL = ${o.interval};
   const history = [];
   const seen = new Map();
-  window.__stats = { clicks: 0, hits: 0, lifetimes: [], sky: [] };
+  window.__stats = {
+    clicks: 0, hits: 0, lifetimes: [], sky: [], byLevel: {},
+    birdsTouched: 0, bossesMet: 0, bossesLost: 0, fireflyTaps: 0
+  };
+
+  // How the boss fights went. Counted by watching, because a fight settles
+  // inside the entity and the harness only sees the result.
+  let bossUp = null;
+  setInterval(() => {
+    const boss = Game.entities && Game.entities.find(e => e.kind === 'boss');
+    if (boss && boss !== bossUp) {
+      bossUp = boss;
+      window.__stats.bossesMet++;
+      bossUp.__lost = Game.livesLost;
+    } else if (!boss && bossUp) {
+      if (Game.livesLost > bossUp.__lost) { window.__stats.bossesLost++; }
+      bossUp = null;
+    }
+  }, 40);
 
   setInterval(() => {
-    if (!Game.balloons) return;
+    if (!Game.entities) return;
+    const balloons = Game.entities.filter(e => e.kind === 'balloon');
+    // The entity itself, not a copy of where it was. Deciding what to go for
+    // is what the reaction delay applies to; where to put the finger is not,
+    // because a person tracks a thing that is moving steadily.
     history.push({
       t: Date.now(),
-      balloons: Game.balloons.map(b => ({ x: b.xcoord, y: b.ycoord }))
+      balloons: balloons.map(b => ({ ref: b, x: b.xcoord, y: b.ycoord }))
     });
     while (history.length > 40) history.shift();
 
     // How full the sky is. Score cannot tell an easy level from a middling
     // one, because a player who is already clicking as fast as they can pops
     // the same number either way; what changes is how much is coming at them.
-    if (Game.screen === 'playing') window.__stats.sky.push(Game.balloons.length);
+    if (Game.screen === 'playing') {
+      window.__stats.sky.push(balloons.length);
+
+      // And how full it is PER LEVEL. Ladder.demand computes arrivals against a
+      // full sky of MAX_BALLOONS, which the game never reaches — so every
+      // demand figure in the ladder has been understated by the difference.
+      // This is the measurement that replaces the assumption.
+      const bucket = window.__stats.byLevel[Game.level] ||
+        (window.__stats.byLevel[Game.level] = []);
+      bucket.push(balloons.length);
+    }
 
     // How long each balloon is actually on screen: the player's real window.
     const now = Date.now();
-    Game.balloons.forEach(b => { if (!seen.has(b)) seen.set(b, now); });
+    balloons.forEach(b => { if (!seen.has(b)) seen.set(b, now); });
     for (const [b, born] of seen) {
-      if (!Game.balloons.includes(b)) {
+      if (!Game.entities.includes(b)) {
         window.__stats.lifetimes.push((now - born) / 1000);
         seen.delete(b);
       }
@@ -92,25 +123,85 @@ const BOT = (o) => `
   }, 40);
 
   setInterval(() => {
-    if (Game.screen !== 'playing' || !Game.balloons || !Game.balloons.length) return;
+    if (Game.screen !== 'playing' || !Game.entities || !Game.entities.length) return;
 
     const cutoff = Date.now() - REACTION;
     let memory = null;
     for (let i = history.length - 1; i >= 0; i--) {
       if (history[i].t <= cutoff) { memory = history[i]; break; }
     }
+
+    // A boss first, and everything else second.
+    //
+    // It is the only thing in the sky with a deadline: five taps in three
+    // seconds, and the life is gone whatever the balloons were doing. A
+    // harness that kept popping balloons through a boss fight would report
+    // that the boss always wins, which would say more about the bot than the
+    // game -- the same trap birds set, one level earlier.
+    const boss = Game.entities.find(e => e.kind === 'boss');
+    if (boss && boss.taps > 0) {
+      window.__stats.clicks++;
+      const bossBefore = Game.score;
+      Game.canvas.dispatchEvent(new MouseEvent('click', {
+        clientX: boss.xcoord + (Math.random() * 2 - 1) * AIM_ERROR,
+        clientY: boss.ycoord + (Math.random() * 2 - 1) * AIM_ERROR,
+        bubbles: true
+      }));
+      if (Game.score > bossBefore) { window.__stats.hits++; }
+      return;
+    }
+
     if (!memory || !memory.balloons.length) return;
 
-    // Go for whatever looked closest to escaping.
-    const target = memory.balloons.reduce((a, b) => (b.y < a.y ? b : a));
-    const before = Game.balloons_caught;
+    // Go for whatever looked closest to escaping, a reaction time ago -- but
+    // not one with a bird next to it.
+    //
+    // Touching a bird costs a life, and nearest-centre dispatch means a tap
+    // aimed at a balloon can land on a bird beside it. A person seeing that
+    // waits for the bird to pass; a harness that did not would report that
+    // birds are impossible, and the number would say more about the bot than
+    // about the game.
+    const birds = Game.entities.filter(e => e.kind === 'bird');
+    const clear = memory.balloons.filter(b => {
+      if (!Game.entities.includes(b.ref)) return false;
+      return !birds.some(bird => {
+        const reach = bird.radius * 1.2 + AIM_ERROR + (b.ref.size || 0);
+        const dx = bird.xcoord - b.ref.xcoord;
+        const dy = bird.ycoord - b.ref.ycoord;
+        return dx * dx + dy * dy < reach * reach;
+      });
+    });
+
+    // Nothing safe to go for is a real answer: hold the tap.
+    if (!clear.length) return;
+    const target = clear.reduce((a, b) => (b.y < a.y ? b : a));
+
+    // And aim where it is NOW. Aiming at the remembered position instead meant
+    // aiming some sixty pixels below the balloon at the upper levels, which the
+    // old bounding-box hit test quietly absorbed: the box ran 1.4 radii below
+    // the centre. Against the balloon's real outline those taps land on sky,
+    // so the harness was measuring its own failure to track rather than the
+    // game's difficulty.
+    const aimX = target.ref.xcoord + (Math.random() * 2 - 1) * AIM_ERROR;
+    const aimY = target.ref.ycoord + (Math.random() * 2 - 1) * AIM_ERROR;
+
+    // Fireflies are NOT avoided, unlike birds. Touching a bird costs a life,
+    // so a person waits for it; a firefly costs only the tap, so a person
+    // takes the tap and misses. Measuring that is the point -- ask the game
+    // what this tap is about to land on, rather than inferring it after.
+    const landsOn = Entities.pick(Game.entities, { x: aimX, y: aimY });
+    if (landsOn && landsOn.kind === 'firefly') { window.__stats.fireflyTaps++; }
+
+    const before = Game.score;
+    const lostBefore = Game.livesLost;
     Game.canvas.dispatchEvent(new MouseEvent('click', {
-      clientX: target.x + (Math.random() * 2 - 1) * AIM_ERROR,
-      clientY: target.y + (Math.random() * 2 - 1) * AIM_ERROR,
+      clientX: aimX,
+      clientY: aimY,
       bubbles: true
     }));
     window.__stats.clicks++;
-    if (Game.balloons_caught > before) window.__stats.hits++;
+    if (Game.score > before) window.__stats.hits++;
+    if (Game.livesLost > lostBefore) window.__stats.birdsTouched++;
   }, INTERVAL);
 })();
 `;
@@ -134,26 +225,23 @@ function serve(port) {
 const server = await serve(OPTIONS.port);
 const browser = await launchBrowser();
 
-/** One difficulty, played OPTIONS.runs times. Levels run in parallel. */
-async function playLevel(level) {
-  const runs = [];
-
-  for (let run = 0; run < OPTIONS.runs; run++) {
+/** One game, played start to finish. Games run in parallel. */
+async function playGame(index) {
+  {
     const context = await browser.newContext({
       viewport: { width: OPTIONS.width, height: OPTIONS.height }
     });
     const page = await context.newPage();
-    await page.addInitScript(l => {
+    await page.addInitScript(() => {
       try {
         localStorage.setItem('name', 'Bot');
-        localStorage.setItem('diff_level', l);
       } catch (e) { /* storage blocked; the game copes */ }
-    }, level);
+    });
 
     await page.goto(`http://localhost:${OPTIONS.port}/`, { waitUntil: 'load' });
     await page.waitForTimeout(400);
     await page.evaluate(BOT(OPTIONS));
-    await page.keyboard.press(level.toLowerCase());
+    await page.keyboard.press(' ');
     await page.waitForTimeout(2300); // the countdown
 
     const started = Date.now();
@@ -161,64 +249,97 @@ async function playLevel(level) {
       .catch(() => { /* survived the cap, which is itself a result */ });
 
     const result = await page.evaluate(() => ({
-      score: Game.balloons_caught,
-      lost: Game.lostBalloons,
-      lives: Game.difficulty.maxLost,
-      died: Game.screen === 'gameover',
+      score: Game.score,
+      lost: Game.livesLost,
+      birdsTouched: window.__stats.birdsTouched,
+      bossesMet: window.__stats.bossesMet,
+      bossesLost: window.__stats.bossesLost,
+      fireflyTaps: window.__stats.fireflyTaps,
+      // The allowance rather than the constant: a run that reached 12, 15 or 18
+      // was handed a life there, and a table saying 5 would be hiding it.
+      lives: Game.allowance,
+      ended: Game.screen === 'gameover',
+      // A run can now end two ways, and the screen alone cannot tell them
+      // apart — surviving level 20 and dying on it both land on gameover.
+      won: Game.won === true,
       time: Game.end_time ? parseFloat(Game.end_time) : null,
+      // How far up the ladder the run got: the number this harness exists to
+      // report now that a game is twenty rungs climbed with time.
+      rung: Game.level,
       stats: window.__stats
     }));
 
-    result.level = level;
+    result.run = index + 1;
     result.wall = Math.round((Date.now() - started) / 100) / 10;
-    runs.push(result);
     await context.close();
+    return result;
   }
-
-  return runs;
 }
 
-const settled = await Promise.all(OPTIONS.levels.map(playLevel));
+const settled = await Promise.all(
+  Array.from({ length: OPTIONS.runs }, (unused, i) => playGame(i))
+);
 await browser.close();
 server.close();
 
 // ---------------------------------------------------------------- report
 
 const round = n => (Math.round(n * 10) / 10).toString();
-const all = settled.flat();
+const all = settled;
 
 console.log(
   `\nbot: ${OPTIONS.reaction}ms reaction, ±${OPTIONS.aimError}px aim, ` +
   `${Math.round(1000 / OPTIONS.interval * 10) / 10} clicks/sec ` +
   `· ${OPTIONS.width}×${OPTIONS.height} · ${OPTIONS.capMs / 1000}s cap\n`
 );
-console.log('level  lives  survived   score   accuracy   sky    lost   outcome');
+console.log('run   lives  survived   points  pops/tap   sky    lost  birds  boss     flies  rung   outcome');
 
 const mean = list => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
 
-OPTIONS.levels.forEach((level, i) => {
-  settled[i].forEach((r, j) => {
-    const accuracy = r.stats.clicks ? (r.stats.hits / r.stats.clicks * 100) : 0;
-    console.log(
-      (j === 0 ? level : '').padEnd(6),
-      String(r.lives).padEnd(6),
-      (round(r.time !== null ? r.time : r.wall) + 's').padEnd(10),
-      String(r.score).padEnd(7),
-      (round(accuracy) + '%').padEnd(10),
-      round(mean(r.stats.sky)).padEnd(6),
-      String(r.lost).padEnd(6),
-      r.died ? 'died' : 'survived the cap'
-    );
-  });
+settled.forEach(r => {
+  const accuracy = r.stats.clicks ? (r.stats.hits / r.stats.clicks * 100) : 0;
+  console.log(
+    String(r.run).padEnd(5),
+    String(r.lives).padEnd(6),
+    (round(r.time !== null ? r.time : r.wall) + 's').padEnd(10),
+    String(r.score).padEnd(7),
+    (round(accuracy) + '%').padEnd(10),
+    round(mean(r.stats.sky)).padEnd(6),
+    String(r.lost).padEnd(5),
+    String(r.birdsTouched).padEnd(6),
+    ((r.bossesMet - r.bossesLost) + '/' + r.bossesMet).padEnd(8),
+    String(r.fireflyTaps).padEnd(6),
+    String(r.rung).padEnd(6),
+    r.won ? 'WON' : (r.ended ? 'died' : 'survived the cap')
+  );
 });
 
-const survived = all.filter(r => !r.died).length;
-console.log(`\n${survived} of ${all.length} games survived the cap.`);
+const won = all.filter(r => r.won).length;
+const capped = all.filter(r => !r.ended).length;
+console.log(
+  `\n${won} of ${all.length} games were won; ${capped} hit the cap without ending.`
+);
 
-// Only meaningful as a comparison: one level surviving says nothing about
-// whether the levels differ from each other.
-if (survived === all.length && OPTIONS.levels.length > 1) {
-  console.log('No difficulty could kill this player, so the levels are not differing.');
+// A run that hits the cap says nothing about where the ladder would have ended
+// it, which is the number this harness exists to report.
+if (capped > 0) {
+  console.log(
+    'A run that hits the cap is not a result: raise --cap above ' +
+    'Ladder.MAX × Ladder.CLIMB_SECONDS so every game can finish.'
+  );
+}
+
+// The occupancy curve: what Ladder.demand should be dividing by.
+const occupancy = {};
+all.forEach(r => {
+  Object.entries(r.stats.byLevel).forEach(([level, samples]) => {
+    (occupancy[level] || (occupancy[level] = [])).push(...samples);
+  });
+});
+const levels = Object.keys(occupancy).map(Number).sort((a, b) => a - b);
+if (levels.length) {
+  console.log('\nhow full the sky actually is, per level (MAX_BALLOONS is 20):');
+  console.log(levels.map(l => `${l}:${round(mean(occupancy[l]))}`).join('  '));
 }
 
 const lifetimes = all.flatMap(r => r.stats.lifetimes).sort((a, b) => a - b);

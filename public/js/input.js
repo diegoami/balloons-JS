@@ -20,22 +20,40 @@ Input.point = function (game, event) {
     };
 };
 
-/** Popping balloons: bound while a round is counting down or being played. */
+/**
+ * Tapping the sky: bound while a round is counting down or being played.
+ *
+ * One tap reaches at most one thing, and which thing is decided by aim rather
+ * than by list order — see Entities.pick. What the tap then means belongs to
+ * whatever was hit: a balloon pops and scores, and the kinds that come later
+ * will answer differently.
+ */
 Input.popping = function (game, signal) {
+    // What the taps are being made WITH, counted as they happen.
+    //
+    // A click event does not say; a pointerdown does. It is worth knowing
+    // because the whole ladder is calibrated against about 2.1 taps a second
+    // from ONE pointer, and a touchscreen lets you use two thumbs — measured,
+    // that is the difference between dying around level 8 and finishing every
+    // run. The board records which, because a score set with two thumbs and
+    // one set with a mouse are not the same achievement.
+    game.canvas.addEventListener("pointerdown", function (event) {
+        game.countPointer(event.pointerType);
+    }, { signal: signal });
+
     game.canvas.addEventListener("click", function (event) {
-        var point = Input.point(game, event);
-        for (var i = game.balloons.length - 1; i >= 0; i--) {
-            if (game.balloons[i].collision(point.x, point.y)) {
-                game.balloons.splice(i, 1);
-                game.balloons_caught++;
-                break;
-            }
+        var hit = Entities.pick(game.entities, Input.point(game, event));
+        if (!hit) {
+            return;
+        }
+        if (hit.tapped(game)) {
+            game.entities.splice(game.entities.indexOf(hit), 1);
         }
     }, { signal: signal });
 };
 
 /**
- * The difficulty menu: bound on the screens that show it.
+ * The menu: bound on the screens that show it.
  *
  * A locked menu is a live binding that declines, rather than the old absence
  * of any binding at all — so the lockout is one condition, checked in the same
@@ -74,16 +92,17 @@ Input.menu = function (game, signal) {
             return;
         }
 
+        // A tap anywhere starts a game. There is one game to start and the
+        // screen behind this is already showing it being played, so asking
+        // someone to find a button first is a step for its own sake. The two
+        // chips along the bottom are the things that mean something else.
         var target = Layout.pick(game.layout.targets, Input.point(game, event));
-        if (!target) {
-            return;
-        }
-        if (target.id === "player") {
+        if (target && target.id === "player") {
             game.enter("name");
+        } else if (target && target.id === "start") {
+            game.cycleStartLevel();
         } else {
-            // The high-score line has no level of its own; it replays the
-            // difficulty already selected.
-            game.restart(target.level || game.difficulty.level);
+            game.restart();
         }
     }, { signal: signal });
 
@@ -91,11 +110,43 @@ Input.menu = function (game, signal) {
         if (!game.isMenuLive()) {
             return;
         }
-        var key = event.key.toUpperCase();
         if (event.key === " " || event.key === "Enter") {
-            game.restart(game.difficulty.level);
-        } else if (key === "E" || key === "S" || key === "H" || key === "V") {
-            game.restart(key);
+            game.restart();
+        }
+    }, { signal: signal });
+};
+
+/**
+ * The break between levels: one button, which skips the wait.
+ *
+ * A tap anywhere would do here too, but this is the one screen where a tap is
+ * ambiguous — the sky behind it is full of frozen balloons the player was
+ * about to pop, and a stray tap on one of those should not be read as "get on
+ * with it". So it is the button, or the keys, or nothing.
+ */
+Input.resume = function (game, signal) {
+    var resume = function () {
+        game.enter("playing");
+    };
+
+    // The paused screen is reached by looking away, so it can be arrived at
+    // with the pointer already down on the button. Ignore a release that had
+    // no press behind it on this screen.
+    game.canvas.addEventListener("pointerdown", function (event) {
+        var hit = Layout.hitRect(game.layout.resume.hit, Input.point(game, event));
+        game.pressed = hit ? "resume" : null;
+    }, { signal: signal });
+
+    game.canvas.addEventListener("click", function (event) {
+        game.pressed = null;
+        if (Layout.hitRect(game.layout.resume.hit, Input.point(game, event))) {
+            resume();
+        }
+    }, { signal: signal });
+
+    document.addEventListener("keydown", function (event) {
+        if (event.key === " " || event.key === "Enter") {
+            resume();
         }
     }, { signal: signal });
 };
