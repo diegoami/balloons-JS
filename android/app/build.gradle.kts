@@ -16,11 +16,11 @@ val keystoreProperties = Properties().apply {
 val hasSigning = keystoreProperties.getProperty("storeFile") != null
 
 android {
-    namespace = "com.diegoami.balloons"
+    namespace = "com.diegoami.baloncelli"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.diegoami.balloons"
+        applicationId = "com.diegoami.baloncelli"
         // 26, not 24, so the launcher icon can be an adaptive vector and the
         // project carries no generated PNGs. Android 8 is also the floor for
         // a WebView new enough to run this without surprises.

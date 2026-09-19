@@ -1,4 +1,4 @@
-package com.diegoami.balloons
+package com.diegoami.baloncelli
 
 import android.annotation.SuppressLint
 import android.os.Build
@@ -40,14 +40,24 @@ class MainActivity : AppCompatActivity() {
 
     /** Where the game is served from, and where its scores are posted. */
     private val origin = "https://appassets.androidplatform.net"
+    private val page = "$origin/assets/www/index.html"
     private val board = "https://baloncelli.netlify.app/api/scores"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // The prefix is STRIPPED before the handler sees the path.
+        //
+        // This was registered under "/www/" while the game lives in
+        // assets/www/, so a request for /www/index.html arrived at the handler
+        // as "index.html" and it went looking for assets/index.html. Nothing
+        // there, nothing loads, and the app opens on "cannot load the page".
+        //
+        // Registered under "/assets/", a request for /assets/www/index.html
+        // reaches the handler as "www/index.html" and finds assets/www/index.html.
         val loader = WebViewAssetLoader.Builder()
-            .addPathHandler("/www/", WebViewAssetLoader.AssetsPathHandler(this))
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
 
         web = WebView(this).apply {
@@ -68,6 +78,21 @@ class MainActivity : AppCompatActivity() {
                     view: WebView,
                     request: WebResourceRequest
                 ): WebResourceResponse? = loader.shouldInterceptRequest(request.url)
+
+                // A failure to load the game is worth a line in logcat saying
+                // which URL failed. The first version of this failed silently
+                // on a path that did not exist, and the only evidence was an
+                // error page.
+                override fun onReceivedError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    error: android.webkit.WebResourceError
+                ) {
+                    android.util.Log.e(
+                        "Baloncelli",
+                        "could not load " + request.url + ": " + error.description
+                    )
+                }
             }
         }
 
@@ -75,7 +100,7 @@ class MainActivity : AppCompatActivity() {
         goFullscreen()
 
         tellThePageWhereTheBoardIs()
-        web.loadUrl("$origin/www/index.html")
+        web.loadUrl(page)
 
         // Back leaves the game rather than walking the history of a single
         // page, because there is no history to walk.
