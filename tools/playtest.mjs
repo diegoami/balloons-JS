@@ -74,7 +74,7 @@ const BOT = (o) => `
   const history = [];
   const seen = new Map();
   window.__stats = {
-    clicks: 0, hits: 0, lifetimes: [], sky: [], byLevel: {},
+    clicks: 0, hits: 0, landed: 0, onTarget: 0, lifetimes: [], sky: [], byLevel: {},
     birdsTouched: 0, bossesMet: 0, bossesLost: 0, fireflyTaps: 0
   };
 
@@ -207,6 +207,21 @@ const BOT = (o) => `
     const landsOn = Entities.pick(Game.entities, { x: aimX, y: aimY });
     if (landsOn && landsOn.kind === 'firefly') { window.__stats.fireflyTaps++; }
 
+    // What SUPPLY actually means, which is not what hits counts.
+    //
+    // The hits counter goes up when the score does, so it counts POPS.
+    // Ladder.demand is in TAPS -- a balloon costs 1 + reinforced + 2 x
+    // armoured of them -- and the two were compared to each other as if they
+    // were the same unit. A tap that takes a skin off an armoured balloon is
+    // supply spent and is not a pop.
+    //
+    // No backticks in here: this whole script is a template literal, and one
+    // of them ends it.
+    if (landsOn) { window.__stats.landed++; }
+    if (landsOn && (landsOn.kind === 'balloon' || landsOn.kind === 'boss')) {
+      window.__stats.onTarget++;
+    }
+
     const before = Game.score;
     const lostBefore = Game.livesLost;
     Game.canvas.dispatchEvent(new MouseEvent('click', {
@@ -313,18 +328,21 @@ console.log(
   `${Math.round(1000 / OPTIONS.interval * 10) / 10} clicks/sec ` +
   `· ${OPTIONS.width}×${OPTIONS.height} · ${OPTIONS.capMs / 1000}s cap\n`
 );
-console.log('run   lives  survived   points  pops/tap   sky    lost  birds  boss     flies  rung   outcome');
+console.log('run   lives  survived   points  pops/tap  taps/s   sky    lost  birds  boss     flies  rung   outcome');
 
 const mean = list => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
 
 settled.forEach(r => {
   const accuracy = r.stats.clicks ? (r.stats.hits / r.stats.clicks * 100) : 0;
+  const seconds = r.time || (r.survived / 1000) || 1;
+  const tapsPerSecond = r.stats.onTarget / seconds;
   console.log(
     String(r.run).padEnd(5),
     String(r.lives).padEnd(6),
     (round(r.time !== null ? r.time : r.wall) + 's').padEnd(10),
     String(r.score).padEnd(7),
     (round(accuracy) + '%').padEnd(10),
+    (Math.round(tapsPerSecond * 100) / 100).toFixed(2).padEnd(8),
     round(mean(r.stats.sky)).padEnd(6),
     String(r.lost).padEnd(5),
     String(r.birdsTouched).padEnd(6),
