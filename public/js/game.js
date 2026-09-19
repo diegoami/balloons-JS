@@ -119,11 +119,18 @@ Game.MAX_CATCHUP_MS = 250;
 Game.COUNTDOWN_MS = 2000;
 
 /**
- * How long the menu stays locked after a game ends. Its only job is to stop
- * the tap that popped the last balloon from immediately restarting; it used to
- * be five seconds, during which the buttons were drawn as though they worked.
+ * How long the game-over screen ignores you.
+ *
+ * It was 1200ms, and its only job was to stop the tap that popped the last
+ * balloon from restarting. Played, that was not enough: a run ended, a tap
+ * landed, and the next game was already counting down before the score had
+ * been read. A score you never see is a score that did not happen.
+ *
+ * Three seconds is long enough to read a number and short enough that nobody
+ * waits on it -- and the button is drawn as disabled throughout, rather than
+ * looking ready while nothing is listening.
  */
-Game.MENU_LOCKOUT_MS = 1200;
+Game.MENU_LOCKOUT_MS = 3000;
 
 /**
  * How long the game-over screen holds before going back to the title, in
@@ -897,6 +904,20 @@ Game.watchVisibility = function () {
  * being a free look at where everything is. That matters more than the count:
  * a limit on how OFTEN you may study the sky is not a limit on studying it.
  */
+/**
+ * Ending the run on purpose.
+ *
+ * It goes through game over rather than straight to the title, so the score
+ * is posted and shown exactly as it would be if the last life had gone. That
+ * is not generosity: a run's score only ever goes up, so stopping early can
+ * never beat playing on, and there is nothing to be gained by making someone
+ * lose their points for admitting they are done.
+ */
+Game.giveUp = function () {
+    this.won = false;
+    this.enter("gameover");
+};
+
 Game.askPause = function () {
     if (this.screen !== "playing" || this.pausesLeft <= 0) {
         return false;
