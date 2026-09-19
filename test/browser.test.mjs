@@ -143,13 +143,17 @@ await t('font size is bounded by width, by height and by the menu', async () => 
   // measurement of the menu string guarantees it fits. The old code was
   // width-only, and bitwise-OR'd the result with the default as a string
   // ("15" | 30 === 31), so a phone rendered a 31px font where 15 was meant.
+  // Which term wins, not what it comes out at. The pixel values used to be
+  // written down here as well, and the moment heightDivisor was tuned this
+  // test failed for asserting the old rule — which is exactly what the comment
+  // below says it was built not to do.
   const cases = [
-    { width: 1000, height: 700, expect: 30, bound: 'width' },
-    { width: 500, height: 700, expect: 15, bound: 'width' },
-    { width: 1920, height: 1080, expect: 54, bound: 'height' },
-    { width: 1920, height: 700, expect: 34, bound: 'height' },
-    { width: 1920, height: 400, expect: 18, bound: 'height' },
-    { width: 320, height: 700, expect: 12, bound: 'minimum' }
+    { width: 1000, height: 700, bound: 'width' },
+    { width: 500, height: 700, bound: 'width' },
+    { width: 1920, height: 1080, bound: 'height' },
+    { width: 1920, height: 700, bound: 'height' },
+    { width: 1920, height: 400, bound: 'height' },
+    { width: 320, height: 700, bound: 'minimum' }
   ];
   for (const c of cases) {
     const { context, page } = await newGame({ width: c.width, height: c.height });
@@ -161,8 +165,14 @@ await t('font size is bounded by width, by height and by the menu', async () => 
       g.baseFontSize * c.width / 1000,
       (c.height - g.footerReserve) / g.heightDivisor
     )));
-    assert.equal(m.size, c.expect,
-      `at ${c.width}x${c.height} (${c.bound}-bound) expected ${c.expect}px, got ${m.size}px`);
+    const byWidth = g.baseFontSize * c.width / 1000;
+    const byHeight = (c.height - g.footerReserve) / g.heightDivisor;
+    const won = g.minFontSize >= Math.min(byWidth, byHeight)
+      ? 'minimum'
+      : (byWidth < byHeight ? 'width' : 'height');
+
+    assert.equal(won, c.bound,
+      `at ${c.width}x${c.height} the ${won} bound decides, not the ${c.bound} one`);
     assert.equal(m.size, predicted,
       `at ${c.width}x${c.height} the rule predicts ${predicted}px but got ${m.size}px`);
     await context.close();
@@ -2963,14 +2973,45 @@ await t('the countdown says what to do', async () => {
   await page.keyboard.press(' ');
   await page.waitForTimeout(400);
 
-  const m = await page.evaluate(() => ({
-    screen: Game.screen,
-    instruction: Layout.PLAY_INSTRUCTION,
-    said: document.getElementById('game_status').textContent
-  }));
+  const m = await page.evaluate(() => {
+    // Drawn, not just defined: it is a whole sentence now and it wraps, so the
+    // thing worth checking is that every line of it lands inside the canvas.
+    Game.stopLoop();
+    Game.measureLayout();
+    Game.ctx.font = Game.layout.fonts.label;
+    const lines = Layout.wrap(
+      Game.ctx, Layout.PLAY_INSTRUCTION, Game.width * Layout.COUNTDOWN_WIDTH);
+    const widest = Math.max(...lines.map(l => Game.ctx.measureText(l).width));
+    return {
+      screen: Game.screen,
+      instruction: Layout.PLAY_INSTRUCTION,
+      rules: Layout.DESCRIPTION[0],
+      lines: lines.length,
+      overflows: widest > Game.width,
+      clears: (Layout.GRID.type.countdown * 0.75) / Layout.GRID.lineRatio + 0.45,
+      line: Game.layout.line,
+      countdownY: Game.layout.countdown.y,
+      // How far the digit reaches above its own baseline.
+      digitRise: Game.fontSize * Layout.GRID.type.countdown * 0.75,
+      said: document.getElementById('game_status').textContent
+    };
+  });
   assert.equal(m.screen, 'starting');
-  assert.equal(m.instruction, 'Pop the balloons!',
-    'the one instruction the game gives has changed wording');
+  // The countdown and the splash say the same thing, so there is one sentence
+  // to keep right rather than two that can drift apart.
+  assert.equal(m.instruction, m.rules,
+    'the countdown no longer says what the title screen says');
+  assert.match(m.instruction, /balloons/,
+    'the one instruction the game gives stopped mentioning balloons');
+  assert.ok(!m.overflows,
+    `the instruction runs off the canvas: its widest line needs more than ${m.lines} lines`);
+  const lowest = m.countdownY - m.line * m.clears;
+  const highest = m.countdownY - m.line * (m.clears + m.lines - 1);
+  assert.ok(highest > 0, 'the instruction is drawn off the top of the screen');
+  // Its last line has to sit above the digit rather than through it, which a
+  // flat gap did the moment the instruction became long enough to wrap.
+  assert.ok(lowest < m.countdownY - m.digitRise,
+    'the instruction runs through the countdown digit');
   assert.match(m.said, /Get ready/, 'the countdown is silent: ' + m.said);
   await context.close();
 });
