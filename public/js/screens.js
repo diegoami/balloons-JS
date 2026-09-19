@@ -37,6 +37,7 @@ Screens.title = {
         Scores.load(game);
         Announce.title(game);
         Attract.begin(game);
+        Play.begin(game);
     },
 
     bind: function (game, signal) {
@@ -45,6 +46,7 @@ Screens.title = {
 
     update: function (game) {
         Attract.step(game);
+        Play.step(game);
     },
 
     /**
@@ -64,8 +66,8 @@ Screens.title = {
         Paint.legend(game);
         Paint.description(game);
         Paint.aboutChip(game);
+        Paint.playButton(game);
         Paint.menu(game);
-        Paint.startLevel(game);
         Paint.player(game);
     },
 
@@ -254,6 +256,39 @@ Screens.about = {
     }
 };
 
+/**
+ * Asking whether you meant to end the run.
+ *
+ * Its own screen rather than a flag on the paused one, because the two answer
+ * different questions and the paused screen already counts down. It costs no
+ * pause: being asked is not a pause you chose to take.
+ *
+ * The sky is not drawn, for the same reason it is not drawn while paused -- a
+ * confirmation you can sit in while reading the sky is a free look at it.
+ */
+Screens.confirmQuit = {
+    animated: false,
+
+    enter: function (game) {
+        game.pressed = null;
+        Announce.confirmQuit(game);
+    },
+
+    bind: function (game, signal) {
+        Input.confirmQuit(game, signal);
+    },
+
+    draw: function (game) {
+        Paint.sky(game);
+        Paint.panel(game, game.layout.breakPanel);
+        Paint.confirmQuit(game);
+    },
+
+    menuLive: function () {
+        return false;
+    }
+};
+
 Screens.paused = {
     // Animated, unlike the pause that only ever came from looking away: a
     // pause the player asked for is counting down, and a clock that does not
@@ -324,7 +359,7 @@ Screens.gameover = {
     },
 
     bind: function (game, signal) {
-        Input.menu(game, signal);
+        Input.gameover(game, signal);
     },
 
     // Nothing spawns any more; the balloons still in the air accelerate and
@@ -348,9 +383,8 @@ Screens.gameover = {
                 game.score + ", Time: " + game.end_time +
                 (game.isPractice() ? " (practice, not saved)" : "")
         );
-        Paint.menu(game);
+        Paint.okayButton(game);
         Paint.scores(game);
-        Paint.startLevel(game);
         Paint.player(game);
         Paint.entities(game);
     },

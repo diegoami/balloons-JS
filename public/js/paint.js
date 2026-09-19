@@ -79,6 +79,37 @@ Paint.chip = function (game, rect, label, live, pressed) {
     ctx.restore();
 };
 
+/**
+ * The Play button, drifting and changing colour.
+ *
+ * Big, because it is the one thing on this screen anybody needs to find. It
+ * carries its own label colour with its fill, so every frame of the cycle is
+ * as readable as every other.
+ */
+Paint.playButton = function (game) {
+    var rect = Play.rect(game);
+    var colour = Play.colour();
+    var ctx = game.ctx;
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = game.layout.fonts.intro;
+
+    Layout.roundedRect(ctx, rect, rect.radius);
+    ctx.fillStyle = colour.fill;
+    ctx.fill();
+
+    if (game.pressed === "play") {
+        ctx.fillStyle = game.palette.buttonPressOverlay;
+        ctx.fill();
+    }
+
+    ctx.fillStyle = colour.ink;
+    ctx.fillText(Layout.PLAY_TEXT, rect.x + rect.width / 2, rect.y + rect.height / 2);
+    ctx.restore();
+};
+
 /** The About chip, beside the name. */
 Paint.aboutChip = function (game) {
     Paint.chip(game, game.layout.about, Layout.ABOUT_TEXT,
@@ -676,9 +707,117 @@ Paint.pauseButton = function (game) {
     ctx.restore();
 };
 
+/**
+ * The quit button: a cross, in the corner, where a cross means close.
+ *
+ * Drawn rather than set, like everything else here. It is the outermost
+ * control on the row because it is the most expensive one to press by
+ * accident -- and it asks before it does anything, which is the real guard.
+ */
+Paint.quitButton = function (game) {
+    var box = game.layout.hud.quit;
+    var ctx = game.ctx;
+    var r = Math.min(box.width, box.height) * 0.22;
+    var cx = box.x + box.width / 2;
+    var cy = box.y + box.height / 2;
+
+    ctx.save();
+    Layout.roundedRect(ctx, box, box.radius);
+    ctx.fillStyle = game.pressed === "quit"
+        ? game.palette.buttonPressOverlay
+        : game.palette.panel;
+    ctx.fill();
+
+    ctx.strokeStyle = game.palette.ink;
+    ctx.lineWidth = Math.max(2, box.width * 0.1);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(cx - r, cy - r);
+    ctx.lineTo(cx + r, cy + r);
+    ctx.moveTo(cx + r, cy - r);
+    ctx.lineTo(cx - r, cy + r);
+    ctx.stroke();
+    ctx.restore();
+};
+
+/**
+ * Asking before ending a run.
+ *
+ * Two buttons rather than one, and the one that keeps you playing is the
+ * accented one: the default answer to "did you mean to throw this away" is no.
+ * The sky is hidden behind it for the same reason it is hidden behind a pause
+ * -- a confirmation that doubles as a free look at the sky is a free look at
+ * the sky.
+ */
+Paint.confirmQuit = function (game) {
+    var ctx = game.ctx;
+    var L = game.layout;
+
+    ctx.font = L.fonts.label;
+    ctx.fillStyle = game.palette.inkSoft;
+    ctx.fillText("LEVEL " + game.level, L.intro.x, L.intro.y);
+
+    ctx.font = L.fonts.intro;
+    ctx.fillStyle = game.palette.ink;
+    ctx.fillText(Layout.QUIT_TEXT, L.intro.x, L.intro.y + L.line * 1.5);
+
+    ctx.font = L.fonts.label;
+    ctx.fillStyle = game.palette.inkSoft;
+    Layout.wrap(ctx, Layout.QUIT_HINT, game.width * 0.8).forEach(function (line, i) {
+        ctx.fillText(line, L.intro.x, L.resume.y - L.line * (1.9 - i * 1.25));
+    });
+
+    Paint.confirmButton(game, L.quitYes, Layout.QUIT_YES, "quitYes", false);
+    Paint.confirmButton(game, L.quitNo, Layout.QUIT_NO, "quitNo", true);
+};
+
+/**
+ * The way off the game-over screen, and the only one.
+ *
+ * A tap used to land anywhere and start another game, which meant a run could
+ * end and the next begin without the score ever being looked at. This goes
+ * back to the title; starting again is a decision made from there, on purpose.
+ *
+ * Disabled until the lockout passes, and drawn that way, so the three seconds
+ * read as the game holding the score up rather than as the game ignoring you.
+ */
+Paint.okayButton = function (game) {
+    var live = game.isMenuLive();
+    Paint.confirmButton(game, game.layout.okay, Layout.OKAY_TEXT, "okay", live);
+};
+
+/** One of the two answers. The accented one is the safe one. */
+Paint.confirmButton = function (game, rect, label, id, preferred) {
+    var ctx = game.ctx;
+    var palette = game.palette;
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = game.layout.fonts.menu;
+    ctx.lineWidth = Math.max(1, game.layout.line * 0.06);
+
+    Layout.roundedRect(ctx, rect, rect.radius);
+    ctx.fillStyle = preferred ? palette.accent : palette.buttonFill;
+    ctx.fill();
+    if (!preferred) {
+        ctx.strokeStyle = palette.buttonBorder;
+        ctx.stroke();
+    }
+    if (game.pressed === id) {
+        ctx.fillStyle = palette.buttonPressOverlay;
+        ctx.fill();
+    }
+
+    ctx.fillStyle = preferred ? palette.onAccent : palette.ink;
+    ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height / 2);
+    ctx.restore();
+};
+
 Paint.hud = function (game) {
     Paint.hudGround(game);
     Paint.pauseButton(game);
+    Paint.quitButton(game);
 
     var ctx = game.ctx;
     ctx.font = game.layout.fonts.hud;

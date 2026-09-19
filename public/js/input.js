@@ -39,19 +39,24 @@ Input.popping = function (game, signal) {
     // one set with a mouse are not the same achievement.
     game.canvas.addEventListener("pointerdown", function (event) {
         game.countPointer(event.pointerType);
-        game.pressed = Layout.hitRect(game.layout.hud.pause, Input.point(game, event))
-            ? "pause"
-            : null;
+        var down = Input.point(game, event);
+        game.pressed = Layout.hitRect(game.layout.hud.pause, down) ? "pause"
+            : (Layout.hitRect(game.layout.hud.quit, down) ? "quit" : null);
     }, { signal: signal });
 
     game.canvas.addEventListener("click", function (event) {
         var at = Input.point(game, event);
 
-        // The pause button first: it sits over the sky, so a tap on it is not
-        // a tap on whatever happens to be behind it.
+        // The two controls first: they sit over the sky, so a tap on one is
+        // not a tap on whatever happens to be behind it.
         if (Layout.hitRect(game.layout.hud.pause, at)) {
             game.pressed = null;
             game.askPause();
+            return;
+        }
+        if (Layout.hitRect(game.layout.hud.quit, at)) {
+            game.pressed = null;
+            game.enter("confirmQuit");
             return;
         }
 
@@ -84,7 +89,15 @@ Input.menu = function (game, signal) {
         if (!game.isMenuLive()) {
             return;
         }
-        var target = Layout.pick(game.layout.targets, Input.point(game, event));
+        var at = Input.point(game, event);
+        // The Play button drifts, so it is not in the layout's list of
+        // targets: it is asked where it is, every time.
+        if (game.screen === "title" && Layout.hitRect(Play.rect(game), at)) {
+            game.pressed = "play";
+            repaintIfStatic();
+            return;
+        }
+        var target = Layout.pick(game.layout.targets, at);
         game.pressed = target ? target.id : null;
         repaintIfStatic();
     }, { signal: signal });
@@ -109,7 +122,13 @@ Input.menu = function (game, signal) {
         // screen behind this is already showing it being played, so asking
         // someone to find a button first is a step for its own sake. The two
         // chips along the bottom are the things that mean something else.
-        var target = Layout.pick(game.layout.targets, Input.point(game, event));
+        var clicked = Input.point(game, event);
+        if (game.screen === "title" && Layout.hitRect(Play.rect(game), clicked)) {
+            game.restart();
+            return;
+        }
+
+        var target = Layout.pick(game.layout.targets, clicked);
         if (target && target.id === "player") {
             game.enter("name");
         } else if (target && target.id === "about") {
@@ -168,6 +187,85 @@ Input.about = function (game, signal) {
     document.addEventListener("keydown", function (event) {
         if (event.key === "Escape" || event.key === " " || event.key === "Enter") {
             leave();
+        }
+    }, { signal: signal });
+};
+
+/**
+ * The two answers to "give up?".
+ *
+ * A tap anywhere else does nothing at all, unlike most screens in this game.
+ * This one is asking a question whose wrong answer throws away a run, so the
+ * only way past it is to answer it.
+ */
+/**
+ * The game-over screen hears one button and nothing else.
+ *
+ * It used to run Input.menu, where a tap anywhere starts a game -- so a run
+ * could end and the next begin before the score had been read. Starting again
+ * is a decision made from the title screen now, on purpose.
+ */
+Input.gameover = function (game, signal) {
+    var leaving = function () {
+        if (!game.isMenuLive()) {
+            return;
+        }
+        game.pressed = null;
+        game.enter("title");
+    };
+
+    game.canvas.addEventListener("pointerdown", function (event) {
+        game.pressed = game.isMenuLive() &&
+            Layout.hitRect(game.layout.okay, Input.point(game, event))
+            ? "okay"
+            : null;
+    }, { signal: signal });
+
+    game.canvas.addEventListener("click", function (event) {
+        var hit = Layout.hitRect(game.layout.okay, Input.point(game, event));
+        game.pressed = null;
+        if (hit) {
+            leaving();
+        }
+    }, { signal: signal });
+
+    document.addEventListener("keydown", function (event) {
+        if (event.key === " " || event.key === "Enter" || event.key === "Escape") {
+            leaving();
+        }
+    }, { signal: signal });
+};
+
+Input.confirmQuit = function (game, signal) {
+    var answer = function (at) {
+        if (Layout.hitRect(game.layout.quitYes, at)) {
+            return "quitYes";
+        }
+        return Layout.hitRect(game.layout.quitNo, at) ? "quitNo" : null;
+    };
+
+    game.canvas.addEventListener("pointerdown", function (event) {
+        game.pressed = answer(Input.point(game, event));
+        game.paint();
+    }, { signal: signal });
+
+    game.canvas.addEventListener("click", function (event) {
+        var said = answer(Input.point(game, event));
+        game.pressed = null;
+        if (said === "quitYes") {
+            game.giveUp();
+        } else if (said === "quitNo") {
+            game.enter("playing");
+        } else {
+            game.paint();
+        }
+    }, { signal: signal });
+
+    document.addEventListener("keydown", function (event) {
+        // Escape backs out of the question, which is the safe answer, and the
+        // one a key pressed by accident should give.
+        if (event.key === "Escape") {
+            game.enter("playing");
         }
     }, { signal: signal });
 };
