@@ -63,6 +63,7 @@ Screens.title = {
         Paint.intro(game, Layout.INTRO_TEXT);
         Paint.legend(game);
         Paint.description(game);
+        Paint.aboutChip(game);
         Paint.menu(game);
         Paint.startLevel(game);
         Paint.player(game);
@@ -220,12 +221,59 @@ Screens.playing = {
  * It is not on a timer. A break between levels resumes itself because the
  * player is there; this one is up precisely because they were not.
  */
-Screens.paused = {
+/**
+ * The rules at length, reached from the title screen and nowhere else.
+ *
+ * Not animated: the footage is stopped behind it, because this is a screen for
+ * reading and balloons drifting past text is the enemy of that.
+ */
+Screens.about = {
     animated: false,
 
     enter: function (game) {
         game.pressed = null;
+        Announce.about(game);
+    },
+
+    bind: function (game, signal) {
+        Input.about(game, signal);
+    },
+
+    draw: function (game) {
+        Paint.sky(game);
+        // The whole screen, not the title screen's panel. This is the only
+        // screen whose text reaches the bottom of a phone, and the panel that
+        // is sized for a leaderboard fades out well above that — which left
+        // the last paragraph on a lit horizon.
+        Paint.panel(game, { y: 0, height: game.height });
+        Paint.about(game);
+    },
+
+    menuLive: function () {
+        return true;
+    }
+};
+
+Screens.paused = {
+    // Animated, unlike the pause that only ever came from looking away: a
+    // pause the player asked for is counting down, and a clock that does not
+    // move is not a clock.
+    animated: true,
+
+    enter: function (game) {
+        game.pressed = null;
+        game.pauseSteps = game.askedToPause ? Game.PAUSE_STEPS : 0;
         Announce.paused(game);
+    },
+
+    update: function (game) {
+        if (!game.askedToPause) {
+            return;
+        }
+        game.pauseSteps--;
+        if (game.pauseSteps <= 0) {
+            game.enter("playing");
+        }
     },
 
     bind: function (game, signal) {
@@ -234,7 +282,9 @@ Screens.paused = {
 
     draw: function (game) {
         Paint.sky(game);
-        Paint.entities(game);
+        // The entities are NOT drawn. A pause that leaves the sky up is a free
+        // look at where everything is, which is worth more than the pause —
+        // and no limit on how often you may take one limits what you get.
         Paint.panel(game, game.layout.breakPanel);
         Paint.paused(game);
     },

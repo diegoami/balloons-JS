@@ -66,6 +66,17 @@ Announce.startLevel = function (game) {
     );
 };
 
+/** The About screen, read out in full: it is all text, so all of it goes. */
+Announce.about = function (game) {
+    var said = [Layout.ABOUT_TITLE];
+    Layout.about().forEach(function (section) {
+        said.push(section.heading + ".");
+        section.lines.forEach(function (line) { said.push(line); });
+    });
+    said.push("Escape to go back.");
+    Announce.say(said.join(" "));
+};
+
 Announce.name = function () {
     Announce.say("Your name. Type a name, then Enter to save or Escape to cancel.");
 };
@@ -86,8 +97,11 @@ Announce.starting = function (game) {
  */
 Announce.paused = function (game) {
     Announce.say(
-        "Paused at level " + game.level + ". " + game.score +
-        " points. Press space to carry on."
+        "Paused at level " + game.level + ". " + game.score + " points. " +
+        (game.askedToPause
+            ? game.pausesLeft + " pauses left. Resuming in " +
+              Game.PAUSE_SECONDS + " seconds, or press space to carry on now."
+            : "Press space to carry on.")
     );
 };
 

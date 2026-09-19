@@ -14,6 +14,31 @@ const t = async (name, fn) => { await fn(); console.log('  ok  ' + name); pass++
 
 __reset();
 
+await t('the board answers something that is not the website', async () => {
+  // The game shares an origin with this function and never needed CORS. An
+  // Android build with the assets on the device does not share an origin with
+  // anything, so without these headers it could neither read the board nor
+  // post to it.
+  const r = await get();
+  assert.equal(r.headers.get('access-control-allow-origin'), '*',
+    'a build that is not the website cannot read the board');
+
+  // The preflight a cross-origin POST of JSON always makes first.
+  const pre = await handler(new Request('https://x/api/scores', {
+    method: 'OPTIONS',
+    headers: { origin: 'https://appassets.androidplatform.net' }
+  }), ctx());
+  assert.equal(pre.status, 204, 'the preflight is refused, so the POST never happens');
+  assert.equal(pre.headers.get('access-control-allow-origin'), '*');
+  assert.match(pre.headers.get('access-control-allow-methods') || '', /POST/);
+  assert.match(pre.headers.get('access-control-allow-headers') || '', /content-type/);
+
+  // And opening it changed nothing about what it will accept: CORS is a rule
+  // browsers apply to each other, not a lock. The validation is the lock.
+  const junk = await post({ name: 'x', score: 'not a number' });
+  assert.equal(junk.status, 400, 'a bad score is still accepted');
+});
+
 await t('GET on an empty board returns []', async () => {
   const r = await get();
   assert.equal(r.status, 200);
