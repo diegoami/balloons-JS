@@ -5016,6 +5016,62 @@ await t('the About screen says what the tables say, and there is a way back', as
 });
 
 
+await t('turning the phone mid-game keeps the sky where it was', async () => {
+  // A rotation is not a resize, it is a different window. Measured before this
+  // was handled: turning a phone upright mid-game put EVERY balloon in the sky
+  // past the right edge — invisible, untappable, and still costing a life each
+  // when they reached the top — and more than doubled how long one took to
+  // cross, because the rise had been worked out for the old height.
+  const { context, page, errors } = await newGame({ width: 844, height: 390 });
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+  await page.waitForFunction(
+    () => Game.entities.filter(e => e.kind === 'balloon').length >= 3,
+    null, { timeout: SKY_FILLS });
+
+  const read = () => page.evaluate(() => {
+    const share = e => ({
+      kind: e.kind,
+      x: +(e.xcoord / Game.width).toFixed(3),
+      y: +(e.ycoord / Game.height).toFixed(3),
+      cross: +(Game.height / Math.abs(e.delta || 1) / 30).toFixed(1)
+    });
+    return {
+      width: Game.width,
+      height: Game.height,
+      balloons: Game.entities.filter(e => e.kind === 'balloon').map(share),
+      offScreen: Game.entities.filter(e =>
+        e.xcoord < 0 || e.xcoord > Game.width).length
+    };
+  });
+
+  await page.evaluate(() => Game.stopLoop());
+  const before = await read();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(600);
+  const after = await read();
+
+  assert.ok(before.balloons.length >= 3, 'nothing was in the sky to turn');
+  assert.ok(after.width < after.height, 'the window did not actually turn');
+  assert.equal(after.offScreen, 0,
+    `${after.offScreen} things were left outside the window by the turn`);
+
+  // Same share of the sky, and the same time left to reach the top. Rounding
+  // to three places is the width of the check: this is proportional, not
+  // approximate.
+  assert.deepEqual(after.balloons.map(b => [b.x, b.y]),
+    before.balloons.map(b => [b.x, b.y]),
+    'the balloons did not keep their place in the sky');
+  assert.deepEqual(after.balloons.map(b => b.cross),
+    before.balloons.map(b => b.cross),
+    'the balloons changed speed when the window did');
+
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+
 await browser.close();
 server.close();
 

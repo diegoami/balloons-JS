@@ -317,8 +317,18 @@ var bossConstructor = function (xcoord, ycoord, radius, xmax, mark, ceiling) {
         return that.ycoord < -that.radius * 8 ? "left" : null;
     };
 
-    that.resized = function (game) {
+    that.resized = function (game, scale) {
         that.xmax = game.width;
+
+        if (scale) {
+            // It patrols a band around where it arrived, and the band is in
+            // pixels of a window that has just changed shape.
+            that.xcoord *= scale.x;
+            that.ycoord *= scale.y;
+            home *= scale.y;
+            band *= scale.y;
+        }
+
         that.xcoord = Math.min(that.xcoord, Math.max(that.radius, game.width - that.radius));
     };
 

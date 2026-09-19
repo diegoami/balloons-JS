@@ -377,15 +377,27 @@ Game.handleResize = function () {
     }
     this.resizePending = true;
 
+    // What the sky was, before it changed shape. Everything in it is placed
+    // and moving in pixels, and pixels are the one thing a rotation does not
+    // preserve -- so each entity is handed how much the window stretched in
+    // each direction and can keep its SHARE of the sky instead of its
+    // coordinates.
+    var was = { width: this.width, height: this.height };
+
     window.requestAnimationFrame(function () {
         that.resizePending = false;
         that.applyCanvasSize();
         that.watchPixelRatio();
 
+        var scale = {
+            x: was.width > 0 ? that.width / was.width : 1,
+            y: was.height > 0 ? that.height / was.height : 1
+        };
+
         // Entities that care about the shape of the window are told.
         for (var i = 0; i < that.entities.length; i++) {
             if (that.entities[i].resized) {
-                that.entities[i].resized(that);
+                that.entities[i].resized(that, scale);
             }
         }
 
