@@ -39,7 +39,11 @@ Paint.panel = function (game, box) {
     ground.addColorStop(0, Sky.transparent(game.palette.panel));
     ground.addColorStop(box.y / bottom, Sky.transparent(game.palette.panel));
     ground.addColorStop(0.42, game.palette.panel);
-    ground.addColorStop(0.9, game.palette.panel);
+    // Solid nearly to its own bottom edge. It used to start fading at 0.9, and
+    // once the legend pushed the leaderboard down into that fade the last
+    // rows came out at 4.1:1 against a brightening sky — under the 4.5 every
+    // other word on the screen is held to.
+    ground.addColorStop(0.97, game.palette.panel);
     ground.addColorStop(1, Sky.transparent(game.palette.panel));
 
     // Full width and no edges: a card inset from a composition that already
@@ -47,6 +51,96 @@ Paint.panel = function (game, box) {
     // mistake. This reads as the sky being deeper where the writing is.
     ctx.fillStyle = ground;
     ctx.fillRect(0, 0, game.width, bottom);
+};
+
+/**
+ * A chip with a word in it. The name line and the About line are the same
+ * object drawn twice, so they cannot drift apart in size, radius or colour.
+ */
+Paint.chip = function (game, rect, label, live, pressed) {
+    var ctx = game.ctx;
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = game.layout.fonts.label;
+
+    Layout.roundedRect(ctx, rect, rect.radius);
+    ctx.fillStyle = game.palette.panel;
+    ctx.fill();
+
+    if (live && pressed) {
+        ctx.fillStyle = game.palette.buttonPressOverlay;
+        ctx.fill();
+    }
+
+    ctx.fillStyle = live ? game.palette.ink : game.palette.inkDisabled;
+    ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height / 2);
+    ctx.restore();
+};
+
+/** The About chip, beside the name. */
+Paint.aboutChip = function (game) {
+    Paint.chip(game, game.layout.about, Layout.ABOUT_TEXT,
+        game.isMenuLive(), game.pressed === "about");
+};
+
+/**
+ * The rules at length, and where the game came from.
+ *
+ * Wrapped and sized to fit the screen it is on rather than assuming it does:
+ * this is the one screen in the game whose content is longer than a phone, so
+ * it shrinks its own type until it fits rather than running off the bottom.
+ */
+Paint.about = function (game) {
+    var ctx = game.ctx;
+    var L = game.layout;
+    var sections = Layout.about();
+    var left = L.intro.x;
+    var available = game.width - left * 2;
+
+    // How tall it comes out at a given size, so a size can be chosen.
+    var laidOut = function (scale) {
+        var body = Math.max(1, Math.round(game.fontSize * 0.62 * scale));
+        var head = Math.max(1, Math.round(game.fontSize * 0.78 * scale));
+        var step = body * 1.42;
+        var rows = [];
+        var y = 0;
+
+        sections.forEach(function (section, i) {
+            if (i > 0) {
+                y += step * 0.7;
+            }
+            rows.push({ text: section.heading, y: y, head: true, size: head });
+            y += step * 1.25;
+            section.lines.forEach(function (line) {
+                ctx.font = body + "px " + Layout.FONT;
+                Layout.wrap(ctx, line, available).forEach(function (piece) {
+                    rows.push({ text: piece, y: y, head: false, size: body });
+                    y += step;
+                });
+                y += step * 0.25;
+            });
+        });
+        return { rows: rows, height: y, body: body, head: head };
+    };
+
+    var top = L.intro.y + L.line * 1.4;
+    var room = L.back.y - L.line * 0.8 - top;
+    var block = laidOut(1);
+    if (block.height > room) {
+        block = laidOut(room / block.height);
+    }
+
+    Paint.intro(game, Layout.ABOUT_TITLE);
+
+    block.rows.forEach(function (row) {
+        ctx.font = row.size + "px " + Layout.FONT;
+        ctx.fillStyle = row.head ? game.palette.accent : game.palette.inkSoft;
+        ctx.fillText(row.text, left, top + row.y);
+    });
+
+    Paint.chip(game, L.back, Layout.BACK_TEXT, true, game.pressed === "about");
 };
 
 /** The one headline line, shared by the title and game-over screens. */
@@ -151,6 +245,31 @@ Paint.description = function (game) {
     });
 };
 
+/**
+ * The one rule, drawn in the things it is about.
+ *
+ * A balloon and a tick, a saucer and a tick, a bird and a cross, a firefly and
+ * a cross. It replaces the sentence that used to say the same thing in words —
+ * which is still there, in Layout.DESCRIPTION, because that is what gets read
+ * aloud and a row of pictures says nothing to a screen reader.
+ */
+Paint.legend = function (game) {
+    var legend = game.layout.legend;
+
+    // A ground of its own, for the same reason the HUD text has one: a bird is
+    // drawn in the palette's darkest ink and the panel behind this block is a
+    // scrim, so on the title screen it was a dark shape on a dark field. It
+    // also groups the four pairs as one legend rather than eight loose marks.
+    Layout.roundedRect(game.ctx, legend.chip, legend.chip.radius);
+    game.ctx.fillStyle = game.palette.buttonFill;
+    game.ctx.fill();
+
+    legend.items.forEach(function (item) {
+        Icons.draw(game, item.kind, item.iconX, legend.y, legend.icon);
+        Icons.verdict(game, item.wanted, item.verdictX, legend.y, legend.icon);
+    });
+};
+
 /** How a row says where it got to: won, a level, or nothing recorded. */
 Paint.reached = function (row) {
     var got = row["won"] ? "WON" : (row["level"] ? "L" + row["level"] : "\u2014");
@@ -229,13 +348,20 @@ Paint.interlude = function (game, label, headline, lines) {
     ctx.fillStyle = palette.ink;
     ctx.fillText(headline, L.intro.x, L.intro.y + L.line * 1.5);
 
+    // Stacked up from the button rather than borrowed from the title screen's
+    // description block. It used to use those baselines, and the moment the
+    // icon legend pushed them down the second line was drawn straight through
+    // the Resume button: two screens sharing one set of positions where only
+    // one of them decides where they are.
     ctx.font = L.fonts.label;
-    lines.forEach(function (line, i) {
-        if (!line || !L.description[i]) {
-            return;
-        }
+    var said = lines.filter(function (line) { return !!line; });
+    said.forEach(function (line, i) {
         ctx.fillStyle = i === 0 ? palette.inkSoft : palette.accent;
-        ctx.fillText(line, L.description[i].x, L.description[i].y);
+        ctx.fillText(
+            line,
+            L.intro.x,
+            L.resume.y - L.line * (0.9 + (said.length - 1 - i) * 1.25)
+        );
     });
 
     var button = L.resume;
@@ -269,12 +395,20 @@ Paint.interlude = function (game, label, headline, lines) {
  * made honest rather than a new feature.
  */
 Paint.paused = function (game) {
-    Paint.interlude(
-        game,
-        "LEVEL " + game.level,
-        Layout.PAUSED_TEXT,
-        [Layout.PAUSED_HINT, ""]
-    );
+    var left = game.pausesLeft;
+    var budget = !game.askedToPause
+        ? Layout.PAUSED_HINT
+        : (left > 1
+            ? left + Layout.PAUSES_LEFT
+            : (left === 1 ? Layout.ONE_PAUSE_LEFT : Layout.NO_PAUSES_LEFT));
+
+    // A pause the player asked for is counting itself down and says so; one
+    // that came from looking away is waiting, and says that instead.
+    var clock = game.askedToPause
+        ? Layout.RESUMING_IN + Math.ceil(game.pauseSteps * Game.STEP_MS / 1000) + "s"
+        : "";
+
+    Paint.interlude(game, "LEVEL " + game.level, Layout.PAUSED_TEXT, [budget, clock]);
 };
 
 Paint.countdown = function (game, remaining) {
@@ -283,15 +417,10 @@ Paint.countdown = function (game, remaining) {
     ctx.save();
     ctx.textAlign = "center";
 
-    // The game has never told anyone what to do. This is the one line it gets,
-    // and the countdown is when a new player is looking at nothing else.
-    ctx.font = game.layout.fonts.label;
-    ctx.fillStyle = game.palette.inkSoft;
-    ctx.fillText(
-        Layout.PLAY_INSTRUCTION,
-        game.layout.countdown.x,
-        game.layout.countdown.y - game.layout.line * 1.5
-    );
+    // Nothing is said here any more. The rules are four icons on the title
+    // screen and a page of text behind the About chip; a third telling, in the
+    // one moment the player should be looking at the sky rather than reading,
+    // was the one that had to go.
 
     ctx.font = game.layout.fonts.countdown;
     ctx.fillStyle = game.palette.accent;
@@ -359,30 +488,11 @@ Paint.player = function (game) {
     var ctx = game.ctx;
     var live = game.isMenuLive();
 
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = game.layout.fonts.label;
-
     // The sky is at its brightest along the bottom edge, so the chip carries
     // the same scrim the sky uses behind its own text rather than trusting
     // pale ink to hold up over a lit horizon.
-    Layout.roundedRect(ctx, rect, rect.radius);
-    ctx.fillStyle = game.palette.panel;
-    ctx.fill();
-
-    if (live && game.pressed === "player") {
-        ctx.fillStyle = game.palette.buttonPressOverlay;
-        ctx.fill();
-    }
-
-    ctx.fillStyle = live ? game.palette.ink : game.palette.inkDisabled;
-    ctx.fillText(
-        Layout.PLAYER_PREFIX + game.name,
-        rect.x + rect.width / 2,
-        rect.y + rect.height / 2
-    );
-    ctx.restore();
+    Paint.chip(game, rect, Layout.PLAYER_PREFIX + game.name, live,
+        game.pressed === "player");
 };
 
 /** The name screen: a heading, the field's Save button, and how to get out. */
@@ -422,29 +532,162 @@ Paint.entities = function (game) {
     }
 };
 
-Paint.hud = function (game) {
-    var hud = game.layout.hud;
+/**
+ * The score, the level and the clock, each on a ground of its own.
+ *
+ * Measured rather than eyeballed: the clock is drawn in the accent colour,
+ * which came out at 3.2:1 against a bright morning sky. Everything else in the
+ * game got a ground; so does this.
+ *
+ * What it does NOT get is a ground across the whole width. The HUD is drawn
+ * over the play area, so a bar of scrim along the top of the screen is a lid
+ * over the top of the game: balloons rose behind it at about 1.4:1 against the
+ * sky and escaped through a strip nobody could see into. Three chips the size
+ * of the words leave the rest of the row as clear sky.
+ */
+Paint.hudRuns = function (game) {
+    return [
+        // The lives are drawn beside this rather than spelled out in it: see
+        // Paint.hudLives. What is left is the score, which is the only thing
+        // here that needs words at all.
+        { text: String(game.score), x: game.layout.hud.caught,
+          ink: game.palette.ink, lives: true },
+        { text: "LEVEL " + game.level, x: game.layout.hud.level,
+          ink: game.palette.inkSoft },
+        { text: game.elapsed() + "s", x: game.layout.hud.time,
+          ink: game.palette.accent }
+    ];
+};
+
+/**
+ * The chips the HUD text stands on, and nothing else.
+ *
+ * Its own routine so the contrast test can measure the ground the game really
+ * draws rather than a copy of it kept in step by hand — the old test rebuilt
+ * the band itself, which is a test of the test.
+ */
+Paint.hudGround = function (game) {
+    var plate = game.layout.hud.plate;
     var ctx = game.ctx;
+    var grounds = [];
 
-    // Measured rather than eyeballed: the clock is drawn in the accent colour,
-    // which came out at 3.2:1 against a bright morning sky. Everything else in
-    // the game got a ground; so does this.
-    var band = ctx.createLinearGradient(0, 0, 0, hud.band.height);
-    band.addColorStop(0, game.palette.panel);
-    band.addColorStop(hud.band.solid, game.palette.panel);
-    band.addColorStop(1, Sky.transparent(game.palette.panel));
-    ctx.fillStyle = band;
-    ctx.fillRect(0, 0, game.width, hud.band.height);
+    ctx.font = game.layout.fonts.hud;
 
-    game.ctx.font = game.layout.fonts.hud;
-    game.ctx.fillStyle = game.palette.ink;
-    game.ctx.fillText(
-        game.score + " points, " + game.livesLost + " of " +
-            game.allowance + " lost",
-        hud.caught, hud.y
-    );
-    game.ctx.fillStyle = game.palette.inkSoft;
-    game.ctx.fillText("LEVEL " + game.level, hud.level, hud.y);
-    game.ctx.fillStyle = game.palette.accent;
-    game.ctx.fillText(game.elapsed() + "s", hud.time, hud.y);
+    // Chips that touch become one chip. On a narrow screen the three runs
+    // crowd together, and three overlapping rounded rectangles read as a
+    // mistake where one bar reads as a decision — so a phone gets the old bar
+    // back, arrived at rather than special-cased.
+    Paint.hudRuns(game).forEach(function (run) {
+        // A run that carries the lives needs ground under them too.
+        var lives = run.lives
+            ? game.layout.hud.life * (2.1 * game.allowance + 1)
+            : 0;
+        var box = {
+            x: run.x - plate.padX,
+            y: plate.y,
+            width: ctx.measureText(run.text).width + lives + plate.padX * 2,
+            height: plate.height
+        };
+        var last = grounds[grounds.length - 1];
+        if (last && box.x <= last.x + last.width + plate.padX) {
+            last.width = Math.max(last.x + last.width, box.x + box.width) - last.x;
+            return;
+        }
+        grounds.push(box);
+    });
+
+    ctx.fillStyle = game.palette.panel;
+    grounds.forEach(function (box) {
+        Layout.roundedRect(ctx, box, plate.radius);
+        ctx.fill();
+    });
+
+    return grounds;
+};
+
+/**
+ * The lives, as the thing you lose them to.
+ *
+ * "2 of 7 lost" is a sum a player has to do while balloons are escaping, and
+ * it was a third of the width of the screen. A row of balloons is the count
+ * itself: the solid ones are what you have left. It also reads at a glance
+ * from the corner of an eye, which a number never does.
+ */
+Paint.hudLives = function (game, from) {
+    var size = game.layout.hud.life;
+    var left = game.allowance - game.livesLost;
+    var x = from + size;
+
+    for (var i = 0; i < game.allowance; i++) {
+        game.ctx.save();
+        // Spent ones stay in the row rather than vanishing, so the row does
+        // not change width as you lose them and the count of what is gone is
+        // as legible as the count of what is left.
+        game.ctx.globalAlpha = i < left ? 1 : 0.22;
+        Icons.draw(game, "balloon", x, game.layout.hud.y - size * 0.35, size);
+        game.ctx.restore();
+        x += size * 2.1;
+    }
+
+    return x - size;
+};
+
+/**
+ * The pause button: two bars, or a triangle once there are none left.
+ *
+ * Drawn rather than set, like the legend's ticks and crosses — a glyph is only
+ * there if the face has one, and the whole point of bundling a font was that
+ * every machine draws the same thing.
+ *
+ * It goes flat and dim at zero rather than disappearing. A control that
+ * vanishes leaves you wondering whether you imagined it; one that is visibly
+ * spent tells you what happened to it.
+ */
+Paint.pauseButton = function (game) {
+    var box = game.layout.hud.pause;
+    var ctx = game.ctx;
+    var spent = game.pausesLeft <= 0;
+    var bar = box.width * 0.13;
+    var tall = box.height * 0.34;
+    var cx = box.x + box.width / 2;
+    var cy = box.y + box.height / 2;
+
+    ctx.save();
+    Layout.roundedRect(ctx, box, box.radius);
+    ctx.fillStyle = game.pressed === "pause"
+        ? game.palette.buttonPressOverlay
+        : game.palette.panel;
+    ctx.fill();
+
+    ctx.fillStyle = spent ? game.palette.inkDisabled : game.palette.ink;
+    ctx.fillRect(cx - bar * 1.8, cy - tall, bar, tall * 2);
+    ctx.fillRect(cx + bar * 0.8, cy - tall, bar, tall * 2);
+
+    // How many are left, as pips under the bars. Small, because it is a thing
+    // to notice rather than a thing to read.
+    var pip = box.width * 0.07;
+    var from = cx - (Game.PAUSES - 1) * pip * 1.6 / 2;
+    for (var i = 0; i < Game.PAUSES; i++) {
+        ctx.globalAlpha = i < game.pausesLeft ? 1 : 0.25;
+        ctx.beginPath();
+        ctx.arc(from + i * pip * 1.6, cy + tall * 1.5, pip * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+};
+
+Paint.hud = function (game) {
+    Paint.hudGround(game);
+    Paint.pauseButton(game);
+
+    var ctx = game.ctx;
+    ctx.font = game.layout.fonts.hud;
+    Paint.hudRuns(game).forEach(function (run) {
+        ctx.fillStyle = run.ink;
+        ctx.fillText(run.text, run.x, game.layout.hud.y);
+        if (run.lives) {
+            Paint.hudLives(game,
+                run.x + ctx.measureText(run.text).width + game.layout.hud.life);
+        }
+    });
 };

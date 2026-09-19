@@ -66,6 +66,17 @@ Announce.startLevel = function (game) {
     );
 };
 
+/** The About screen, read out in full: it is all text, so all of it goes. */
+Announce.about = function (game) {
+    var said = [Layout.ABOUT_TITLE];
+    Layout.about().forEach(function (section) {
+        said.push(section.heading + ".");
+        section.lines.forEach(function (line) { said.push(line); });
+    });
+    said.push("Escape to go back.");
+    Announce.say(said.join(" "));
+};
+
 Announce.name = function () {
     Announce.say("Your name. Type a name, then Enter to save or Escape to cancel.");
 };
@@ -86,8 +97,11 @@ Announce.starting = function (game) {
  */
 Announce.paused = function (game) {
     Announce.say(
-        "Paused at level " + game.level + ". " + game.score +
-        " points. Press space to carry on."
+        "Paused at level " + game.level + ". " + game.score + " points. " +
+        (game.askedToPause
+            ? game.pausesLeft + " pauses left. Resuming in " +
+              Game.PAUSE_SECONDS + " seconds, or press space to carry on now."
+            : "Press space to carry on.")
     );
 };
 
@@ -118,8 +132,17 @@ Announce.arrivals = function (game) {
     var under = Ladder.at(game.level - 1);
     var news = "";
 
+    if ((rung.bossMark || 1) > (under.bossMark || 1)) {
+        return " A bigger saucer: eight taps, and it moves.";
+    }
+    if (rung.fading > 0 && !(under.fading > 0)) {
+        return " Fading balloons: they thin out as they rise.";
+    }
+    if (rung.janky > 0 && !(under.janky > 0)) {
+        return " Janky balloons: some of them wander.";
+    }
     if (rung.fireflies > 0 && !(under.fireflies > 0)) {
-        return " Fireflies: harmless, but taps land on them.";
+        return " Fireflies: do not touch them either.";
     }
     if (rung.birds > 0 && !(under.birds > 0)) {
         return " Birds: do not touch them.";
@@ -140,7 +163,11 @@ Announce.arrivals = function (game) {
  * "it is here" and "it is charging" are the whole interface for them.
  */
 Announce.bossArrived = function (game) {
-    Announce.say("A saucer. Tap it down, quickly.");
+    var kind = Ladder.saucer(Ladder.at(game.level).bossMark);
+    Announce.say(
+        (kind.mark > 1 ? "A bigger saucer. " : "A saucer. ") +
+        "Tap it down, quickly: " + kind.taps + " taps."
+    );
 };
 
 Announce.bossDestroyed = function (game) {
@@ -163,6 +190,19 @@ Announce.bossFired = function (game) {
 Announce.touchedBird = function (game) {
     Announce.say(
         "You touched a bird. " + game.livesLost + " of " + game.allowance +
+        " lost."
+    );
+};
+
+/**
+ * A firefly was touched.
+ *
+ * Said every time, like a bird, and for the same reason: the cost is a life
+ * and the cause is a rule the player may not have absorbed yet.
+ */
+Announce.touchedFirefly = function (game) {
+    Announce.say(
+        "You touched a firefly. " + game.livesLost + " of " + game.allowance +
         " lost."
     );
 };

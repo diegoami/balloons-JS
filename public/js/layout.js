@@ -27,20 +27,97 @@ var Layout = {};
 Layout.INTRO_TEXT = "Pop the balloons before they get away";
 
 /**
- * The rules, in one line, and what a run is in another.
+ * The rules, in one line, what a run is in another, and how to play it best.
  *
  * The first line replaces the break between levels. That screen stopped the
  * game every time something new arrived to explain it, which was the right
  * instinct and the wrong place: four verbs cover every object in the game, and
  * a player who has read them once does not need the game to stop and say them
- * again. "Spare" does the work of two rules at once — a bird and a firefly are
- * both things you leave alone, for different reasons that do not matter while
- * you are playing.
+ * again. "Save" does the work of two rules at once — a bird and a firefly are
+ * both things you leave alone, and since this phase both of them cost a life,
+ * it is now literally true rather than a shorthand.
+ *
+ * The same sentence greets the countdown, because the countdown is the other
+ * moment a new player is looking at nothing else.
+ *
+ * The third line is advice and it is earned: the ladder is calibrated against
+ * about 2.1 taps a second from ONE pointer, and a touchscreen lets you use two
+ * thumbs. Measured, that is the difference between dying around level 8 and
+ * finishing every run — which is why the board records which was used.
  */
 Layout.DESCRIPTION = [
-    "Pop the balloons, send back the saucers, spare the birds and the fireflies.",
-    "Twenty levels, twenty seconds each, five lives. It can be won."
+    "Pop up the balloons, repel the saucers, save the birds and the fireflies.",
+    "Twenty levels, twenty seconds each, five lives. It can be won.",
+    "Best played on a tablet."
 ];
+
+/**
+ * What the game is, at length, for anyone who wants it.
+ *
+ * The title screen says the rules in four icons and the countdown says nothing
+ * at all, which is right for the ninety-nine times out of a hundred that
+ * somebody wants to play rather than read. This is the hundredth.
+ *
+ * Every number in here is read from the tables that decide it rather than
+ * written out, because a rules page that goes stale is worse than no rules
+ * page: it is a rules page that lies.
+ */
+// A question mark rather than the word: it is an icon, and it has to fit on
+// the same row as a name and a level chip on a 240px screen.
+Layout.ABOUT_TEXT = "?";
+Layout.ABOUT_TITLE = "About this game";
+Layout.BACK_TEXT = "Back";
+
+Layout.about = function () {
+    var top = Ladder.at(Ladder.MAX);
+    var boss = Ladder.saucer(1);
+    var mark2 = Ladder.saucer(2);
+    var lives = Game.LIVES + Ladder.livesBy(Ladder.MAX);
+
+    return [
+        { heading: "What you are doing", lines: [
+            "Pop the balloons before they reach the top. One that gets away " +
+                "costs a life.",
+            "Some balloons are reinforced and take two taps, some are " +
+                "armoured and take three. They rise more slowly and are worth " +
+                "more: " + Ladder.skin(3).points + " points against " +
+                Ladder.skin(1).points + "."
+        ] },
+        { heading: "What to leave alone", lines: [
+            "Birds and fireflies both cost a life if you touch them. A bird " +
+                "crosses and is gone; a firefly hovers, and will sit in front " +
+                "of the balloon you were aiming at.",
+            "A tap that lands on a firefly is gone, and so is the life."
+        ] },
+        { heading: "The saucers", lines: [
+            "A saucer arrives when the sky goes quiet and fires after " +
+                Math.round(boss.fuse / 30) + " seconds. " + boss.taps +
+                " taps bring it down.",
+            "From level 18 a bigger one comes instead: " + mark2.taps +
+                " taps in " + (mark2.fuse / 30).toFixed(1) + " seconds, and it " +
+                "will not hold still."
+        ] },
+        { heading: "A run", lines: [
+            Ladder.MAX + " levels of " + Ladder.CLIMB_SECONDS + " seconds. " +
+                Game.LIVES + " lives, and one more at 12, 15 and 18, so " +
+                lives + " in all if you get there.",
+            "From level 12 some balloons wander as they rise. From 14 some " +
+                "thin out the higher they go — never so far that you cannot " +
+                "find them, but far enough to make you look.",
+            "You get " + Game.PAUSES + " pauses. Each one gives itself back " +
+                "after " + Game.PAUSE_SECONDS + " seconds."
+        ] },
+        { heading: "Where it came from", lines: [
+            "Written in December 2012 as an experiment with the HTML5 canvas: " +
+                "balloons, four difficulty settings and a photograph of a sky.",
+            "Rebuilt in 2026. The sky is drawn rather than photographed and " +
+                "runs from morning to night as you climb; the difficulties " +
+                "became one ladder of " + Ladder.MAX + " levels, so that every " +
+                "score on the board was earned the same way.",
+            "It can be won. Surviving level " + Ladder.MAX + " is the end of it."
+        ] }
+    ];
+};
 
 Layout.START_TEXT = "Tap anywhere to play";
 Layout.RESUME_TEXT = "Resume";
@@ -49,8 +126,11 @@ Layout.RESUME_TEXT = "Resume";
 Layout.START_FROM_ONE = "From level 1";
 Layout.START_PREFIX = "From level ";
 Layout.PRACTICE_WARNING = "Practice run — this score will not be saved.";
-Layout.PLAY_INSTRUCTION = "Pop the balloons!";
 Layout.PAUSED_TEXT = "Paused";
+Layout.PAUSES_LEFT = " pauses left";
+Layout.ONE_PAUSE_LEFT = "1 pause left";
+Layout.NO_PAUSES_LEFT = "That was your last pause";
+Layout.RESUMING_IN = "Resuming in ";
 Layout.PAUSED_HINT = "You looked away, so the game waited.";
 Layout.HIGH_SCORES_TEXT = "High Scores";
 
@@ -60,6 +140,26 @@ Layout.NAME_TEXT = "Who is playing?";
 Layout.NAME_HINT = "Enter to save, Escape to cancel";
 Layout.SAVE_TEXT = "Save";
 Layout.PLAY_TEXT = "Play";
+
+/**
+ * The face everything is drawn in, and what to fall back to.
+ *
+ * Verdana was the browser's, chosen for being everywhere rather than for being
+ * right: a screen font from 1996 designed to survive 96dpi CRTs, which is a
+ * thing no phone has been since. Fredoka is rounded, has the weight to sit on
+ * a sky without a heavy scrim behind every word, and its digits are unmistakable
+ * at the size the countdown uses them.
+ *
+ * It is bundled rather than linked, because a request to a third party on load
+ * is a request that fails offline and inside an Android wrapper -- and because
+ * the canvas has to MEASURE this font before it can lay anything out, so a file
+ * that arrives late is a composition laid out to the wrong metrics.
+ *
+ * The fallback is deliberately Verdana: if the file ever fails to arrive the
+ * game is laid out in the face it was tuned for right up until this change,
+ * rather than in whatever the platform's default happens to be.
+ */
+Layout.FONT = "Fredoka, Verdana, sans-serif";
 
 Layout.GRID = {
     /** Fractions of canvas width. */
@@ -119,6 +219,29 @@ Layout.GRID = {
     /** Air between the text block and the edge of the panel behind it. */
     panelPad: 0.7,
 
+    /**
+     * The legend that replaces the rules sentence, in line heights.
+     *
+     * `icon` is how big each thing from the sky is drawn, `gap` the air
+     * between an icon and its verdict, and `pair` the air between one pair and
+     * the next -- which is the wider of the two on purpose, because "balloon,
+     * tick" has to read as one thing and not as "tick, saucer".
+     */
+    legend: { icon: 1.15, gap: 0.5, pair: 1.25 },
+
+    /**
+     * The ground under each run of HUD text, in line heights.
+     *
+     * It used to be one bar across the whole width, and the whole width is the
+     * problem: the HUD is drawn OVER the play area, so a lid of scrim across
+     * the top of the screen is a lid across the top of the game. A balloon
+     * behind it sat at about 1.4:1 against the sky -- under the 3:1 anything
+     * you have to find is meant to clear -- so balloons were escaping through
+     * a strip nobody could see into. The text needs a ground; the empty space
+     * either side of it does not.
+     */
+    hudPlate: { padX: 0.5, top: 0.78, height: 1.15, radius: 0.28 },
+
     /** A line height, as a multiple of the advance width of a capital M. */
     lineRatio: 1.3,
 
@@ -151,16 +274,27 @@ Layout.GRID = {
     minTouchTarget: 44,
 
     /**
-     * Font size is capped so the deepest row still lands on screen: the
-     * deepest baseline sits at about 15.6x the font size, so 19 leaves the
-     * composition occupying roughly 82% of the height it is given.
+     * Font size is capped so the deepest row still lands on screen. Measured
+     * across every viewport the tests cover, the deepest baseline sits at
+     * 18.7x the font size on a wide window and 21.7x on a phone, where the
+     * description wraps to five lines — so this leaves the composition about
+     * 88% of the height it is given.
+     *
+     * It was 19, from a deepest baseline of 15.6x, and a third line of
+     * description moved that: at 1280x720 the last score row landed 9px BELOW
+     * the name line, and at 2560x1440 it was 24px. The number is measured
+     * rather than reasoned, because the description wraps and how many lines
+     * that comes to depends on the width, the font and which machine is
+     * rendering it. It went up again when the rules sentence became a row of
+     * icons: a legend is two line heights tall where the line it replaced was
+     * one, and the tightest window was down to 18px of clearance.
      *
      * What it is given is the height less the name line, which sits on the
      * bottom edge outside the flow and takes a touch target plus a little air.
      * Without that reservation the flow ran into the footer on a letterboxed
      * window: at 1920x400 the last score row landed 5px below the name line.
      */
-    heightDivisor: 19,
+    heightDivisor: 22,
     footerReserve: 56
 };
 
@@ -226,19 +360,21 @@ Layout.applyFont = function (ctx, width, height) {
     );
 
     size = Math.round(size);
-    ctx.font = size + "px Verdana";
+    ctx.font = size + "px " + Layout.FONT;
 
     // Only the lines that CANNOT wrap decide whether the composition fits.
     //
-    // The description used to be measured here too, and on a 320px phone with
-    // real Verdana its second line came out eight pixels over — 3% — which
-    // scaled the entire type scale down past `minFontSize` and made a floor
-    // that is documented as a floor into a suggestion. One long sentence
-    // should cost itself a second line, not cost every other word on the
-    // screen a point of size. It wraps in `compute` instead.
+    // The description used to be measured here too, and on a 320px phone its
+    // second line came out eight pixels over — 3% — which scaled the entire
+    // type scale down past `minFontSize` and made a floor that is documented
+    // as a floor into a suggestion. One long sentence should cost itself a
+    // second line, not cost every other word on the screen a point of size.
+    // It wraps in `compute` instead.
     //
-    // This only showed up on Windows: the Linux boxes this was built on have
-    // no Verdana and substitute something narrower, so the same string fitted.
+    // That only showed up on Windows, back when the face was whatever the
+    // browser had: the Linux boxes this was built on substituted something
+    // narrower and the same string fitted. A bundled font is the fix for that
+    // class of bug — every machine now lays out against the same metrics.
     var available = width * (1 - 2 * G.columns.margin);
     var longest = 0;
     [Layout.INTRO_TEXT, Layout.START_TEXT].forEach(function (text) {
@@ -247,7 +383,7 @@ Layout.applyFont = function (ctx, width, height) {
 
     if (longest > available) {
         size = Math.max(1, Math.floor(size * (available / longest)));
-        ctx.font = size + "px Verdana";
+        ctx.font = size + "px " + Layout.FONT;
     }
 
     return size;
@@ -274,7 +410,8 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
     var fonts = {};
     for (var role in G.type) {
         if (Object.prototype.hasOwnProperty.call(G.type, role)) {
-            fonts[role] = Math.max(1, Math.round(fontSize * G.type[role])) + "px Verdana";
+            fonts[role] = Math.max(1, Math.round(fontSize * G.type[role])) +
+                "px " + Layout.FONT;
         }
     }
 
@@ -336,20 +473,33 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
     // because after wrapping there is no longer one line per entry in
     // Layout.DESCRIPTION for a painter to index into.
     ctx.font = fonts.label;
+    // The rules sentence is not among these any more: it is the legend below,
+    // drawn in the things it used to name. It stays in Layout.DESCRIPTION
+    // because that is what the screen reader is given, and a row of pictures
+    // says nothing at all to one.
     var wrapped = [];
-    Layout.DESCRIPTION.forEach(function (sentence) {
+    Layout.DESCRIPTION.slice(1).forEach(function (sentence) {
         Layout.wrap(ctx, sentence, available).forEach(function (text) {
             wrapped.push(text);
         });
     });
     ctx.font = fonts.score;
 
+    // The legend stands where that sentence stood, and the rest flows under
+    // it on the same rhythm.
+    var legend = Layout.legendRow(ctx, width, line, fontSize);
+    var legendTop = menuTop + line * 0.3;
+    legend.y = legendTop + legend.height / 2;
+    legend.chip.y = legendTop - line * 0.25;
+    legend.chip.height = legend.height + line * 0.5;
+
+    var textTop = legendTop + legend.height + line * 1.35;
     var description = wrapped.map(function (text, d) {
-        return { x: left, y: menuTop + line * (1 + d * G.descriptionStep), text: text };
+        return { x: left, y: textTop + line * (d * G.descriptionStep), text: text };
     });
     var menuBottom = buttons.length
         ? rowTop + buttonHeight
-        : menuTop + line * (description.length * G.descriptionStep + 0.4);
+        : textTop + line * ((description.length - 1) * G.descriptionStep + 0.6);
 
     // Drawn rect and hit rect are the same object now: buttons are laid out
     // rather than bracketing substrings, so both directions can meet the touch
@@ -505,6 +655,41 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
     var targets = buttons.map(function (button) {
         return { id: button.id, hit: button.hit };
     });
+    // The About chip, bottom right, mirroring the name chip on the left — or
+    // the row above it when the bottom row is already full. On a 240px screen
+    // the name and the level chip reach past the middle, and a third chip at
+    // the right edge landed on top of the level one.
+    var aboutWidth = Math.max(
+        G.minTouchTarget,
+        ctx.measureText(Layout.ABOUT_TEXT).width + line * G.footer.padX * 2
+    );
+    var about = {
+        x: width - width * G.columns.margin - aboutWidth,
+        y: player.y,
+        width: aboutWidth,
+        height: player.height,
+        radius: player.radius
+    };
+
+    if (about.x < start.x + start.width + line * G.footer.padX) {
+        about.y = player.y - footerHeight - line * G.footer.inset;
+    }
+
+    // The way out of the About screen is a word, not a mark, and a chip sized
+    // for one character is not a chip sized for "Back".
+    var backWidth = Math.max(
+        G.minTouchTarget,
+        ctx.measureText(Layout.BACK_TEXT).width + line * G.footer.padX * 2
+    );
+    var back = {
+        x: width - width * G.columns.margin - backWidth,
+        y: player.y,
+        width: backWidth,
+        height: footerHeight,
+        radius: line * G.footer.radius
+    };
+
+    targets.push({ id: "about", hit: about });
     targets.push({ id: "replay", hit: scoresHit });
     targets.push({ id: "player", hit: player });
     targets.push({ id: "start", hit: start });
@@ -566,15 +751,34 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
             rows: rows
         },
 
+        legend: legend,
+
         hud: {
             y: line * G.rows.hud,
 
             // The HUD is the only text drawn during play, and it is drawn over
-            // whatever the sky is doing. This is its ground: solid behind the
-            // row, then faded out, so it reads as a bar rather than a lid.
-            band: {
-                height: line * G.rows.hud + line * 1.2,
-                solid: (line * G.rows.hud + line * 0.5) / (line * G.rows.hud + line * 1.2)
+            // whatever the sky is doing. Each run of it gets a chip of ground
+            // the size of the words, rather than the whole row getting a lid.
+            plate: {
+                padX: line * G.hudPlate.padX,
+                y: line * G.rows.hud - line * G.hudPlate.top,
+                height: line * G.hudPlate.height,
+                radius: line * G.hudPlate.radius
+            },
+
+            // Small enough to sit inside the chip, big enough to read as a
+            // balloon rather than a dot.
+            life: line * 0.3,
+
+            // The pause button, on the right of the row where the clock is.
+            // A touch target rather than a glyph: it is the only thing in the
+            // game you press while playing that is not a balloon.
+            pause: {
+                x: width - width * G.columns.margin - Math.max(G.minTouchTarget, line * 1.5),
+                y: line * G.rows.hud - line * G.hudPlate.top,
+                width: Math.max(G.minTouchTarget, line * 1.5),
+                height: Math.max(G.minTouchTarget, line * G.hudPlate.height),
+                radius: line * G.hudPlate.radius
             },
 
             caught: width * G.columns.hudCaught,
@@ -587,8 +791,67 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
             width: width * G.spawn.spread
         },
 
+        about: about,
+        back: back,
         targets: targets
     };
+};
+
+/**
+ * Where each icon and each verdict sits, centred as one row.
+ *
+ * Measured rather than spaced by eye, because the four pairs are a single
+ * object as far as the composition is concerned: it is centred as a whole, so
+ * the row has to be laid out before anybody knows where it starts.
+ *
+ * It shrinks to fit rather than wrapping. A legend that breaks over two lines
+ * stops reading as one sentence, and four pairs on a phone is the narrowest
+ * case there is -- so on a screen too tight for them at full size the icons
+ * get smaller together.
+ */
+Layout.legendRow = function (ctx, width, line, fontSize) {
+    var G = Layout.GRID;
+    var available = width * (1 - 2 * G.columns.margin);
+    var icon = line * G.legend.icon;
+    var gap = line * G.legend.gap;
+    var pair = line * G.legend.pair;
+
+    // Per pair: the icon's own box either side of its centre, the gap, and a
+    // slot for the verdict. This counted the verdict's slot out and the chip
+    // came up an icon short for every pair in the row.
+    var each = icon * 3 + gap;
+    var wide = Icons.RULES.length * each + (Icons.RULES.length - 1) * pair;
+
+    if (wide > available) {
+        var squeeze = available / wide;
+        icon *= squeeze;
+        gap *= squeeze;
+        pair *= squeeze;
+        wide = available;
+    }
+
+    // Left, with everything else. Centred, it floated away from the block it
+    // belongs to and read as decoration rather than as the line it replaced.
+    var x = width * G.columns.margin;
+    var row = {
+        icon: icon,
+        height: icon * 2,
+        items: [],
+        chip: { x: x - icon * 0.6, y: 0, width: wide + icon * 1.2, height: 0,
+                radius: line * G.footer.radius }
+    };
+
+    Icons.RULES.forEach(function (rule) {
+        row.items.push({
+            kind: rule.kind,
+            wanted: rule.wanted,
+            iconX: x + icon,
+            verdictX: x + icon * 2 + gap + icon * 0.5
+        });
+        x += icon * 2 + gap + icon + pair;
+    });
+
+    return row;
 };
 
 /** Traces a rounded rectangle. Path2D.roundRect is too new to rely on. */

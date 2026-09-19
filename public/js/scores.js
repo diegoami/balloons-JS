@@ -12,7 +12,19 @@
 "use strict";
 var Scores = {};
 
-Scores.URL = "/api/scores";
+/**
+ * Where the board lives.
+ *
+ * Relative, because the function is served from the same origin as the game --
+ * no CORS, no mixed content, and it follows the site to whatever domain or
+ * branch deploy it is on without being told.
+ *
+ * A build that does NOT share an origin with it -- an Android app with the
+ * game bundled on the device, which is the point of bundling it -- sets
+ * window.BALLOONS_SCORES_URL to the absolute address before this file loads.
+ * One override, in one place, rather than a build step that rewrites a string.
+ */
+Scores.URL = window.BALLOONS_SCORES_URL || "/api/scores";
 
 /** What has arrived, or null. */
 Scores.board = null;

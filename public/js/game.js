@@ -6,7 +6,37 @@ var BALLOON_SIZE_SPREAD = 50;
 
 /** A bird's body radius and its speed across the screen, before scaling. */
 var BIRD_BASE_SIZE = 13;
-var BIRD_SPEED = 7;
+
+/**
+ * How fast a bird crosses, before scaling.
+ *
+ * It was 7, which crossed a desktop window in under five seconds. Measured,
+ * that made the whole mechanic inert: over 490 played taps not one landed on
+ * a bird, because the nearest one was a median 400px away and 95% of taps had
+ * none within eighty. A bird you cannot touch costs nothing to avoid, so
+ * "do not touch the birds" was a rule the game announced and never enforced.
+ *
+ * Slower is most of the fix. It does not make a bird harder to see -- it is
+ * visible for LONGER -- it just means the sky it is crossing is a sky the
+ * player is still working in when it gets there.
+ */
+var BIRD_SPEED = 4.5;
+
+/**
+ * How often a bird crosses where the taps are rather than anywhere.
+ *
+ * The band was a fixed 0.18 to 0.73 of the height, and the taps are not: a
+ * player reaches for whatever is closest to escaping, which puts the median
+ * tap at 0.06 of the height when the sky is thin. Birds were flying through
+ * the part of the screen nobody was aiming at.
+ *
+ * Sampling the height of a balloon that is ALREADY well up is a sampler for
+ * where the taps are going, and it adapts on its own to how full the sky is,
+ * which a second hardcoded band would not. The rest of the time it still flies
+ * anywhere, because a bird that only ever appeared on the danger line would be
+ * a tell rather than a hazard.
+ */
+var BIRD_INTERCEPT = 0.6;
 
 /**
  * Balloon speed is expressed for a screen this tall and scaled from there.
@@ -111,6 +141,21 @@ Game.MENU_LOCKOUT_MS = 1200;
  * did.
  */
 Game.GAMEOVER_STEPS = Math.round(10000 / Game.STEP_MS);
+
+/**
+ * Pauses a run gets, and how long one lasts before it gives itself back.
+ *
+ * Three, because a pause is for the things that interrupt a person -- a door,
+ * a phone, a child -- and three is enough for a seven-minute run to survive
+ * being lived through without being enough to take one every level.
+ *
+ * Thirty seconds because that is long enough to deal with the door and short
+ * enough that a pause cannot be parked. It resumes itself rather than waiting,
+ * which is the difference between a pause and a stop.
+ */
+Game.PAUSES = 3;
+Game.PAUSE_SECONDS = 30;
+Game.PAUSE_STEPS = Math.round(Game.PAUSE_SECONDS * 1000 / Game.STEP_MS);
 
 /**
  * Balloons you may lose before the game ends, at the start of a run.
@@ -563,7 +608,13 @@ Game.resetRound = function () {
     // Far enough back that the first boss is only waiting on the sky going
     // quiet, not on a cooldown left over from nothing.
     this.lastBoss = -Infinity;
-    this.allowance = Game.LIVES;
+    // Plus whatever a run that CLIMBED to this level would have collected on
+    // the way. A practice run at 18 that starts on five lives is not a harder
+    // level 18, it is a different game: the ladder hands out a life at 12, 15
+    // and 18 precisely because the back half costs them.
+    this.allowance = Game.LIVES + Ladder.livesBy(this.startLevel);
+    this.pausesLeft = Game.PAUSES;
+    this.askedToPause = false;
     this.won = false;
     this.end_time = null;
     this.ticks = 0;
@@ -589,17 +640,32 @@ Game.randomBalloon = function () {
     var minRadius = Layout.GRID.minTouchTarget / 2;
     var baseRadius = Math.max(BALLOON_BASE_SIZE * this.ratio * ratioSize, minRadius);
     var randomSize = baseRadius + Math.random() * BALLOON_SIZE_SPREAD * this.ratio * ratioSize;
-    var getRandomRGB = function () { return Math.floor(Math.random() * 255); };
-    var randomColor = { r: getRandomRGB(), g: getRandomRGB(), b: getRandomRGB() };
+    // A fading balloon may not keep this one: it needs a colour with somewhere
+    // to fade to, and only the balloon knows which sky it is being drawn on.
+    var randomColor = randomBalloonColour();
     var balloonSpeed = rung.speed;
 
     // Scaling the rise by height keeps the time to cross the screen the same
     // whatever shape the window is.
     var heightScale = this.height / REFERENCE_HEIGHT;
 
+    // What is actually behind a point in the sky, so a fading balloon can work
+    // out how faint it may get without asking the screen mid-flight. Read off
+    // the painted sky and cached per level, so this is a lookup.
+    var game = this;
+    var skyAt = function (x, yFraction) {
+        return Sky.down(
+            Sky.column(game.width, game.height, game.dpr, game.level,
+                x / Math.max(1, game.width)),
+            yFraction
+        );
+    };
+
     return balloonConstructor(
         xcoord, ycoord, randomSize, randomColor, max_width, balloonSpeed, heightScale,
-        Ladder.rollSkin(rung)
+        Ladder.rollSkin(rung),
+        Ladder.rollQuirk(rung),
+        skyAt
     );
 };
 
@@ -676,16 +742,18 @@ Game.spawnBoss = function () {
         return;
     }
 
-    var radius = Math.max(BOSS_MIN_RADIUS, BOSS_BASE_SIZE * this.ratio);
+    var plate = this.layout.hud.plate;
     this.add(bossConstructor(
         this.width / 2,
-        // High, so the fight happens over the balloons rather than in them —
-        // but not so high that the fuse ring drawn around it disappears under
-        // the HUD band.
-        Math.max(radius * 1.6, this.height * 0.26),
-        radius,
-        BOSS_DRIFT * this.ratio * (Math.random() < 0.5 ? 1 : -1),
-        this.width
+        // High, so the fight happens over the balloons rather than in them.
+        this.height * 0.26,
+        BOSS_BASE_SIZE * this.ratio,
+        this.width,
+        rung.bossMark,
+        // ...but under the HUD, because the fuse ring is the only clock the
+        // player gets and half of it behind a chip is half a clock. One that
+        // wanders pushes itself down until its whole band clears this.
+        plate.y + plate.height
     ));
     Announce.bossArrived(this);
 };
@@ -723,10 +791,31 @@ Game.spawnBird = function () {
     var fromLeft = Math.random() < 0.5;
     var band = this.height * 0.55;
     var top = this.height * 0.18;
+    var height = top + Math.random() * band;
+
+    // Most of the time, cross where somebody is about to be tapping. It still
+    // enters a full wingspan off the canvas, so it is in sight for the whole
+    // way in — the fairness rule this file is built on is that a bird is never
+    // somewhere you had already committed to before you could see it.
+    var climbing = this.entities.filter(function (e) {
+        return e.kind === "balloon" && e.ycoord < this.height * 0.65;
+    }, this);
+
+    if (climbing.length && Math.random() < BIRD_INTERCEPT) {
+        var plate = this.layout.hud.plate;
+        height = Math.min(
+            Math.max(
+                climbing[Math.floor(Math.random() * climbing.length)].ycoord,
+                // Clear of the HUD, or it is a hazard drawn behind a chip.
+                plate.y + plate.height + radius * 1.5
+            ),
+            this.height * 0.85
+        );
+    }
 
     this.add(birdConstructor(
         fromLeft ? -span : this.width + span,
-        top + Math.random() * band,
+        height,
         radius,
         BIRD_SPEED * this.ratio,
         fromLeft
@@ -777,9 +866,33 @@ Game.watchVisibility = function () {
     var that = this;
     document.addEventListener("visibilitychange", function () {
         if (document.hidden && that.screen === "playing") {
+            // Free, and it waits for you. Looking away is not a decision.
+            that.askedToPause = false;
             that.enter("paused");
         }
     });
+};
+
+/**
+ * A pause the player asked for, if they have one left.
+ *
+ * Pauses are a resource like lives, because a pause is worth something: it is
+ * the only way to stop a clock that otherwise never stops. Three of them, and
+ * each one runs out on its own after PAUSE_SECONDS, so the cost of taking one
+ * is that you have one fewer and the benefit is bounded.
+ *
+ * The sky is hidden while it is up (Paint.paused), which is what stops a pause
+ * being a free look at where everything is. That matters more than the count:
+ * a limit on how OFTEN you may study the sky is not a limit on studying it.
+ */
+Game.askPause = function () {
+    if (this.screen !== "playing" || this.pausesLeft <= 0) {
+        return false;
+    }
+    this.pausesLeft--;
+    this.askedToPause = true;
+    this.enter("paused");
+    return true;
 };
 
 Game.init = function () {
@@ -819,6 +932,44 @@ Game.init = function () {
     this.watchVisibility();
 };
 
+/**
+ * Starts once the face everything is measured in has arrived.
+ *
+ * The canvas lays out by MEASURING text, so a font that turns up after the
+ * first measure leaves a composition built to the fallback's metrics and never
+ * rebuilt -- lines that wrap where they should not, a name chip that no longer
+ * clears the scores. `document.fonts.load` asks for it rather than waiting for
+ * something else to want it, since nothing on the page uses it in HTML.
+ *
+ * It is raced against a timeout and re-measured afterwards, because a game
+ * that will not start because a font is slow is worse than one drawn in
+ * Verdana for a moment.
+ */
 window.addEventListener("load", function () {
-    Game.init();
+    var waited = false;
+    var begin = function () {
+        if (waited) {
+            return;
+        }
+        waited = true;
+        Game.init();
+    };
+
+    if (window.document.fonts && document.fonts.load) {
+        document.fonts.load("16px Fredoka").catch(function () { return null; });
+        // Whichever comes first.
+        Promise.race([
+            document.fonts.ready,
+            new Promise(function (resolve) { window.setTimeout(resolve, 1500); })
+        ]).then(begin, begin);
+
+        // And if it lands after we gave up waiting, lay it out again.
+        document.fonts.ready.then(function () {
+            if (Game.canvas) {
+                Game.applyCanvasSize();
+            }
+        }, function () { return null; });
+    } else {
+        begin();
+    }
 }, false);

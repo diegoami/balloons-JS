@@ -56,7 +56,16 @@ const OPTIONS = {
   // Pointing is not pixel perfect.
   aimError: Number(flag('aim', 12)),
   // Nobody sustains more than roughly 3.5 aimed clicks a second.
-  interval: Number(flag('interval', 280))
+  interval: Number(flag('interval', 280)),
+  // Which rung to start on, the way the level chip does.
+  //
+  // A feature that arrives at 18 cannot be measured by a bot that dies at 11,
+  // and at a thumb's aim error this one does. Starting partway up is the only
+  // way to put a number on the top of the ladder at all -- but it is a
+  // different measurement from a whole run and it is labelled as one. It has
+  // the lives a run that climbed there would have, and none of the escapes
+  // that run would have already spent.
+  from: Number(flag('from', 1))
 };
 
 const BOT = (o) => `
@@ -65,7 +74,7 @@ const BOT = (o) => `
   const history = [];
   const seen = new Map();
   window.__stats = {
-    clicks: 0, hits: 0, lifetimes: [], sky: [], byLevel: {},
+    clicks: 0, hits: 0, landed: 0, onTarget: 0, lifetimes: [], sky: [], byLevel: {},
     birdsTouched: 0, bossesMet: 0, bossesLost: 0, fireflyTaps: 0
   };
 
@@ -133,11 +142,17 @@ const BOT = (o) => `
 
     // A boss first, and everything else second.
     //
-    // It is the only thing in the sky with a deadline: five taps in three
-    // seconds, and the life is gone whatever the balloons were doing. A
-    // harness that kept popping balloons through a boss fight would report
-    // that the boss always wins, which would say more about the bot than the
-    // game -- the same trap birds set, one level earlier.
+    // It is the only thing in the sky with a deadline -- five taps in three
+    // seconds, or eight in five from level 18 -- and the life is gone whatever
+    // the balloons were doing. A harness that kept popping balloons through a
+    // boss fight would report that the boss always wins, which would say more
+    // about the bot than the game: the same trap birds set, one level earlier.
+    //
+    // What this DOES measure of the mark II is the part that matters to the
+    // ladder: eight taps instead of five, and five seconds of unwatched sky
+    // instead of three. What it does not measure is the wandering, because it
+    // aims where the saucer is rather than where it was when a person would
+    // have started moving.
     const boss = Game.entities.find(e => e.kind === 'boss');
     if (boss && boss.taps > 0) {
       window.__stats.clicks++;
@@ -192,6 +207,21 @@ const BOT = (o) => `
     const landsOn = Entities.pick(Game.entities, { x: aimX, y: aimY });
     if (landsOn && landsOn.kind === 'firefly') { window.__stats.fireflyTaps++; }
 
+    // What SUPPLY actually means, which is not what hits counts.
+    //
+    // The hits counter goes up when the score does, so it counts POPS.
+    // Ladder.demand is in TAPS -- a balloon costs 1 + reinforced + 2 x
+    // armoured of them -- and the two were compared to each other as if they
+    // were the same unit. A tap that takes a skin off an armoured balloon is
+    // supply spent and is not a pop.
+    //
+    // No backticks in here: this whole script is a template literal, and one
+    // of them ends it.
+    if (landsOn) { window.__stats.landed++; }
+    if (landsOn && (landsOn.kind === 'balloon' || landsOn.kind === 'boss')) {
+      window.__stats.onTarget++;
+    }
+
     const before = Game.score;
     const lostBefore = Game.livesLost;
     Game.canvas.dispatchEvent(new MouseEvent('click', {
@@ -241,6 +271,9 @@ async function playGame(index) {
     await page.goto(`http://localhost:${OPTIONS.port}/`, { waitUntil: 'load' });
     await page.waitForTimeout(400);
     await page.evaluate(BOT(OPTIONS));
+    if (OPTIONS.from > 1) {
+      await page.evaluate((n) => { Game.startLevel = n; }, OPTIONS.from);
+    }
     await page.keyboard.press(' ');
     await page.waitForTimeout(2300); // the countdown
 
@@ -288,22 +321,28 @@ const round = n => (Math.round(n * 10) / 10).toString();
 const all = settled;
 
 console.log(
+  (OPTIONS.from > 1
+    ? `\nstarting at level ${OPTIONS.from}: a practice run, not a whole one\n`
+    : '') +
   `\nbot: ${OPTIONS.reaction}ms reaction, ±${OPTIONS.aimError}px aim, ` +
   `${Math.round(1000 / OPTIONS.interval * 10) / 10} clicks/sec ` +
   `· ${OPTIONS.width}×${OPTIONS.height} · ${OPTIONS.capMs / 1000}s cap\n`
 );
-console.log('run   lives  survived   points  pops/tap   sky    lost  birds  boss     flies  rung   outcome');
+console.log('run   lives  survived   points  pops/tap  taps/s   sky    lost  birds  boss     flies  rung   outcome');
 
 const mean = list => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
 
 settled.forEach(r => {
   const accuracy = r.stats.clicks ? (r.stats.hits / r.stats.clicks * 100) : 0;
+  const seconds = r.time || (r.survived / 1000) || 1;
+  const tapsPerSecond = r.stats.onTarget / seconds;
   console.log(
     String(r.run).padEnd(5),
     String(r.lives).padEnd(6),
     (round(r.time !== null ? r.time : r.wall) + 's').padEnd(10),
     String(r.score).padEnd(7),
     (round(accuracy) + '%').padEnd(10),
+    (Math.round(tapsPerSecond * 100) / 100).toFixed(2).padEnd(8),
     round(mean(r.stats.sky)).padEnd(6),
     String(r.lost).padEnd(5),
     String(r.birdsTouched).padEnd(6),
