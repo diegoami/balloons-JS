@@ -152,6 +152,16 @@ Layout.GRID = {
     panelPad: 0.7,
 
     /**
+     * The legend that replaces the rules sentence, in line heights.
+     *
+     * `icon` is how big each thing from the sky is drawn, `gap` the air
+     * between an icon and its verdict, and `pair` the air between one pair and
+     * the next -- which is the wider of the two on purpose, because "balloon,
+     * tick" has to read as one thing and not as "tick, saucer".
+     */
+    legend: { icon: 1.15, gap: 0.5, pair: 1.25 },
+
+    /**
      * The ground under each run of HUD text, in line heights.
      *
      * It used to be one bar across the whole width, and the whole width is the
@@ -207,14 +217,16 @@ Layout.GRID = {
      * the name line, and at 2560x1440 it was 24px. The number is measured
      * rather than reasoned, because the description wraps and how many lines
      * that comes to depends on the width, the font and which machine is
-     * rendering it.
+     * rendering it. It went up again when the rules sentence became a row of
+     * icons: a legend is two line heights tall where the line it replaced was
+     * one, and the tightest window was down to 18px of clearance.
      *
      * What it is given is the height less the name line, which sits on the
      * bottom edge outside the flow and takes a touch target plus a little air.
      * Without that reservation the flow ran into the footer on a letterboxed
      * window: at 1920x400 the last score row landed 5px below the name line.
      */
-    heightDivisor: 21,
+    heightDivisor: 22,
     footerReserve: 56
 };
 
@@ -393,20 +405,33 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
     // because after wrapping there is no longer one line per entry in
     // Layout.DESCRIPTION for a painter to index into.
     ctx.font = fonts.label;
+    // The rules sentence is not among these any more: it is the legend below,
+    // drawn in the things it used to name. It stays in Layout.DESCRIPTION
+    // because that is what the screen reader is given, and a row of pictures
+    // says nothing at all to one.
     var wrapped = [];
-    Layout.DESCRIPTION.forEach(function (sentence) {
+    Layout.DESCRIPTION.slice(1).forEach(function (sentence) {
         Layout.wrap(ctx, sentence, available).forEach(function (text) {
             wrapped.push(text);
         });
     });
     ctx.font = fonts.score;
 
+    // The legend stands where that sentence stood, and the rest flows under
+    // it on the same rhythm.
+    var legend = Layout.legendRow(ctx, width, line, fontSize);
+    var legendTop = menuTop + line * 0.3;
+    legend.y = legendTop + legend.height / 2;
+    legend.chip.y = legendTop - line * 0.25;
+    legend.chip.height = legend.height + line * 0.5;
+
+    var textTop = legendTop + legend.height + line * 1.35;
     var description = wrapped.map(function (text, d) {
-        return { x: left, y: menuTop + line * (1 + d * G.descriptionStep), text: text };
+        return { x: left, y: textTop + line * (d * G.descriptionStep), text: text };
     });
     var menuBottom = buttons.length
         ? rowTop + buttonHeight
-        : menuTop + line * (description.length * G.descriptionStep + 0.4);
+        : textTop + line * ((description.length - 1) * G.descriptionStep + 0.6);
 
     // Drawn rect and hit rect are the same object now: buttons are laid out
     // rather than bracketing substrings, so both directions can meet the touch
@@ -623,6 +648,8 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
             rows: rows
         },
 
+        legend: legend,
+
         hud: {
             y: line * G.rows.hud,
 
@@ -636,6 +663,10 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
                 radius: line * G.hudPlate.radius
             },
 
+            // Small enough to sit inside the chip, big enough to read as a
+            // balloon rather than a dot.
+            life: line * 0.3,
+
             caught: width * G.columns.hudCaught,
             level: width * G.columns.hudLevel,
             time: width * G.columns.hudTime
@@ -648,6 +679,63 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
 
         targets: targets
     };
+};
+
+/**
+ * Where each icon and each verdict sits, centred as one row.
+ *
+ * Measured rather than spaced by eye, because the four pairs are a single
+ * object as far as the composition is concerned: it is centred as a whole, so
+ * the row has to be laid out before anybody knows where it starts.
+ *
+ * It shrinks to fit rather than wrapping. A legend that breaks over two lines
+ * stops reading as one sentence, and four pairs on a phone is the narrowest
+ * case there is -- so on a screen too tight for them at full size the icons
+ * get smaller together.
+ */
+Layout.legendRow = function (ctx, width, line, fontSize) {
+    var G = Layout.GRID;
+    var available = width * (1 - 2 * G.columns.margin);
+    var icon = line * G.legend.icon;
+    var gap = line * G.legend.gap;
+    var pair = line * G.legend.pair;
+
+    // Per pair: the icon's own box either side of its centre, the gap, and a
+    // slot for the verdict. This counted the verdict's slot out and the chip
+    // came up an icon short for every pair in the row.
+    var each = icon * 3 + gap;
+    var wide = Icons.RULES.length * each + (Icons.RULES.length - 1) * pair;
+
+    if (wide > available) {
+        var squeeze = available / wide;
+        icon *= squeeze;
+        gap *= squeeze;
+        pair *= squeeze;
+        wide = available;
+    }
+
+    // Left, with everything else. Centred, it floated away from the block it
+    // belongs to and read as decoration rather than as the line it replaced.
+    var x = width * G.columns.margin;
+    var row = {
+        icon: icon,
+        height: icon * 2,
+        items: [],
+        chip: { x: x - icon * 0.6, y: 0, width: wide + icon * 1.2, height: 0,
+                radius: line * G.footer.radius }
+    };
+
+    Icons.RULES.forEach(function (rule) {
+        row.items.push({
+            kind: rule.kind,
+            wanted: rule.wanted,
+            iconX: x + icon,
+            verdictX: x + icon * 2 + gap + icon * 0.5
+        });
+        x += icon * 2 + gap + icon + pair;
+    });
+
+    return row;
 };
 
 /** Traces a rounded rectangle. Path2D.roundRect is too new to rely on. */

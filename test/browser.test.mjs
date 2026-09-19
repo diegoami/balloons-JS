@@ -739,14 +739,26 @@ await t('there are no buttons left, and the name line is the only exception', as
   const m = await page.evaluate(() => ({
     buttons: Game.layout.menu.buttons.length,
     targets: Game.layout.targets.map(t => t.id),
-    lines: Layout.DESCRIPTION.length,
-    described: Game.layout.description.length
+    sentences: Layout.DESCRIPTION,
+    drawn: Game.layout.description.map(d => d.text),
+    legend: Game.layout.legend.items.map(i => i.kind),
+    rules: Icons.RULES.map(r => r.kind)
   }));
   assert.equal(m.buttons, 0, 'a button came back');
   assert.deepEqual(m.targets, ['replay', 'player', 'start'],
     'the only named targets should be the high-score line and the two chips');
-  assert.equal(m.described, m.lines,
+
+  // The rules sentence is NOT drawn: the legend of icons stands where it did.
+  // It stays in Layout.DESCRIPTION regardless, because that is what is read
+  // aloud, and a row of pictures says nothing at all to a screen reader.
+  assert.ok(!m.drawn.join(' ').includes('repel'),
+    'the rules sentence is drawn as well as being shown as icons');
+  assert.ok(m.drawn.join(' ').includes('Twenty levels'),
+    'the sentences that are not the legend stopped being drawn');
+  assert.ok(m.drawn.length >= m.sentences.length - 1,
     'the description has no baseline for every line it wants to draw');
+  assert.deepEqual(m.legend, m.rules,
+    'the legend does not show what the rules say it should');
   await context.close();
 });
 
@@ -4383,16 +4395,17 @@ await t('the HUD stands on the words rather than lying across the sky', async ()
   // And the narrowest window the game supports, where the runs crowd together
   // and become a bar again.
   //
-  // 320 rather than 390: WHICH width crowds depends on the face, and this
-  // asserted 390 until the font changed and a narrower one stopped touching
-  // there. The behaviour is the thing — that runs which would overlap are
-  // merged instead — not the width it starts at.
+  // The narrowest window, with the longest score and the most lives it can
+  // hold. WHICH width crowds depends on the face and on how wide the runs are
+  // — this asserted 390 with Verdana and a spelled-out life count, and both of
+  // those have since changed. The behaviour is the thing: runs that would
+  // overlap get merged instead. So it is driven to the case that must crowd.
   const narrow = await page.evaluate(() => {
     const was = { w: Game.width, h: Game.height };
     Object.defineProperty(window, 'innerWidth', { value: 320, configurable: true });
     Object.defineProperty(window, 'innerHeight', { value: 568, configurable: true });
     Game.applyCanvasSize();
-    Game.score = 1420; Game.livesLost = 2; Game.allowance = 7;
+    Game.score = 99999; Game.livesLost = 9; Game.allowance = 9;
     Paint.sky(Game);
     const grounds = Paint.hudGround(Game);
     const got = {

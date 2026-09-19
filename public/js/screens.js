@@ -61,6 +61,7 @@ Screens.title = {
         Paint.entities(game);
         Paint.panel(game, game.layout.splash);
         Paint.intro(game, Layout.INTRO_TEXT);
+        Paint.legend(game);
         Paint.description(game);
         Paint.menu(game);
         Paint.startLevel(game);
