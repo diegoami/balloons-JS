@@ -147,9 +147,14 @@ await t('font size is bounded by width, by height and by the menu', async () => 
   // written down here as well, and the moment heightDivisor was tuned this
   // test failed for asserting the old rule — which is exactly what the comment
   // below says it was built not to do.
+  // Each case is one where its bound wins CLEARLY. 1000x700 used to be in
+  // here and it sat on the knife edge — width gave 30.0 and height 29.3 — so
+  // the moment heightDivisor moved by one the winner flipped and this failed.
+  // A case that close is not testing which bound applies, it is testing
+  // arithmetic to three significant figures.
   const cases = [
-    { width: 1000, height: 700, bound: 'width' },
-    { width: 500, height: 700, bound: 'width' },
+    { width: 1000, height: 1400, bound: 'width' },
+    { width: 500, height: 1400, bound: 'width' },
     { width: 1920, height: 1080, bound: 'height' },
     { width: 1920, height: 700, bound: 'height' },
     { width: 1920, height: 400, bound: 'height' },
@@ -173,6 +178,13 @@ await t('font size is bounded by width, by height and by the menu', async () => 
 
     assert.equal(won, c.bound,
       `at ${c.width}x${c.height} the ${won} bound decides, not the ${c.bound} one`);
+
+    // And it wins by enough that tuning a constant cannot flip it without
+    // somebody meaning to. This is the guard that was missing.
+    const spread = Math.abs(byWidth - byHeight) / Math.min(byWidth, byHeight);
+    assert.ok(c.bound === 'minimum' || spread > 0.2,
+      `at ${c.width}x${c.height} the two bounds are within ` +
+      `${(spread * 100).toFixed(0)}% of each other, so which one wins is luck`);
     assert.equal(m.size, predicted,
       `at ${c.width}x${c.height} the rule predicts ${predicted}px but got ${m.size}px`);
     await context.close();
