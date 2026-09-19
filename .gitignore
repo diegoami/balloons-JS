@@ -174,3 +174,8 @@ node_modules/
 .env
 .env.*
 npm-debug.log*
+
+# Android: the SDK path is this machine's, and the signing key is yours.
+android/local.properties
+android/keystore.properties
+android/*.jks

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Only to reach the leaderboard. The game itself is on the device and
+         plays with the radio off. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Balloons">
+
+        <!-- THE LINE THAT KEEPS A GAME ALIVE THROUGH A ROTATION is
+             android:configChanges below.
+
+             Without it Android destroys and recreates this activity when the
+             phone turns, which reloads the WebView and throws away the run in
+             progress. With it the activity survives, the page gets a resize
+             event, and the game re-anchors every balloon to the new shape of
+             the sky - keeping its share of the window and its time to the top.
+
+             (An XML comment cannot sit between an element's attributes, which
+             is where this one was and why the manifest would not parse.) -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:hardwareAccelerated="true"
+            android:screenOrientation="fullSensor"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Balloons"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

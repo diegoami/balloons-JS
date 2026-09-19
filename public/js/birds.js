@@ -191,12 +191,21 @@ var birdConstructor = function (xcoord, ycoord, radius, speed, fromLeft) {
             : null;
     };
 
-    that.resized = function (game) {
-        // Nothing to re-anchor: a bird is mid-flight and will be off the far
-        // side shortly. Its height is left where it is rather than scaled,
-        // because moving it under the player's finger is worse than a bird
-        // flying slightly high on a window that just changed shape.
+    that.resized = function (game, scale) {
         that.xmax = game.width;
+
+        // A bird IS re-anchored, unlike the note that used to be here.
+        //
+        // That note was about a window nudged a few pixels, where moving a
+        // bird under the player's finger is worse than letting it fly a little
+        // high. A phone turned upright is not a nudge: it more than doubles
+        // the height and halves the width, and a bird left in place is either
+        // off the side entirely or somewhere no part of the sky corresponds
+        // to. Keeping its share of the window is the smaller lie.
+        if (scale) {
+            that.xcoord *= scale.x;
+            that.ycoord *= scale.y;
+        }
     };
 
     return that;

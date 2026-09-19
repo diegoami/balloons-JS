@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The top of the morning sky from sky.js, so the launch window matches
+         the first frame the game draws. -->
+    <color name="sky">#1E6FB4</color>
+</resources>
