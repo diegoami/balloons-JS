@@ -6,7 +6,37 @@ var BALLOON_SIZE_SPREAD = 50;
 
 /** A bird's body radius and its speed across the screen, before scaling. */
 var BIRD_BASE_SIZE = 13;
-var BIRD_SPEED = 7;
+
+/**
+ * How fast a bird crosses, before scaling.
+ *
+ * It was 7, which crossed a desktop window in under five seconds. Measured,
+ * that made the whole mechanic inert: over 490 played taps not one landed on
+ * a bird, because the nearest one was a median 400px away and 95% of taps had
+ * none within eighty. A bird you cannot touch costs nothing to avoid, so
+ * "do not touch the birds" was a rule the game announced and never enforced.
+ *
+ * Slower is most of the fix. It does not make a bird harder to see -- it is
+ * visible for LONGER -- it just means the sky it is crossing is a sky the
+ * player is still working in when it gets there.
+ */
+var BIRD_SPEED = 4.5;
+
+/**
+ * How often a bird crosses where the taps are rather than anywhere.
+ *
+ * The band was a fixed 0.18 to 0.73 of the height, and the taps are not: a
+ * player reaches for whatever is closest to escaping, which puts the median
+ * tap at 0.06 of the height when the sky is thin. Birds were flying through
+ * the part of the screen nobody was aiming at.
+ *
+ * Sampling the height of a balloon that is ALREADY well up is a sampler for
+ * where the taps are going, and it adapts on its own to how full the sky is,
+ * which a second hardcoded band would not. The rest of the time it still flies
+ * anywhere, because a bird that only ever appeared on the danger line would be
+ * a tell rather than a hazard.
+ */
+var BIRD_INTERCEPT = 0.6;
 
 /**
  * Balloon speed is expressed for a screen this tall and scaled from there.
@@ -744,10 +774,31 @@ Game.spawnBird = function () {
     var fromLeft = Math.random() < 0.5;
     var band = this.height * 0.55;
     var top = this.height * 0.18;
+    var height = top + Math.random() * band;
+
+    // Most of the time, cross where somebody is about to be tapping. It still
+    // enters a full wingspan off the canvas, so it is in sight for the whole
+    // way in — the fairness rule this file is built on is that a bird is never
+    // somewhere you had already committed to before you could see it.
+    var climbing = this.entities.filter(function (e) {
+        return e.kind === "balloon" && e.ycoord < this.height * 0.65;
+    }, this);
+
+    if (climbing.length && Math.random() < BIRD_INTERCEPT) {
+        var plate = this.layout.hud.plate;
+        height = Math.min(
+            Math.max(
+                climbing[Math.floor(Math.random() * climbing.length)].ycoord,
+                // Clear of the HUD, or it is a hazard drawn behind a chip.
+                plate.y + plate.height + radius * 1.5
+            ),
+            this.height * 0.85
+        );
+    }
 
     this.add(birdConstructor(
         fromLeft ? -span : this.width + span,
-        top + Math.random() * band,
+        height,
         radius,
         BIRD_SPEED * this.ratio,
         fromLeft
