@@ -1,4 +1,4 @@
-# Balloons
+# Baloncelli
 
 Pop the balloons before they get away. Twenty levels, twenty seconds each,
 five lives. It can be won.
@@ -33,7 +33,7 @@ The app is about 2.7 MB and **plays with the radio off**. The whole game is on
 the device; it only reaches the network to fetch and post high scores, and it
 works perfectly well without that.
 
-1. Download `app-release.apk` from [the latest release](../../releases/latest).
+1. Download `baloncelli-v2.0.apk` from [the latest release](../../releases/latest).
 2. Open it. Android will say it cannot install apps from this source — that is
    the normal warning for anything not from the Play Store.
 3. Tap **Settings** on that prompt, allow installs from whichever app you
@@ -59,6 +59,6 @@ nobody is being charged for.
 
 ## Licence
 
-The game is by [Diego Amicabile](https://github.com/diegoami). The typeface is
+Baloncelli is by [Diego Amicabile](https://github.com/diegoami). The typeface is
 [Fredoka](https://fonts.google.com/specimen/Fredoka), used under the SIL Open
 Font License.
