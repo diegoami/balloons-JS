@@ -119,17 +119,48 @@ function byScoreDescending(a: ScoreEntry, b: ScoreEntry): number {
   return b.score - a.score;
 }
 
+/**
+ * Headers that let something other than the website talk to this.
+ *
+ * The game and this function share an origin, so the browser never needed
+ * these. An Android build that bundles its assets does not share an origin
+ * with anything -- it is loaded from the device -- so without them the app
+ * could not read the board or post to it.
+ *
+ * `*`, and it costs nothing, because CORS IS NOT A LOCK. It is a rule browsers
+ * apply to each other; it has never stopped curl, and this endpoint has always
+ * been open to anything that can make an HTTP request. What actually guards
+ * the board is that every field is validated and clamped above: a score has to
+ * be an integer inside MAX_SCORE, a level inside the ladder, a win only at the
+ * top of it, and a name is cleaned. Opening it to other origins does not make
+ * it one bit more forgeable than it already was.
+ */
+const CORS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-headers": "content-type",
+  "access-control-max-age": "86400",
+};
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       "content-type": "application/json",
       "cache-control": "no-store",
+      ...CORS,
     },
   });
 }
 
 export default async (req: Request, context: Context) => {
+  // The preflight, which a cross-origin POST of JSON always makes first. It is
+  // answered before the store is touched: it is a question about permission,
+  // not about scores.
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS });
+  }
+
   const store = getScoreStore(context);
   const existing =
     ((await store.get(BOARD, { type: "json" })) as ScoreEntry[] | null) ?? [];
