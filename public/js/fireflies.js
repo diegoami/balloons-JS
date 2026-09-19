@@ -220,9 +220,18 @@ var fireflyConstructor = function (xcoord, ycoord, radius, drift, xmax, ymax) {
         return that.ycoord < -that.radius * FIREFLY_GLOW * 2 ? "left" : null;
     };
 
-    that.resized = function (game) {
+    that.resized = function (game, scale) {
         that.xmax = game.width;
         that.ymax = game.height;
+
+        // Scaled first, then clamped. Clamping alone piled every firefly onto
+        // the new edge when a window got narrower, which is the one place they
+        // are least use as an obstacle.
+        if (scale) {
+            that.xcoord *= scale.x;
+            that.ycoord *= scale.y;
+        }
+
         var edge = that.radius * FIREFLY_GLOW;
         that.xcoord = Math.min(that.xcoord, Math.max(edge, game.width - edge));
         that.ycoord = Math.min(that.ycoord, Math.max(edge, game.height - edge));

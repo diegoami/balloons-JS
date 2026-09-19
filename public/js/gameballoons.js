@@ -402,9 +402,37 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
         return that.ycoord <= ESCAPE_COORDS ? "escaped" : null;
     };
 
-    /** The width it bounces off is the width of the window. */
-    that.resized = function (game) {
+    /**
+     * The window changed shape, so keep the share of it rather than the pixels.
+     *
+     * Only `xmax` used to move. Measured, turning a phone upright mid-game put
+     * every balloon in the sky PAST THE RIGHT EDGE -- invisible, untappable,
+     * and still costing a life each when they reached the top. And because the
+     * rise was worked out for the old height, a balloon that crossed in 15.8
+     * seconds took 41.2 after the turn.
+     *
+     * So the position scales with the window and so does the rise. A balloon
+     * that was a third of the way up and a third of the way across is still
+     * exactly that, and still takes the same time to reach the top -- which is
+     * the promise `speedScale` makes at spawn and had no way of keeping
+     * afterwards.
+     */
+    that.resized = function (game, scale) {
         that.xmax = game.width;
+
+        if (!scale) {
+            return;
+        }
+
+        that.xcoord *= scale.x;
+        that.ycoord *= scale.y;
+        that.delta *= scale.y;
+        that.xdelta *= scale.x;
+
+        // The height it spawned at is what the fade measures from, so it has
+        // to travel with everything else or a balloon halfway up reads as
+        // having barely started.
+        spawnY *= scale.y;
     };
 
     return that;

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- No action bar: the game draws its own everything. The window is the
+         sky's colour at level one, so the moment before the page paints is
+         not a white flash. -->
+    <style name="Theme.Balloons" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/sky</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:statusBarColor">@color/sky</item>
+        <item name="android:navigationBarColor">@color/sky</item>
+    </style>
+</resources>

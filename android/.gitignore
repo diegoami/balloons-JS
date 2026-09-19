@@ -1,0 +1,12 @@
+# The signing key and its passwords never go in here.
+keystore.properties
+*.jks
+*.keystore
+
+.gradle/
+build/
+local.properties
+
+# The game, copied from public/ at build time. One source of truth lives in
+# public/; this is a build artefact.
+app/src/main/assets/www/
