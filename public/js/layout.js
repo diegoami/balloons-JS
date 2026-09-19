@@ -27,20 +27,32 @@ var Layout = {};
 Layout.INTRO_TEXT = "Pop the balloons before they get away";
 
 /**
- * The rules, in one line, and what a run is in another.
+ * The rules, in one line, what a run is in another, and how to play it best.
  *
  * The first line replaces the break between levels. That screen stopped the
  * game every time something new arrived to explain it, which was the right
  * instinct and the wrong place: four verbs cover every object in the game, and
  * a player who has read them once does not need the game to stop and say them
- * again. "Spare" does the work of two rules at once — a bird and a firefly are
- * both things you leave alone, for different reasons that do not matter while
- * you are playing.
+ * again. "Save" does the work of two rules at once — a bird and a firefly are
+ * both things you leave alone, and since this phase both of them cost a life,
+ * it is now literally true rather than a shorthand.
+ *
+ * The same sentence greets the countdown, because the countdown is the other
+ * moment a new player is looking at nothing else.
+ *
+ * The third line is advice and it is earned: the ladder is calibrated against
+ * about 2.1 taps a second from ONE pointer, and a touchscreen lets you use two
+ * thumbs. Measured, that is the difference between dying around level 8 and
+ * finishing every run — which is why the board records which was used.
  */
 Layout.DESCRIPTION = [
-    "Pop the balloons, send back the saucers, spare the birds and the fireflies.",
-    "Twenty levels, twenty seconds each, five lives. It can be won."
+    "Pop up the balloons, repel the saucers, save the birds and the fireflies.",
+    "Twenty levels, twenty seconds each, five lives. It can be won.",
+    "Best played on a tablet."
 ];
+
+/** How much of the width the countdown's line of instruction may use. */
+Layout.COUNTDOWN_WIDTH = 0.86;
 
 Layout.START_TEXT = "Tap anywhere to play";
 Layout.RESUME_TEXT = "Resume";
@@ -49,7 +61,7 @@ Layout.RESUME_TEXT = "Resume";
 Layout.START_FROM_ONE = "From level 1";
 Layout.START_PREFIX = "From level ";
 Layout.PRACTICE_WARNING = "Practice run — this score will not be saved.";
-Layout.PLAY_INSTRUCTION = "Pop the balloons!";
+Layout.PLAY_INSTRUCTION = Layout.DESCRIPTION[0];
 Layout.PAUSED_TEXT = "Paused";
 Layout.PAUSED_HINT = "You looked away, so the game waited.";
 Layout.HIGH_SCORES_TEXT = "High Scores";
@@ -164,16 +176,25 @@ Layout.GRID = {
     minTouchTarget: 44,
 
     /**
-     * Font size is capped so the deepest row still lands on screen: the
-     * deepest baseline sits at about 15.6x the font size, so 19 leaves the
-     * composition occupying roughly 82% of the height it is given.
+     * Font size is capped so the deepest row still lands on screen. Measured
+     * across every viewport the tests cover, the deepest baseline sits at
+     * 18.7x the font size on a wide window and 21.7x on a phone, where the
+     * description wraps to five lines — so this leaves the composition about
+     * 88% of the height it is given.
+     *
+     * It was 19, from a deepest baseline of 15.6x, and a third line of
+     * description moved that: at 1280x720 the last score row landed 9px BELOW
+     * the name line, and at 2560x1440 it was 24px. The number is measured
+     * rather than reasoned, because the description wraps and how many lines
+     * that comes to depends on the width, the font and which machine is
+     * rendering it.
      *
      * What it is given is the height less the name line, which sits on the
      * bottom edge outside the flow and takes a touch target plus a little air.
      * Without that reservation the flow ran into the footer on a letterboxed
      * window: at 1920x400 the last score row landed 5px below the name line.
      */
-    heightDivisor: 19,
+    heightDivisor: 21,
     footerReserve: 56
 };
 

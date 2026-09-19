@@ -283,15 +283,33 @@ Paint.countdown = function (game, remaining) {
     ctx.save();
     ctx.textAlign = "center";
 
-    // The game has never told anyone what to do. This is the one line it gets,
-    // and the countdown is when a new player is looking at nothing else.
+    // The game has never told anyone what to do. This is the line it gets, and
+    // the countdown is when a new player is looking at nothing else.
+    //
+    // Wrapped, because it is the whole rule now rather than three words: set
+    // as one centred line it ran off both sides of a phone.
     ctx.font = game.layout.fonts.label;
     ctx.fillStyle = game.palette.inkSoft;
-    ctx.fillText(
-        Layout.PLAY_INSTRUCTION,
-        game.layout.countdown.x,
-        game.layout.countdown.y - game.layout.line * 1.5
-    );
+    var told = Layout.wrap(
+        ctx, Layout.PLAY_INSTRUCTION, game.width * Layout.COUNTDOWN_WIDTH);
+
+    // Clear of the digit, worked out from the digit rather than guessed. The
+    // countdown glyph is 2.4x the base size and a capital reaches about three
+    // quarters of its size above its own baseline, so it occupies that much
+    // room upward; the gap was a flat 1.5 line heights and the last line of a
+    // wrapped instruction sat straight through the 3.
+    var clears = (Layout.GRID.type.countdown * 0.75) / Layout.GRID.lineRatio + 0.45;
+
+    told.forEach(function (line, i) {
+        ctx.fillText(
+            line,
+            game.layout.countdown.x,
+            // Stacked upward, so the digit stays put however many lines the
+            // sentence needs.
+            game.layout.countdown.y -
+                game.layout.line * (clears + (told.length - 1 - i))
+        );
+    });
 
     ctx.font = game.layout.fonts.countdown;
     ctx.fillStyle = game.palette.accent;

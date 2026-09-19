@@ -128,7 +128,7 @@ Announce.arrivals = function (game) {
         return " Janky balloons: some of them wander.";
     }
     if (rung.fireflies > 0 && !(under.fireflies > 0)) {
-        return " Fireflies: harmless, but taps land on them.";
+        return " Fireflies: do not touch them either.";
     }
     if (rung.birds > 0 && !(under.birds > 0)) {
         return " Birds: do not touch them.";
@@ -176,6 +176,19 @@ Announce.bossFired = function (game) {
 Announce.touchedBird = function (game) {
     Announce.say(
         "You touched a bird. " + game.livesLost + " of " + game.allowance +
+        " lost."
+    );
+};
+
+/**
+ * A firefly was touched.
+ *
+ * Said every time, like a bird, and for the same reason: the cost is a life
+ * and the cause is a rule the player may not have absorbed yet.
+ */
+Announce.touchedFirefly = function (game) {
+    Announce.say(
+        "You touched a firefly. " + game.livesLost + " of " + game.allowance +
         " lost."
     );
 };

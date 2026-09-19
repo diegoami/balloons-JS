@@ -121,12 +121,16 @@ var bounced = function (x, max) {
  * in a hundred qualifies there. The level that ANNOUNCES fading balloons is
  * the one that can least afford to be short of them, and it is what sets this
  * number: forty tries delivered two thirds of the share its row asks for, a
- * hundred and sixty delivered five sixths, and this many delivers all of it.
+ * hundred and sixty delivered five sixths, four hundred delivered all of it
+ * while the row asked for one balloon in eight -- and then the row was raised
+ * to one in four after a playtest found the feature too rare to notice, and
+ * four hundred dropped back to 78%. The search has to be as deep as the share
+ * is wide.
  *
  * Brute force is the right tool here. Colours are free, and a try that is
  * going to fail costs two contrast comparisons before it gives up.
  */
-var FADE_TRIES = 400;
+var FADE_TRIES = 1500;
 
 /** The colour an ordinary balloon gets: any of them, with no thought at all. */
 var randomBalloonColour = function () {

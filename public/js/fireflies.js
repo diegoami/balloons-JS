@@ -9,14 +9,27 @@
  * You are meant to see it, understand it immediately, and then lose taps to it
  * anyway, because it is drifting through the space your finger is aiming at.
  *
- * WHAT IT COSTS IS PRECISION, NOT RECOGNITION
+ * WHAT IT COSTS IS PRECISION
  *
- * It is a valid tap target that does nothing: taps land on it and are gone. The
- * nearest-centre dispatch built in phase 1 means a firefly hovering beside a
- * balloon quietly takes every sloppy tap aimed at that balloon. So the tax
- * falls on aim — the one part of the supply side nothing else in the game
- * touches. It is emphatically NOT a disguise: making it look like a balloon
- * would be a trick, and a trick is only clever once.
+ * It is a valid tap target, and touching one costs a life. The nearest-centre
+ * dispatch built in phase 1 means a firefly hovering beside a balloon quietly
+ * takes every sloppy tap aimed at that balloon, so the tax falls on aim — the
+ * one part of the supply side nothing else in the game touches. It is
+ * emphatically NOT a disguise: making it look like a balloon would be a trick,
+ * and a trick is only clever once.
+ *
+ * It used to cost only the tap. That was the wrong call and playing it showed
+ * why: a tap that vanishes into a firefly is indistinguishable from a tap that
+ * missed, so the player learns nothing and the sky's prettiest thing turns out
+ * to be free. A life makes "leave her alone" a rule rather than a suggestion.
+ *
+ * IT CANNOT CHARGE YOU TWICE FOR ONE MISTAKE
+ *
+ * A firefly stays where a bird leaves, so a burst of taps at the same balloon
+ * could hit the same firefly three times and take three lives for one error of
+ * aim. It is immune while it is flaring — which is exactly as long as it is
+ * visibly announcing that it got you, and long enough for a person to see it
+ * and stop.
  *
  * AND UNLIKE A BIRD, THEY STAY
  *
@@ -33,7 +46,24 @@ var FIREFLY_MIN_RADIUS = 13;
 /** How far the glow reaches past the body, as a multiple of the radius. */
 var FIREFLY_GLOW = 2.2;
 
-/** Steps per pulse. Slow enough to read as breathing rather than blinking. */
+/**
+ * How long a startled firefly stays startled, and how hard it bolts.
+ *
+ * The flinch used to be six steps of being 25% bigger. That is invisible, and
+ * measurably so: it breathes between 0.78 and 1.00 of its size all on its own,
+ * so a quarter more size is inside the range it moves through anyway -- and
+ * two hundred milliseconds is shorter than the quarter second a person needs
+ * to notice anything at all. A player tapping one saw nothing happen and
+ * concluded, correctly on the evidence, that nothing had.
+ *
+ * So the answer is not a bigger number on the same dial. It flares white and
+ * BOLTS, which is something the idle pulse never does, and it does it for long
+ * enough to be seen.
+ */
+var FIREFLY_FLINCH_STEPS = 16;
+var FIREFLY_BOLT = 3.2;
+
+/** How long the pulse takes, in steps. Slow enough to read as breathing. */
 var FIREFLY_PULSE_STEPS = 34;
 
 /** How fast it wanders, before scaling. Slower than anything else in the sky. */
@@ -83,8 +113,16 @@ var fireflyConstructor = function (xcoord, ycoord, radius, drift, xmax, ymax) {
             turnIn = FIREFLY_TURN_STEPS;
         }
 
-        that.xcoord += Math.cos(heading) * speed;
-        that.ycoord += Math.sin(heading) * speed;
+        // Startled, it bolts, and the bolt dies away over the flinch. This is
+        // the part that makes a tap on a firefly legible as a tap on a
+        // firefly: the thing you hit gets out of the way, so the next tap
+        // finds the balloon behind it rather than eating the same tax twice.
+        var bolt = flinch > 0
+            ? 1 + (FIREFLY_BOLT - 1) * (flinch / FIREFLY_FLINCH_STEPS)
+            : 1;
+
+        that.xcoord += Math.cos(heading) * speed * bolt;
+        that.ycoord += Math.sin(heading) * speed * bolt;
 
         // It stays in the sky rather than wandering off it. Turning at the
         // edge is what makes it something you have to work around instead of
@@ -113,8 +151,11 @@ var fireflyConstructor = function (xcoord, ycoord, radius, drift, xmax, ymax) {
         var ctx = game.ctx;
         var palette = game.palette;
         var pulse = 0.78 + 0.22 * Math.sin(steps / FIREFLY_PULSE_STEPS * Math.PI * 2);
-        var r = that.radius * pulse * (flinch > 0 ? 1.25 : 1);
-        var reach = r * FIREFLY_GLOW;
+        // The flare, dying away over the flinch. It reaches well past anything
+        // the pulse does -- that is the whole point of it.
+        var startled = flinch / FIREFLY_FLINCH_STEPS;
+        var r = that.radius * pulse * (1 + startled);
+        var reach = r * FIREFLY_GLOW * (1 + startled * 0.8);
 
         ctx.save();
         ctx.translate(that.xcoord, that.ycoord);
@@ -128,9 +169,14 @@ var fireflyConstructor = function (xcoord, ycoord, radius, drift, xmax, ymax) {
         ctx.arc(0, 0, reach, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = palette.fireflyCore;
+        // White at the moment of the tap, its own colour again by the end of
+        // it. A hue the firefly never otherwise wears is what carries "that
+        // landed on me" at a glance.
+        ctx.fillStyle = startled > 0
+            ? "rgba(255, 255, 255, " + (0.35 + 0.65 * startled).toFixed(3) + ")"
+            : palette.fireflyCore;
         ctx.beginPath();
-        ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2);
+        ctx.arc(0, 0, r * (0.5 + startled * 0.35), 0, Math.PI * 2);
         ctx.fill();
 
         ctx.restore();
@@ -151,7 +197,7 @@ var fireflyConstructor = function (xcoord, ycoord, radius, drift, xmax, ymax) {
     };
 
     /**
-     * Tapped. That is the whole cost: the tap.
+     * Tapped. That costs a life, once per flare.
      *
      * No life. The bird punishes touching and the firefly punishes carelessness,
      * and if both cost a life the second one is not a new idea. It flinches so
@@ -159,7 +205,13 @@ var fireflyConstructor = function (xcoord, ycoord, radius, drift, xmax, ymax) {
      * response at all would read as the game having missed the input.
      */
     that.tapped = function (game) {
-        flinch = 6;
+        // Already flaring means this is the same mistake still being made, not
+        // a new one, so it is not charged again.
+        if (flinch <= 0) {
+            game.livesLost++;
+            Announce.touchedFirefly(game);
+        }
+        flinch = FIREFLY_FLINCH_STEPS;
         return false;
     };
 

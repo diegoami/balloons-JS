@@ -51,9 +51,9 @@
  *
  * `fireflies` is how many hover at that level. They are never removed and
  * never reach the top, so this is a population rather than a rate: the
- * spawner tops it up and that is all. They cost no lives and no taps of
- * their own, so they do not move the demand sum either -- what they cost is
- * the taps you aim near one and lose.
+ * spawner tops it up and that is all. They ask for no taps of their own, so
+ * they do not move the demand sum -- what they cost is the taps you aim near
+ * one and lose, and now a life with each of them.
  *
  * `birds` is the chance per step that a bird enters. A bird costs no taps —
  * you are meant to leave it alone — so it does not move the demand sum at all.
@@ -106,11 +106,14 @@ var Ladder = {};
  * teach the game, the odd levels tighten what you already have, and 19 and 20
  * add nothing new. They are the exam.
  *
- * `janky` STOPS CLIMBING at 14, where `fading` starts, and gives back some of
- * what it had. The ceiling belongs to the two of them together: a sky where
- * two balloons in three are awkward in one way or another stops reading as
- * "some of these are awkward" and starts reading as the game being unsteady.
- * Their sum runs from 0.20 at 12 to 0.56 at the top.
+ * `janky` FALLS BACK at 14, where `fading` starts, and keeps falling. The
+ * ceiling belongs to the two of them together: a sky where two balloons in
+ * three are awkward in one way or another stops reading as "some of these are
+ * awkward" and starts reading as the game being unsteady. Their sum runs from
+ * 0.20 at 12 to 0.56 at the top, and the split between them moved toward
+ * fading after a playtest: at the two to four balloons the sky actually holds,
+ * one fading balloon in eight meant whole levels went by without one being on
+ * screen at all, and the feature read as not being there.
  *
  * The spawn rate FALLS where a heavier balloon arrives — 0.0833 at 3, 0.0807 at
  * 4 — and that is not a mistake. A three-tap balloon costs three of the two
@@ -137,16 +140,16 @@ Ladder.LEVELS = [
     { level: 12, speed:  8.9, frequency: 0.0675, size: 0.68, reinforced: 0.25, armoured: 0.12, life: 1, birds: 0.006, bossAt: 4, bossEvery: 420, janky: 0.20,
       news: ["Janky balloons", "Some of them wander as they rise. They are bigger, too."] },
     { level: 13, speed:  9.4, frequency: 0.0656, size: 0.66, reinforced: 0.26, armoured: 0.13, birds: 0.007, bossAt: 4, bossEvery: 400, janky: 0.24 },
-    { level: 14, speed:  9.9, frequency: 0.0609, size: 0.64, reinforced: 0.26, armoured: 0.14, birds: 0.007, bossAt: 4, bossEvery: 390, janky: 0.26, fading: 0.12,
+    { level: 14, speed:  9.9, frequency: 0.0609, size: 0.64, reinforced: 0.26, armoured: 0.14, birds: 0.007, bossAt: 4, bossEvery: 390, janky: 0.18, fading: 0.24,
       news: ["Fading balloons", "Some of them thin out as they rise. Take them early."] },
-    { level: 15, speed: 10.4, frequency: 0.0587, size: 0.62, reinforced: 0.27, armoured: 0.15, life: 1, birds: 0.008, bossAt: 5, bossEvery: 380, janky: 0.27, fading: 0.14 },
+    { level: 15, speed: 10.4, frequency: 0.0587, size: 0.62, reinforced: 0.27, armoured: 0.15, life: 1, birds: 0.008, bossAt: 5, bossEvery: 380, janky: 0.19, fading: 0.26 },
     { level: 16, speed: 10.9, frequency: 0.0565, size: 0.60, reinforced: 0.27, armoured: 0.16, birds: 0.008, bossAt: 5, bossEvery: 370, fireflies: 2,
-      news: ["Fireflies", "Pretty, harmless, and in the way. Taps land on them."], janky: 0.28, fading: 0.16 },
-    { level: 17, speed: 11.4, frequency: 0.0543, size: 0.58, reinforced: 0.28, armoured: 0.17, birds: 0.009, bossAt: 5, bossEvery: 360, fireflies: 3, janky: 0.29, fading: 0.18 },
-    { level: 18, speed: 11.9, frequency: 0.0521, size: 0.56, reinforced: 0.28, armoured: 0.18, life: 1, birds: 0.009, bossAt: 6, bossEvery: 300, bossMark: 2, fireflies: 3, janky: 0.30, fading: 0.20,
+      news: ["Fireflies", "Pretty, and in the way. Touching one costs a life."], janky: 0.19, fading: 0.28 },
+    { level: 17, speed: 11.4, frequency: 0.0543, size: 0.58, reinforced: 0.28, armoured: 0.17, birds: 0.009, bossAt: 5, bossEvery: 360, fireflies: 3, janky: 0.20, fading: 0.30 },
+    { level: 18, speed: 11.9, frequency: 0.0521, size: 0.56, reinforced: 0.28, armoured: 0.18, life: 1, birds: 0.009, bossAt: 6, bossEvery: 300, bossMark: 2, fireflies: 3, janky: 0.21, fading: 0.31,
       news: ["A bigger saucer", "Eight taps, and it will not hold still."] },
-    { level: 19, speed: 12.4, frequency: 0.0500, size: 0.54, reinforced: 0.30, armoured: 0.19, birds: 0.010, bossAt: 6, bossEvery: 285, bossMark: 2, fireflies: 4, janky: 0.31, fading: 0.22 },
-    { level: 20, speed: 13.0, frequency: 0.0478, size: 0.52, reinforced: 0.30, armoured: 0.20, birds: 0.010, bossAt: 6, bossEvery: 270, bossMark: 2, fireflies: 4, janky: 0.32, fading: 0.24 }
+    { level: 19, speed: 12.4, frequency: 0.0500, size: 0.54, reinforced: 0.30, armoured: 0.19, birds: 0.010, bossAt: 6, bossEvery: 285, bossMark: 2, fireflies: 4, janky: 0.21, fading: 0.33 },
+    { level: 20, speed: 13.0, frequency: 0.0478, size: 0.52, reinforced: 0.30, armoured: 0.20, birds: 0.010, bossAt: 6, bossEvery: 270, bossMark: 2, fireflies: 4, janky: 0.22, fading: 0.34 }
 ];
 
 /**
