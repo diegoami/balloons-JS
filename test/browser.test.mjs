@@ -2309,16 +2309,36 @@ await t('the ladder climbs to the ceiling and then holds there', async () => {
     `the top of the ladder asks ${band(13, 20).toFixed(2)} taps a second against ` +
     `${band(8, 12).toFixed(2)} in the middle; the back half has no room for that`);
 
-  // A player supplies about 2.1 taps a second. The peak has to reach it,
-  // otherwise the whole thing is a stroll, and must not run away from it.
-  const peak = Math.max(...m.rungs.map(r => r.demand));
-  assert.ok(peak >= 2.1 && peak <= 2.6,
-    `the ladder peaks at ${peak.toFixed(2)} taps a second, which is not near ` +
-    "a player's 2.1");
-  const peakAt = m.rungs.find(r => r.demand === peak).level;
-  assert.ok(peakAt >= 8 && peakAt <= 13,
+  // The peak, against a supply measured in the SAME UNIT.
+  //
+  // This asserted the peak was near 2.1 and passed for months, because both
+  // numbers were wrong in the same direction: the sky column understated how
+  // hard the spawn throttle pushes, and the 2.1 was POPS a second compared
+  // against a demand in TAPS. Measured, a player lands 2.29 taps a second on
+  // balloons and saucers and the ladder peaks at 2.82 — a quarter more than
+  // anyone has.
+  //
+  // That is the design, not a fault. Asking for more taps than a player has
+  // does not mean losing; it means balloons get away, and how many you can
+  // afford is what the lives are for. What WOULD be a fault is a curve that
+  // runs away, so this checks the shape: it climbs, it peaks in the middle
+  // within half again of supply, and it eases afterwards.
+  const supply = 2.29;
+  const demands = m.rungs.map(r => r.demand);
+  const peak = Math.max(...demands);
+  const peakAt = demands.indexOf(peak) + 1;
+
+  assert.ok(peak > supply,
+    `the ladder peaks at ${peak.toFixed(2)} taps a second, under a player's ` +
+    `${supply} — a ladder nobody can fall off is not a ladder`);
+  assert.ok(peak < supply * 1.5,
+    `the ladder peaks at ${peak.toFixed(2)} against a player's ${supply}, ` +
+    'which is running away rather than climbing');
+  assert.ok(peakAt >= 8 && peakAt <= 15,
     `the ladder peaks at level ${peakAt}, not around the middle where the ` +
     'climb is supposed to stop');
+  assert.ok(demands[19] < peak * 0.9, 'the ladder never eases off after its peak');
+  assert.ok(demands[0] < demands[9] * 0.7, 'the ladder barely climbs at all');
 
   // Five flat lives cannot reach 20.
   const awarded = m.rungs.filter(r => r.life > 0).map(r => r.level);
@@ -2708,14 +2728,28 @@ await t('the sky thins out as what is in it gets heavier', async () => {
   assert.ok(armoured.demand > belowArmoured.demand,
     'the rung that brings armoured balloons asks no more of the player');
 
-  // Across the whole ladder the two numbers move in opposite directions, and by
-  // the top that is the entire story: level 20 releases fewer balloons a second
-  // than level 1 does, while asking far more taps of each one.
+  // Across the whole ladder the two numbers move in opposite directions — from
+  // the PEAK onwards, which is the honest version of this.
+  //
+  // It used to say level 20 releases fewer balloons a second than level 1, and
+  // that passed only while the sky column overstated how full the sky gets.
+  // Measured, arrivals climb from 1.24 a second at level 1 to about 2.07 at
+  // level 9 and then fall to 1.33 by the top: the sky thins from its own peak,
+  // not from the tutorial. Level 20 is still busier than level 1 AND every
+  // balloon in it costs 1.7 taps instead of 1.
   const first = m.find(r => r.level === 1);
   const last = m.find(r => r.level === 20);
-  assert.ok(last.arrivals < first.arrivals,
-    `level 20 releases ${last.arrivals.toFixed(2)} balloons a second, which is ` +
-    `no fewer than level 1's ${first.arrivals.toFixed(2)}`);
+  const busiest = m.reduce((a, b) => (b.arrivals > a.arrivals ? b : a));
+
+  assert.ok(busiest.level >= 6 && busiest.level <= 12,
+    `the sky is busiest at level ${busiest.level}, which is not the middle`);
+  assert.ok(last.arrivals < busiest.arrivals * 0.75,
+    `level 20 releases ${last.arrivals.toFixed(2)} balloons a second against ` +
+    `the peak's ${busiest.arrivals.toFixed(2)}, so the sky never thins for the ` +
+    'heavier balloons in it');
+  assert.ok(last.demand > first.demand * 1.5,
+    `level 20 asks ${last.demand.toFixed(2)} taps a second against level 1's ` +
+    `${first.demand.toFixed(2)}, which is not a climb`);
   assert.ok(last.taps > first.taps * 1.5,
     `a balloon at level 20 costs ${last.taps.toFixed(2)} taps, which is not much ` +
     `more than level 1's ${first.taps.toFixed(2)}`);

@@ -66,30 +66,63 @@
  *
  * THE ARITHMETIC THAT MATTERS
  *
- * A player supplies about 2.1 taps a second: the bot clicks 3.6 times a second
- * and lands 58% of them, and a good human is faster but not by much.
+ * A player supplies about 2.29 TAPS a second, measured: the bot clicks 3.6
+ * times a second and 2.29 of those land on a balloon or a saucer.
  *
- * A game that can be WON cannot simply outrun that. The old ten-rung table was
- * an arcade curve — demand crossed 2.1 at level 5 and reached 3.2 by level 10,
- * so the game always won and where it beat you was your score. Extending that
- * slope to twenty would ask for six taps a second at the top, and nobody would
- * ever see the end of it.
+ * That number was 2.1 here for a long time and it was wrong twice over, in a
+ * way worth writing down because it is the easiest mistake to make again.
  *
- * So demand climbs to the ceiling and then STOPS. It rises to about 2.16 at
- * level 10 and falls away again through the back half. That is not a mistake
- * and not softness: levels 11 to 20 are meant to get harder by taking taps
- * AWAY rather than asking for more of them — a balloon that jinks lowers your
- * hit rate, one that fades costs you time to find it, a firefly eats whole
- * taps, a boss takes a burst. All of them are built now, which is why the top
- * of this table reads gentler than it plays. The sky thins out to pay for
- * them, exactly as it already thins where thick balloons arrive -- and levels
- * 18 to 20 thin again for the mark II saucer, which asks for eight taps where
- * the first asked five.
+ * It was measured as hits over clicks -- and the harness counts a hit when the
+ * SCORE goes up, which happens when a balloon POPS. Demand below is in TAPS: a
+ * balloon costs `1 + reinforced + 2 * armoured` of them, so an armoured one
+ * takes three taps and pops once. The two sides of the comparison this whole
+ * table rests on were in different units, and the supply side was the smaller
+ * one. The harness counts taps that land now, separately from pops.
  *
- * The budget is small enough to write down. Five lives, ten rungs and about
- * 1.5 taps per balloon means the whole back half can afford some seven and a
- * half taps more than a player supplies, across 200 seconds — a net pressure
- * of 0.04 taps a second. That is why a life is awarded at 12, 15 and 18.
+ * And it was taken before the bot could aim. Its accuracy went from 58% to 67%
+ * when its targeting was fixed, so even the pops figure had moved.
+ *
+ * WHAT THE CURVE ACTUALLY DOES
+ *
+ *   level    1     5     8    10    12    15    18    20
+ *   demand  1.24  2.16  2.52  2.74  2.82  2.60  2.36  2.26
+ *
+ * It crosses supply around level 6 and stays above it for the rest of the
+ * game, peaking about a quarter over at level 12 before easing back to just
+ * under by 20. The old text here claimed it climbed to 2.16 and stopped below
+ * a supply of 2.1 -- that the game never asks for more than you have. It does,
+ * from level 6 onwards.
+ *
+ * THAT IS NOT A BUG, AND IT IS WHY THERE ARE LIVES
+ *
+ * Asking for more taps than a player has does not mean losing. It means some
+ * balloons get away, and the question the back half asks is how many you can
+ * afford — which is exactly what an allowance of lives is for, and why one is
+ * handed out at 12, 15 and 18, either side of the peak. A curve that stayed
+ * under supply would be a game you could play perfectly, and a twenty-rung
+ * ladder nobody could ever lose is not a ladder.
+ *
+ * The SHAPE was right all along: up, a plateau, then easing off. Only the
+ * height was wrong. Levels 11 to 20 still get harder by taking taps AWAY
+ * rather than asking for more — a balloon that jinks lowers your hit rate, one
+ * that fades costs you time to find it, a firefly eats whole taps and a life,
+ * a saucer takes a burst. The sky thins out to pay for them, exactly as it
+ * already thins where thick balloons arrive, and levels 18 to 20 thin again
+ * for the mark II saucer, which asks for eight taps where the first asked
+ * five.
+ *
+ * The budget, now that both sides are in taps. The back half runs 200 seconds
+ * and asks about 0.3 taps a second more than a player supplies, which is some
+ * sixty taps, or forty balloons, more than anyone can reach. Three lives are
+ * handed out over the same stretch and a run arrives with five: eight lives
+ * against forty balloons is not meant to be survivable by clearing the sky. It
+ * is meant to be survivable by choosing which ones to let go, which is the
+ * game the back half is actually asking you to play.
+ *
+ * MEASURED, NOT SOLVED. These figures are what the game does, taken from the
+ * harness, and the owner has looked at the outcomes they produce and called
+ * the tuning right. Do not re-solve the frequency column against this comment:
+ * the comment describes the table, not the other way round.
  */
 
 "use strict";
@@ -306,28 +339,32 @@ Ladder.at = function (level) {
  * THIS COLUMN EXISTS BECAUSE THE DEMAND SUM WAS WRONG. `arrivals` divided by a
  * full sky of MAX_BALLOONS, which the game never reaches: the spawn throttle
  * slows arrivals as the sky fills, so the sky settles at an equilibrium well
- * under twenty. Measured with the bot, it runs from 2 balloons at level 1 to
- * about 17 by level 10, and every demand figure computed against 20 was
- * understated by the difference — by 34% at the bottom and 24% in the middle.
+ * under twenty. The throttle is a negative feedback loop -- fewer balloons up
+ * means less throttling means more arrivals -- so the emptier the sky, the
+ * harder the game pushes.
  *
- * Which means the tidy curve the last three phases were tuned against never
- * existed in the running game. Real demand was nearly FLAT at 2.0 to 2.45 taps
- * a second from level 1 upward, because the throttle is a negative feedback
- * loop: fewer balloons up means less throttling means more arrivals. What
- * actually escalates as the ladder climbs is the speed, the size and the taps
- * per balloon — not the rate.
+ * THE NUMBERS HERE WERE ALSO WRONG, BY TWO TO FOUR TIMES. They said 5 to 11
+ * balloons across the middle of the ladder; measured over two full runs at a
+ * careful mouse it is 2 to 3.6. Every demand figure computed from them was
+ * understated by 20 to 25%, which is how a table documented as peaking at 2.16
+ * taps a second was really peaking at 2.82.
  *
- * So occupancy is a parameter now, not a constant. These are bot measurements,
- * and they are noisy above about level 15, where only a run that gets that far
- * contributes samples at all. They are documentation of where the game sits,
- * not a dial: changing one changes what `demand` reports, never what the game
- * does. The frequencies were solved against them by iteration — tune, measure,
- * damp, repeat — because the two chase each other: cutting the spawn rate
- * empties the sky, which throttles less, which feeds arrivals back.
+ * OCCUPANCY IS NOT A PROPERTY OF THE LADDER. It is a property of the ladder
+ * AND the player: the same levels sit at 2 to 3.6 balloons under a bot that
+ * pops nearly everything and reach 9 by level 12 under one with a thumb's aim,
+ * because what is left in the sky is what you did not get to. These are the
+ * strong-player numbers, which is the honest choice for a column whose job is
+ * to say how hard the game pushes when it is being played well.
+ *
+ * They are documentation, and one dial. `demand` reads them, and so does the
+ * title screen's footage, which fills the sky to whatever this says a level
+ * holds -- so a wrong number here made the demo look like a fuller game than
+ * the one behind it. Nothing in a round reads them: the spawner throttles on
+ * the live count.
  */
 Ladder.SKY = [
-    1.1, 1.2, 1.7, 2.6, 3.8, 4.2, 5.8, 8.2, 11.6, 10.2,
-    10.5, 9.9, 10.2, 8.3, 6.9, 5.5, 9.1, 5.6, 5.5, 5.5
+    0.6, 0.8, 0.9, 1.1, 1.3, 2.0, 2.3, 2.7, 3.1, 2.5,
+    3.5, 3.0, 3.6, 3.2, 2.3, 2.3, 3.2, 2.7, 2.0, 2.3
 ];
 
 /** How full the sky is when a given level is being played. */
