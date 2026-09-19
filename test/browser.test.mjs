@@ -458,11 +458,20 @@ await t('a second game after game over still responds to input', async () => {
   // naturally takes most of a minute.
   await page.evaluate(() => { Game.livesLost = Game.allowance; });
   await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
-  await page.waitForTimeout(5600); // input is rebound after the lockout
+  // Game over goes HOME, not straight into another run. A tap used to land
+  // anywhere here and start the next game, so a run could end and the next
+  // begin before the score had been read.
+  await page.waitForFunction(() => Game.isMenuLive(), null, { timeout: 6000 });
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => Game.screen), 'title',
+    'game over did not go back to the title screen');
+
+  // And from there a second game still starts, at the bottom of the ladder.
   await page.keyboard.press(' ');
   await page.waitForTimeout(2500);
   const state = await page.evaluate(() => ({ level: Game.level, screen: Game.screen }));
-  assert.equal(state.screen, 'playing', 'could not start a new game after game over');
+  assert.equal(state.screen, 'playing', 'could not start a new game from the title');
   assert.equal(state.level, 1, 'the second game did not start at the bottom again');
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
@@ -757,8 +766,8 @@ await t('there are no buttons left, and the name line is the only exception', as
     rules: Icons.RULES.map(r => r.kind)
   }));
   assert.equal(m.buttons, 0, 'a button came back');
-  assert.deepEqual(m.targets, ['about', 'replay', 'player', 'start'],
-    'the only named targets should be the high-score line and the three chips');
+  assert.deepEqual(m.targets, ['about', 'replay', 'player'],
+    'the only named targets should be the high-score line and the two chips');
 
   // The rules sentence is NOT drawn: the legend of icons stands where it did.
   // It stays in Layout.DESCRIPTION regardless, because that is what is read
@@ -1097,19 +1106,50 @@ await t('the menu is dead briefly after a game, then live', async () => {
   assert.equal(await page.evaluate(() => Game.isMenuLive()), false,
     'menu was live immediately after game over');
 
-  // A tap during the lockout must not restart. Anywhere will do now.
-  const box = await page.evaluate(() => ({ x: Game.width * 0.5, y: Game.height * 0.45 }));
-  await page.mouse.click(box.x, box.y);
+  // A tap during the lockout does nothing at all -- not on the sky, which is
+  // no longer a way out of this screen, and not on the OK button either.
+  const where = await page.evaluate(() => ({
+    sky: { x: Game.width * 0.5, y: Game.height * 0.45 },
+    okay: {
+      x: Game.layout.okay.x + Game.layout.okay.width / 2,
+      y: Game.layout.okay.y + Game.layout.okay.height / 2
+    }
+  }));
+  await page.mouse.click(where.sky.x, where.sky.y);
+  await page.mouse.click(where.okay.x, where.okay.y);
   await page.waitForTimeout(150);
   assert.equal(await page.evaluate(() => Game.screen), 'gameover',
-    'a press during the lockout started a game');
+    'a press during the lockout left the game-over screen');
 
   await page.waitForFunction(() => Game.isMenuLive(), null, { timeout: 4000 });
   const lockout = await page.evaluate(() => Game.MENU_LOCKOUT_MS);
-  assert.ok(lockout <= 2000, `lockout is ${lockout}ms, too long to look intentional`);
+  // Three seconds, and long is the point now.
+  //
+  // This asserted the lockout was at most two, on the grounds that a longer
+  // one reads as the game ignoring you. Played, 1200ms was not enough: a run
+  // ended, the tap that popped the last balloon landed on the screen behind
+  // it, and the next game was counting down before the score had been read. A
+  // score nobody sees is a score that did not happen.
+  //
+  // What stops it reading as neglect is that the button is drawn disabled for
+  // exactly this long, rather than looking ready while nothing is listening.
+  assert.ok(lockout >= 2000 && lockout <= 4000,
+    `lockout is ${lockout}ms, which is neither long enough to read a score ` +
+    'nor short enough that nobody waits on it');
+
+  // Once live, the OK button is the way out, and the sky is not.
+  await page.mouse.click(where.sky.x, where.sky.y);
+  await page.waitForTimeout(150);
+  assert.equal(await page.evaluate(() => Game.screen), 'gameover',
+    'tapping the sky left the game-over screen, so a score can still be missed');
+
+  await page.mouse.click(where.okay.x, where.okay.y);
+  await page.waitForTimeout(250);
+  assert.equal(await page.evaluate(() => Game.screen), 'title',
+    'the menu did not respond once live');
 
   // And now it works.
-  await page.mouse.click(box.x, box.y);
+  await page.mouse.click(where.sky.x, where.sky.y);
   await page.waitForTimeout(300);
   assert.equal(await page.evaluate(() => Game.screen), 'starting',
     'the menu did not respond once live');
@@ -3552,34 +3592,48 @@ await t('the level chip cycles through the levels worth practising', async () =>
   await context.close();
 });
 
-await t('tapping the level chip changes the level instead of starting a game', async () => {
-  // Everywhere else on this screen a tap starts a game, so the two chips along
-  // the bottom are the whole exception and it has to hold.
+await t('the level chip is gone, and what it drove is still there', async () => {
+  // It was a development aid on the title screen of a finished game: a way to
+  // practise level 18 without climbing to it, with a warning that the score
+  // would not count. It is off the screen now.
+  //
+  // Game.startLevel and everything behind it stays, because the playtest
+  // harness sets it directly to measure the top of the ladder -- which is the
+  // only thing that ever really needed a way in.
   const { context, page, errors } = await newGame();
-  const chip = await page.evaluate(() => Game.layout.start);
-  await page.mouse.click(chip.x + chip.width / 2, chip.y + chip.height / 2);
-  await page.waitForTimeout(200);
-
   const m = await page.evaluate(() => ({
-    screen: Game.screen,
+    targets: Game.layout.targets.map(t => t.id),
     startLevel: Game.startLevel,
     practice: Game.isPractice(),
-    label: Game.layout.start.label,
-    said: document.getElementById('game_status').textContent
+    starts: Ladder.starts(),
+    drawn: (() => {
+      const wrote = [];
+      const was = Game.ctx.fillText.bind(Game.ctx);
+      Game.ctx.fillText = function (text) { wrote.push(String(text)); };
+      Screens.title.draw(Game);
+      Game.ctx.fillText = was;
+      return wrote.join(' | ');
+    })()
   }));
 
-  assert.equal(m.screen, 'title', 'the level chip started a game');
-  assert.ok(m.startLevel > 1, 'the level chip did not move');
-  assert.equal(m.practice, true, 'starting above level 1 is not a practice run');
-  assert.match(m.label, new RegExp('' + m.startLevel), 'the chip does not say its level');
-  assert.match(m.said, /not be saved/i, 'the warning is never said: ' + m.said);
+  assert.ok(!m.targets.includes('start'), 'the level chip is still a tap target');
+  assert.ok(!/From level/i.test(m.drawn),
+    'the level chip is still drawn: ' + m.drawn);
 
-  // And a tap on the sky still starts the game, from the chosen level.
-  await page.mouse.click(await page.evaluate(() => Game.width * 0.7), 300);
-  await page.waitForTimeout(2600);
-  const playing = await page.evaluate(() => ({ screen: Game.screen, level: Game.level }));
-  assert.equal(playing.screen, 'playing');
-  assert.equal(playing.level, m.startLevel, 'the game did not open on the chosen level');
+  // A run opened from the title still starts at the bottom and still counts.
+  assert.equal(m.startLevel, 1, 'a fresh game does not start at level 1');
+  assert.equal(m.practice, false, 'a fresh game counts as practice');
+
+  // And the machinery the harness drives is intact.
+  assert.ok(m.starts.length > 2, 'the practice levels stopped being derivable');
+  const above = await page.evaluate(() => {
+    Game.startLevel = 18;
+    return { practice: Game.isPractice(), lives: Game.LIVES + Ladder.livesBy(18) };
+  });
+  assert.equal(above.practice, true,
+    'starting above level 1 stopped counting as a practice run');
+  assert.equal(above.lives, 8,
+    'a run opened at 18 no longer gets the lives it would have climbed with');
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });

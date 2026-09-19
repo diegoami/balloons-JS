@@ -105,6 +105,14 @@ Announce.paused = function (game) {
     );
 };
 
+Announce.confirmQuit = function (game) {
+    Announce.say(
+        "Give up? Your run ends here at level " + game.level + " with " +
+        game.score + " points, and the score goes to the board. " +
+        "Escape to keep playing."
+    );
+};
+
 Announce.playing = function () {
     Announce.say("Go.");
 };

@@ -119,7 +119,9 @@ Layout.about = function () {
     ];
 };
 
-Layout.START_TEXT = "Tap anywhere to play";
+// Still true, and still worth saying for anyone who reads it — the button is
+// a signpost, not a gate.
+Layout.START_TEXT = "or tap anywhere";
 Layout.RESUME_TEXT = "Resume";
 
 /** The level chip, and what it warns when it is not on level 1. */
@@ -127,6 +129,10 @@ Layout.START_FROM_ONE = "From level 1";
 Layout.START_PREFIX = "From level ";
 Layout.PRACTICE_WARNING = "Practice run — this score will not be saved.";
 Layout.PAUSED_TEXT = "Paused";
+Layout.QUIT_TEXT = "Give up?";
+Layout.QUIT_HINT = "Your run ends here, and the score you have goes to the board.";
+Layout.QUIT_YES = "Give up";
+Layout.QUIT_NO = "Keep playing";
 Layout.PAUSES_LEFT = " pauses left";
 Layout.ONE_PAUSE_LEFT = "1 pause left";
 Layout.NO_PAUSES_LEFT = "That was your last pause";
@@ -140,6 +146,7 @@ Layout.NAME_TEXT = "Who is playing?";
 Layout.NAME_HINT = "Enter to save, Escape to cancel";
 Layout.SAVE_TEXT = "Save";
 Layout.PLAY_TEXT = "Play";
+Layout.OKAY_TEXT = "OK";
 
 /**
  * The face everything is drawn in, and what to fall back to.
@@ -692,7 +699,11 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
     targets.push({ id: "about", hit: about });
     targets.push({ id: "replay", hit: scoresHit });
     targets.push({ id: "player", hit: player });
-    targets.push({ id: "start", hit: start });
+
+    // The level chip is gone from the screen, so it is gone from the targets.
+    // Game.startLevel and everything behind it stays: the playtest harness
+    // sets it directly to measure the top of the ladder, which is the only
+    // thing that ever really needed a way in.
 
     panel.height = rows[rows.length - 1] + line - panel.y + panelPad;
 
@@ -753,6 +764,34 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
 
         legend: legend,
 
+        // The two answers to "give up?", side by side above the footer. Keep
+        // playing sits on the right, under the thumb that was already there.
+        // The way off the game-over screen. Where the hint line sits, above
+        // the board, because the board is the thing you are being given time
+        // to read and a button over it would be a button in the way.
+        okay: {
+            x: width * G.columns.margin,
+            y: hintY - line * 0.95,
+            width: Math.max(G.minTouchTarget * 2, line * 3.2),
+            height: Math.max(G.minTouchTarget, line * 1.5),
+            radius: line * G.footer.radius
+        },
+
+        quitYes: {
+            x: width * G.columns.margin,
+            y: resume.y,
+            width: resume.width,
+            height: resume.height,
+            radius: resume.radius
+        },
+        quitNo: {
+            x: width * G.columns.margin + resume.width + line * 0.6,
+            y: resume.y,
+            width: resume.width,
+            height: resume.height,
+            radius: resume.radius
+        },
+
         hud: {
             y: line * G.rows.hud,
 
@@ -770,10 +809,23 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
             // balloon rather than a dot.
             life: line * 0.3,
 
-            // The pause button, on the right of the row where the clock is.
-            // A touch target rather than a glyph: it is the only thing in the
-            // game you press while playing that is not a balloon.
+            // Pause and quit, on the right of the row where the clock is.
+            // Touch targets rather than glyphs: they are the only things in
+            // the game you press while playing that are not a balloon.
+            //
+            // Quit is the OUTER one, furthest from the middle of the screen
+            // and hardest to hit by accident, because pausing costs you a
+            // pause and quitting costs you the run.
             pause: {
+                x: width - width * G.columns.margin -
+                    Math.max(G.minTouchTarget, line * 1.5) * 2 - line * 0.3,
+                y: line * G.rows.hud - line * G.hudPlate.top,
+                width: Math.max(G.minTouchTarget, line * 1.5),
+                height: Math.max(G.minTouchTarget, line * G.hudPlate.height),
+                radius: line * G.hudPlate.radius
+            },
+
+            quit: {
                 x: width - width * G.columns.margin - Math.max(G.minTouchTarget, line * 1.5),
                 y: line * G.rows.hud - line * G.hudPlate.top,
                 width: Math.max(G.minTouchTarget, line * 1.5),
