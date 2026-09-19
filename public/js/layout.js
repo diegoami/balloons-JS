@@ -51,8 +51,73 @@ Layout.DESCRIPTION = [
     "Best played on a tablet."
 ];
 
-/** How much of the width the countdown's line of instruction may use. */
-Layout.COUNTDOWN_WIDTH = 0.86;
+/**
+ * What the game is, at length, for anyone who wants it.
+ *
+ * The title screen says the rules in four icons and the countdown says nothing
+ * at all, which is right for the ninety-nine times out of a hundred that
+ * somebody wants to play rather than read. This is the hundredth.
+ *
+ * Every number in here is read from the tables that decide it rather than
+ * written out, because a rules page that goes stale is worse than no rules
+ * page: it is a rules page that lies.
+ */
+// A question mark rather than the word: it is an icon, and it has to fit on
+// the same row as a name and a level chip on a 240px screen.
+Layout.ABOUT_TEXT = "?";
+Layout.ABOUT_TITLE = "About this game";
+Layout.BACK_TEXT = "Back";
+
+Layout.about = function () {
+    var top = Ladder.at(Ladder.MAX);
+    var boss = Ladder.saucer(1);
+    var mark2 = Ladder.saucer(2);
+    var lives = Game.LIVES + Ladder.livesBy(Ladder.MAX);
+
+    return [
+        { heading: "What you are doing", lines: [
+            "Pop the balloons before they reach the top. One that gets away " +
+                "costs a life.",
+            "Some balloons are reinforced and take two taps, some are " +
+                "armoured and take three. They rise more slowly and are worth " +
+                "more: " + Ladder.skin(3).points + " points against " +
+                Ladder.skin(1).points + "."
+        ] },
+        { heading: "What to leave alone", lines: [
+            "Birds and fireflies both cost a life if you touch them. A bird " +
+                "crosses and is gone; a firefly hovers, and will sit in front " +
+                "of the balloon you were aiming at.",
+            "A tap that lands on a firefly is gone, and so is the life."
+        ] },
+        { heading: "The saucers", lines: [
+            "A saucer arrives when the sky goes quiet and fires after " +
+                Math.round(boss.fuse / 30) + " seconds. " + boss.taps +
+                " taps bring it down.",
+            "From level 18 a bigger one comes instead: " + mark2.taps +
+                " taps in " + (mark2.fuse / 30).toFixed(1) + " seconds, and it " +
+                "will not hold still."
+        ] },
+        { heading: "A run", lines: [
+            Ladder.MAX + " levels of " + Ladder.CLIMB_SECONDS + " seconds. " +
+                Game.LIVES + " lives, and one more at 12, 15 and 18, so " +
+                lives + " in all if you get there.",
+            "From level 12 some balloons wander as they rise. From 14 some " +
+                "thin out the higher they go — never so far that you cannot " +
+                "find them, but far enough to make you look.",
+            "You get " + Game.PAUSES + " pauses. Each one gives itself back " +
+                "after " + Game.PAUSE_SECONDS + " seconds."
+        ] },
+        { heading: "Where it came from", lines: [
+            "Written in December 2012 as an experiment with the HTML5 canvas: " +
+                "balloons, four difficulty settings and a photograph of a sky.",
+            "Rebuilt in 2026. The sky is drawn rather than photographed and " +
+                "runs from morning to night as you climb; the difficulties " +
+                "became one ladder of " + Ladder.MAX + " levels, so that every " +
+                "score on the board was earned the same way.",
+            "It can be won. Surviving level " + Ladder.MAX + " is the end of it."
+        ] }
+    ];
+};
 
 Layout.START_TEXT = "Tap anywhere to play";
 Layout.RESUME_TEXT = "Resume";
@@ -61,8 +126,11 @@ Layout.RESUME_TEXT = "Resume";
 Layout.START_FROM_ONE = "From level 1";
 Layout.START_PREFIX = "From level ";
 Layout.PRACTICE_WARNING = "Practice run — this score will not be saved.";
-Layout.PLAY_INSTRUCTION = Layout.DESCRIPTION[0];
 Layout.PAUSED_TEXT = "Paused";
+Layout.PAUSES_LEFT = " pauses left";
+Layout.ONE_PAUSE_LEFT = "1 pause left";
+Layout.NO_PAUSES_LEFT = "That was your last pause";
+Layout.RESUMING_IN = "Resuming in ";
 Layout.PAUSED_HINT = "You looked away, so the game waited.";
 Layout.HIGH_SCORES_TEXT = "High Scores";
 
@@ -587,6 +655,41 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
     var targets = buttons.map(function (button) {
         return { id: button.id, hit: button.hit };
     });
+    // The About chip, bottom right, mirroring the name chip on the left — or
+    // the row above it when the bottom row is already full. On a 240px screen
+    // the name and the level chip reach past the middle, and a third chip at
+    // the right edge landed on top of the level one.
+    var aboutWidth = Math.max(
+        G.minTouchTarget,
+        ctx.measureText(Layout.ABOUT_TEXT).width + line * G.footer.padX * 2
+    );
+    var about = {
+        x: width - width * G.columns.margin - aboutWidth,
+        y: player.y,
+        width: aboutWidth,
+        height: player.height,
+        radius: player.radius
+    };
+
+    if (about.x < start.x + start.width + line * G.footer.padX) {
+        about.y = player.y - footerHeight - line * G.footer.inset;
+    }
+
+    // The way out of the About screen is a word, not a mark, and a chip sized
+    // for one character is not a chip sized for "Back".
+    var backWidth = Math.max(
+        G.minTouchTarget,
+        ctx.measureText(Layout.BACK_TEXT).width + line * G.footer.padX * 2
+    );
+    var back = {
+        x: width - width * G.columns.margin - backWidth,
+        y: player.y,
+        width: backWidth,
+        height: footerHeight,
+        radius: line * G.footer.radius
+    };
+
+    targets.push({ id: "about", hit: about });
     targets.push({ id: "replay", hit: scoresHit });
     targets.push({ id: "player", hit: player });
     targets.push({ id: "start", hit: start });
@@ -667,6 +770,17 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
             // balloon rather than a dot.
             life: line * 0.3,
 
+            // The pause button, on the right of the row where the clock is.
+            // A touch target rather than a glyph: it is the only thing in the
+            // game you press while playing that is not a balloon.
+            pause: {
+                x: width - width * G.columns.margin - Math.max(G.minTouchTarget, line * 1.5),
+                y: line * G.rows.hud - line * G.hudPlate.top,
+                width: Math.max(G.minTouchTarget, line * 1.5),
+                height: Math.max(G.minTouchTarget, line * G.hudPlate.height),
+                radius: line * G.hudPlate.radius
+            },
+
             caught: width * G.columns.hudCaught,
             level: width * G.columns.hudLevel,
             time: width * G.columns.hudTime
@@ -677,6 +791,8 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
             width: width * G.spawn.spread
         },
 
+        about: about,
+        back: back,
         targets: targets
     };
 };

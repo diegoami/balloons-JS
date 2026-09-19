@@ -39,10 +39,23 @@ Input.popping = function (game, signal) {
     // one set with a mouse are not the same achievement.
     game.canvas.addEventListener("pointerdown", function (event) {
         game.countPointer(event.pointerType);
+        game.pressed = Layout.hitRect(game.layout.hud.pause, Input.point(game, event))
+            ? "pause"
+            : null;
     }, { signal: signal });
 
     game.canvas.addEventListener("click", function (event) {
-        var hit = Entities.pick(game.entities, Input.point(game, event));
+        var at = Input.point(game, event);
+
+        // The pause button first: it sits over the sky, so a tap on it is not
+        // a tap on whatever happens to be behind it.
+        if (Layout.hitRect(game.layout.hud.pause, at)) {
+            game.pressed = null;
+            game.askPause();
+            return;
+        }
+
+        var hit = Entities.pick(game.entities, at);
         if (!hit) {
             return;
         }
@@ -99,6 +112,8 @@ Input.menu = function (game, signal) {
         var target = Layout.pick(game.layout.targets, Input.point(game, event));
         if (target && target.id === "player") {
             game.enter("name");
+        } else if (target && target.id === "about") {
+            game.enter("about");
         } else if (target && target.id === "start") {
             game.cycleStartLevel();
         } else {
@@ -124,6 +139,39 @@ Input.menu = function (game, signal) {
  * about to pop, and a stray tap on one of those should not be read as "get on
  * with it". So it is the button, or the keys, or nothing.
  */
+/**
+ * The About screen: one way out, by the chip or by Escape.
+ *
+ * A tap anywhere does NOT leave, unlike the title screen it came from — this
+ * is a page of text and half of reading it is putting a finger on the screen.
+ */
+Input.about = function (game, signal) {
+    var leave = function () {
+        game.pressed = null;
+        game.enter("title");
+    };
+
+    game.canvas.addEventListener("pointerdown", function (event) {
+        game.pressed = Layout.hitRect(game.layout.back, Input.point(game, event))
+            ? "about"
+            : null;
+    }, { signal: signal });
+
+    game.canvas.addEventListener("click", function (event) {
+        if (Layout.hitRect(game.layout.back, Input.point(game, event))) {
+            leave();
+            return;
+        }
+        game.pressed = null;
+    }, { signal: signal });
+
+    document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape" || event.key === " " || event.key === "Enter") {
+            leave();
+        }
+    }, { signal: signal });
+};
+
 Input.resume = function (game, signal) {
     var resume = function () {
         game.enter("playing");

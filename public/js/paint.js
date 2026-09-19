@@ -53,6 +53,96 @@ Paint.panel = function (game, box) {
     ctx.fillRect(0, 0, game.width, bottom);
 };
 
+/**
+ * A chip with a word in it. The name line and the About line are the same
+ * object drawn twice, so they cannot drift apart in size, radius or colour.
+ */
+Paint.chip = function (game, rect, label, live, pressed) {
+    var ctx = game.ctx;
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = game.layout.fonts.label;
+
+    Layout.roundedRect(ctx, rect, rect.radius);
+    ctx.fillStyle = game.palette.panel;
+    ctx.fill();
+
+    if (live && pressed) {
+        ctx.fillStyle = game.palette.buttonPressOverlay;
+        ctx.fill();
+    }
+
+    ctx.fillStyle = live ? game.palette.ink : game.palette.inkDisabled;
+    ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height / 2);
+    ctx.restore();
+};
+
+/** The About chip, beside the name. */
+Paint.aboutChip = function (game) {
+    Paint.chip(game, game.layout.about, Layout.ABOUT_TEXT,
+        game.isMenuLive(), game.pressed === "about");
+};
+
+/**
+ * The rules at length, and where the game came from.
+ *
+ * Wrapped and sized to fit the screen it is on rather than assuming it does:
+ * this is the one screen in the game whose content is longer than a phone, so
+ * it shrinks its own type until it fits rather than running off the bottom.
+ */
+Paint.about = function (game) {
+    var ctx = game.ctx;
+    var L = game.layout;
+    var sections = Layout.about();
+    var left = L.intro.x;
+    var available = game.width - left * 2;
+
+    // How tall it comes out at a given size, so a size can be chosen.
+    var laidOut = function (scale) {
+        var body = Math.max(1, Math.round(game.fontSize * 0.62 * scale));
+        var head = Math.max(1, Math.round(game.fontSize * 0.78 * scale));
+        var step = body * 1.42;
+        var rows = [];
+        var y = 0;
+
+        sections.forEach(function (section, i) {
+            if (i > 0) {
+                y += step * 0.7;
+            }
+            rows.push({ text: section.heading, y: y, head: true, size: head });
+            y += step * 1.25;
+            section.lines.forEach(function (line) {
+                ctx.font = body + "px " + Layout.FONT;
+                Layout.wrap(ctx, line, available).forEach(function (piece) {
+                    rows.push({ text: piece, y: y, head: false, size: body });
+                    y += step;
+                });
+                y += step * 0.25;
+            });
+        });
+        return { rows: rows, height: y, body: body, head: head };
+    };
+
+    var top = L.intro.y + L.line * 1.4;
+    var room = L.back.y - L.line * 0.8 - top;
+    var block = laidOut(1);
+    if (block.height > room) {
+        block = laidOut(room / block.height);
+    }
+
+    Paint.intro(game, Layout.ABOUT_TITLE);
+
+    block.rows.forEach(function (row) {
+        ctx.font = row.size + "px " + Layout.FONT;
+        ctx.fillStyle = row.head ? game.palette.accent : game.palette.inkSoft;
+        ctx.fillText(row.text, left, top + row.y);
+    });
+
+    Paint.chip(game, L.back, Layout.BACK_TEXT, true, game.pressed === "about");
+};
+
 /** The one headline line, shared by the title and game-over screens. */
 Paint.intro = function (game, text) {
     game.ctx.font = game.layout.fonts.intro;
@@ -258,13 +348,20 @@ Paint.interlude = function (game, label, headline, lines) {
     ctx.fillStyle = palette.ink;
     ctx.fillText(headline, L.intro.x, L.intro.y + L.line * 1.5);
 
+    // Stacked up from the button rather than borrowed from the title screen's
+    // description block. It used to use those baselines, and the moment the
+    // icon legend pushed them down the second line was drawn straight through
+    // the Resume button: two screens sharing one set of positions where only
+    // one of them decides where they are.
     ctx.font = L.fonts.label;
-    lines.forEach(function (line, i) {
-        if (!line || !L.description[i]) {
-            return;
-        }
+    var said = lines.filter(function (line) { return !!line; });
+    said.forEach(function (line, i) {
         ctx.fillStyle = i === 0 ? palette.inkSoft : palette.accent;
-        ctx.fillText(line, L.description[i].x, L.description[i].y);
+        ctx.fillText(
+            line,
+            L.intro.x,
+            L.resume.y - L.line * (0.9 + (said.length - 1 - i) * 1.25)
+        );
     });
 
     var button = L.resume;
@@ -298,12 +395,20 @@ Paint.interlude = function (game, label, headline, lines) {
  * made honest rather than a new feature.
  */
 Paint.paused = function (game) {
-    Paint.interlude(
-        game,
-        "LEVEL " + game.level,
-        Layout.PAUSED_TEXT,
-        [Layout.PAUSED_HINT, ""]
-    );
+    var left = game.pausesLeft;
+    var budget = !game.askedToPause
+        ? Layout.PAUSED_HINT
+        : (left > 1
+            ? left + Layout.PAUSES_LEFT
+            : (left === 1 ? Layout.ONE_PAUSE_LEFT : Layout.NO_PAUSES_LEFT));
+
+    // A pause the player asked for is counting itself down and says so; one
+    // that came from looking away is waiting, and says that instead.
+    var clock = game.askedToPause
+        ? Layout.RESUMING_IN + Math.ceil(game.pauseSteps * Game.STEP_MS / 1000) + "s"
+        : "";
+
+    Paint.interlude(game, "LEVEL " + game.level, Layout.PAUSED_TEXT, [budget, clock]);
 };
 
 Paint.countdown = function (game, remaining) {
@@ -312,33 +417,10 @@ Paint.countdown = function (game, remaining) {
     ctx.save();
     ctx.textAlign = "center";
 
-    // The game has never told anyone what to do. This is the line it gets, and
-    // the countdown is when a new player is looking at nothing else.
-    //
-    // Wrapped, because it is the whole rule now rather than three words: set
-    // as one centred line it ran off both sides of a phone.
-    ctx.font = game.layout.fonts.label;
-    ctx.fillStyle = game.palette.inkSoft;
-    var told = Layout.wrap(
-        ctx, Layout.PLAY_INSTRUCTION, game.width * Layout.COUNTDOWN_WIDTH);
-
-    // Clear of the digit, worked out from the digit rather than guessed. The
-    // countdown glyph is 2.4x the base size and a capital reaches about three
-    // quarters of its size above its own baseline, so it occupies that much
-    // room upward; the gap was a flat 1.5 line heights and the last line of a
-    // wrapped instruction sat straight through the 3.
-    var clears = (Layout.GRID.type.countdown * 0.75) / Layout.GRID.lineRatio + 0.45;
-
-    told.forEach(function (line, i) {
-        ctx.fillText(
-            line,
-            game.layout.countdown.x,
-            // Stacked upward, so the digit stays put however many lines the
-            // sentence needs.
-            game.layout.countdown.y -
-                game.layout.line * (clears + (told.length - 1 - i))
-        );
-    });
+    // Nothing is said here any more. The rules are four icons on the title
+    // screen and a page of text behind the About chip; a third telling, in the
+    // one moment the player should be looking at the sky rather than reading,
+    // was the one that had to go.
 
     ctx.font = game.layout.fonts.countdown;
     ctx.fillStyle = game.palette.accent;
@@ -406,30 +488,11 @@ Paint.player = function (game) {
     var ctx = game.ctx;
     var live = game.isMenuLive();
 
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = game.layout.fonts.label;
-
     // The sky is at its brightest along the bottom edge, so the chip carries
     // the same scrim the sky uses behind its own text rather than trusting
     // pale ink to hold up over a lit horizon.
-    Layout.roundedRect(ctx, rect, rect.radius);
-    ctx.fillStyle = game.palette.panel;
-    ctx.fill();
-
-    if (live && game.pressed === "player") {
-        ctx.fillStyle = game.palette.buttonPressOverlay;
-        ctx.fill();
-    }
-
-    ctx.fillStyle = live ? game.palette.ink : game.palette.inkDisabled;
-    ctx.fillText(
-        Layout.PLAYER_PREFIX + game.name,
-        rect.x + rect.width / 2,
-        rect.y + rect.height / 2
-    );
-    ctx.restore();
+    Paint.chip(game, rect, Layout.PLAYER_PREFIX + game.name, live,
+        game.pressed === "player");
 };
 
 /** The name screen: a heading, the field's Save button, and how to get out. */
@@ -569,8 +632,53 @@ Paint.hudLives = function (game, from) {
     return x - size;
 };
 
+/**
+ * The pause button: two bars, or a triangle once there are none left.
+ *
+ * Drawn rather than set, like the legend's ticks and crosses — a glyph is only
+ * there if the face has one, and the whole point of bundling a font was that
+ * every machine draws the same thing.
+ *
+ * It goes flat and dim at zero rather than disappearing. A control that
+ * vanishes leaves you wondering whether you imagined it; one that is visibly
+ * spent tells you what happened to it.
+ */
+Paint.pauseButton = function (game) {
+    var box = game.layout.hud.pause;
+    var ctx = game.ctx;
+    var spent = game.pausesLeft <= 0;
+    var bar = box.width * 0.13;
+    var tall = box.height * 0.34;
+    var cx = box.x + box.width / 2;
+    var cy = box.y + box.height / 2;
+
+    ctx.save();
+    Layout.roundedRect(ctx, box, box.radius);
+    ctx.fillStyle = game.pressed === "pause"
+        ? game.palette.buttonPressOverlay
+        : game.palette.panel;
+    ctx.fill();
+
+    ctx.fillStyle = spent ? game.palette.inkDisabled : game.palette.ink;
+    ctx.fillRect(cx - bar * 1.8, cy - tall, bar, tall * 2);
+    ctx.fillRect(cx + bar * 0.8, cy - tall, bar, tall * 2);
+
+    // How many are left, as pips under the bars. Small, because it is a thing
+    // to notice rather than a thing to read.
+    var pip = box.width * 0.07;
+    var from = cx - (Game.PAUSES - 1) * pip * 1.6 / 2;
+    for (var i = 0; i < Game.PAUSES; i++) {
+        ctx.globalAlpha = i < game.pausesLeft ? 1 : 0.25;
+        ctx.beginPath();
+        ctx.arc(from + i * pip * 1.6, cy + tall * 1.5, pip * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+};
+
 Paint.hud = function (game) {
     Paint.hudGround(game);
+    Paint.pauseButton(game);
 
     var ctx = game.ctx;
     ctx.font = game.layout.fonts.hud;

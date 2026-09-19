@@ -143,6 +143,21 @@ Game.MENU_LOCKOUT_MS = 1200;
 Game.GAMEOVER_STEPS = Math.round(10000 / Game.STEP_MS);
 
 /**
+ * Pauses a run gets, and how long one lasts before it gives itself back.
+ *
+ * Three, because a pause is for the things that interrupt a person -- a door,
+ * a phone, a child -- and three is enough for a seven-minute run to survive
+ * being lived through without being enough to take one every level.
+ *
+ * Thirty seconds because that is long enough to deal with the door and short
+ * enough that a pause cannot be parked. It resumes itself rather than waiting,
+ * which is the difference between a pause and a stop.
+ */
+Game.PAUSES = 3;
+Game.PAUSE_SECONDS = 30;
+Game.PAUSE_STEPS = Math.round(Game.PAUSE_SECONDS * 1000 / Game.STEP_MS);
+
+/**
  * Balloons you may lose before the game ends, at the start of a run.
  *
  * One number for everyone. There were four, from fifteen down to one, and they
@@ -598,6 +613,8 @@ Game.resetRound = function () {
     // level 18, it is a different game: the ladder hands out a life at 12, 15
     // and 18 precisely because the back half costs them.
     this.allowance = Game.LIVES + Ladder.livesBy(this.startLevel);
+    this.pausesLeft = Game.PAUSES;
+    this.askedToPause = false;
     this.won = false;
     this.end_time = null;
     this.ticks = 0;
@@ -849,9 +866,33 @@ Game.watchVisibility = function () {
     var that = this;
     document.addEventListener("visibilitychange", function () {
         if (document.hidden && that.screen === "playing") {
+            // Free, and it waits for you. Looking away is not a decision.
+            that.askedToPause = false;
             that.enter("paused");
         }
     });
+};
+
+/**
+ * A pause the player asked for, if they have one left.
+ *
+ * Pauses are a resource like lives, because a pause is worth something: it is
+ * the only way to stop a clock that otherwise never stops. Three of them, and
+ * each one runs out on its own after PAUSE_SECONDS, so the cost of taking one
+ * is that you have one fewer and the benefit is bounded.
+ *
+ * The sky is hidden while it is up (Paint.paused), which is what stops a pause
+ * being a free look at where everything is. That matters more than the count:
+ * a limit on how OFTEN you may study the sky is not a limit on studying it.
+ */
+Game.askPause = function () {
+    if (this.screen !== "playing" || this.pausesLeft <= 0) {
+        return false;
+    }
+    this.pausesLeft--;
+    this.askedToPause = true;
+    this.enter("paused");
+    return true;
 };
 
 Game.init = function () {

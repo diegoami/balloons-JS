@@ -757,8 +757,8 @@ await t('there are no buttons left, and the name line is the only exception', as
     rules: Icons.RULES.map(r => r.kind)
   }));
   assert.equal(m.buttons, 0, 'a button came back');
-  assert.deepEqual(m.targets, ['replay', 'player', 'start'],
-    'the only named targets should be the high-score line and the two chips');
+  assert.deepEqual(m.targets, ['about', 'replay', 'player', 'start'],
+    'the only named targets should be the high-score line and the three chips');
 
   // The rules sentence is NOT drawn: the legend of icons stands where it did.
   // It stays in Layout.DESCRIPTION regardless, because that is what is read
@@ -2124,6 +2124,20 @@ await t('every colour the game draws text in is readable on its ground', async (
         out.push({ level, what, ratio: ratio(over(parse(colour), bg), bg) });
       });
 
+      // The About screen, which is the one screen that is nothing but text.
+      const aboutGround = (y) => {
+        Paint.sky(Game);
+        Paint.panel(Game, { y: 0, height: Game.height });
+        const d = Game.ctx.getImageData(
+          Math.round(L.intro.x * Game.dpr + 4), Math.round(y * Game.dpr), 1, 1).data;
+        return [d[0], d[1], d[2]];
+      };
+      [L.intro.y, Game.height * 0.5, L.back.y - L.line].forEach((y, i) => {
+        const bg = aboutGround(y);
+        out.push({ level, what: 'about body ' + i, ratio: ratio(over(parse(p.inkSoft), bg), bg) });
+        out.push({ level, what: 'about heading ' + i, ratio: ratio(over(parse(p.accent), bg), bg) });
+      });
+
       // The accent is still used for the score column and the HUD clock.
       out.push({
         level, what: 'accent on its own ground',
@@ -2992,53 +3006,44 @@ await t('a tap beside the tail no longer pops the balloon', async () => {
 
 
 
-await t('the countdown says what to do', async () => {
+await t('the countdown says nothing, and the rules are somewhere you can find them', async () => {
+  // It used to draw the whole rules sentence over the 3-2-1. With four icons
+  // on the title screen and a page of text behind the About chip, that was the
+  // third telling in a row — in the one moment a player should be watching the
+  // sky rather than reading.
   const { context, page } = await newGame();
   await page.keyboard.press(' ');
   await page.waitForTimeout(400);
 
   const m = await page.evaluate(() => {
-    // Drawn, not just defined: it is a whole sentence now and it wraps, so the
-    // thing worth checking is that every line of it lands inside the canvas.
     Game.stopLoop();
-    Game.measureLayout();
-    Game.ctx.font = Game.layout.fonts.label;
-    const lines = Layout.wrap(
-      Game.ctx, Layout.PLAY_INSTRUCTION, Game.width * Layout.COUNTDOWN_WIDTH);
-    const widest = Math.max(...lines.map(l => Game.ctx.measureText(l).width));
+    // Everything the countdown puts on the canvas, by what it writes.
+    const wrote = [];
+    const was = Game.ctx.fillText.bind(Game.ctx);
+    Game.ctx.fillText = function (text) {
+      wrote.push(String(text));
+      return was.apply(Game.ctx, arguments);
+    };
+    Paint.countdown(Game, 2400);
+    Game.ctx.fillText = was;
+
     return {
       screen: Game.screen,
-      instruction: Layout.PLAY_INSTRUCTION,
-      rules: Layout.DESCRIPTION[0],
-      lines: lines.length,
-      overflows: widest > Game.width,
-      clears: (Layout.GRID.type.countdown * 0.75) / Layout.GRID.lineRatio + 0.45,
-      line: Game.layout.line,
-      countdownY: Game.layout.countdown.y,
-      // How far the digit reaches above its own baseline.
-      digitRise: Game.fontSize * Layout.GRID.type.countdown * 0.75,
+      wrote,
+      about: Layout.about().map(s => s.heading),
       said: document.getElementById('game_status').textContent
     };
   });
+
   assert.equal(m.screen, 'starting');
-  // The countdown and the splash say the same thing, so there is one sentence
-  // to keep right rather than two that can drift apart.
-  assert.equal(m.instruction, m.rules,
-    'the countdown no longer says what the title screen says');
-  assert.match(m.instruction, /balloons/,
-    'the one instruction the game gives stopped mentioning balloons');
-  assert.ok(!m.overflows,
-    `the instruction runs off the canvas: its widest line needs more than ${m.lines} lines`);
-  const lowest = m.countdownY - m.line * m.clears;
-  const highest = m.countdownY - m.line * (m.clears + m.lines - 1);
-  assert.ok(highest > 0, 'the instruction is drawn off the top of the screen');
-  // Its last line has to sit above the digit rather than through it, which a
-  // flat gap did the moment the instruction became long enough to wrap.
-  assert.ok(lowest < m.countdownY - m.digitRise,
-    'the instruction runs through the countdown digit');
+  assert.deepEqual(m.wrote, ['3'], `the countdown drew ${m.wrote.join(' / ')}`);
+  // The rules did not vanish, they moved.
+  assert.ok(m.about.length >= 4,
+    'the About screen has no sections for the rules to live in');
   assert.match(m.said, /Get ready/, 'the countdown is silent: ' + m.said);
   await context.close();
 });
+
 
 await t('looking away pauses the game and says so on the way back', async () => {
   const { context, page, errors } = await newGame();
@@ -4819,6 +4824,154 @@ await t('no balloon outlives the level it was born in', async () => {
     assert.ok(row.slowest > row.fastest * 1.5,
       `every balloon at level ${row.level} rises at nearly the same speed`);
   });
+  await context.close();
+});
+
+
+await t('a pause is a resource, and it gives itself back', async () => {
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+  await page.waitForFunction(() => Game.screen === 'playing', null, { timeout: SKY_FILLS });
+
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    const out = { budget: Game.PAUSES, seconds: Game.PAUSE_SECONDS, spent: [] };
+
+    for (let i = 0; i < Game.PAUSES + 2; i++) {
+      Game.enter('playing');
+      const took = Game.askPause();
+      out.spent.push({ took, left: Game.pausesLeft, screen: Game.screen });
+    }
+
+    // Wound back, and run down to nothing: it resumes on its own.
+    Game.enter('playing');
+    Game.pausesLeft = 1;
+    Game.askPause();
+    const steps = Game.pauseSteps;
+    let ticks = 0;
+    while (Game.screen === 'paused' && ticks < steps * 2) {
+      Screens.paused.update(Game);
+      ticks++;
+    }
+    out.resumedAfter = ticks;
+    out.startedAt = steps;
+    out.backTo = Game.screen;
+    return out;
+  });
+
+  assert.equal(m.spent.filter(s => s.took).length, m.budget,
+    `a run got ${m.spent.filter(s => s.took).length} pauses, not ${m.budget}`);
+  assert.deepEqual(m.spent.map(s => s.left), [2, 1, 0, 0, 0],
+    'the count of pauses left does not go down one at a time and stop');
+  assert.equal(m.spent[m.budget].screen, 'playing',
+    'a pause was taken after the last one had been spent');
+
+  // It runs out on its own. That is the difference between a pause and a stop.
+  assert.equal(m.backTo, 'playing', 'a pause never gave itself back');
+  assert.equal(m.resumedAfter, m.startedAt,
+    `it resumed after ${m.resumedAfter} steps, not the ${m.startedAt} it promised`);
+  assert.equal(m.startedAt, Math.round(m.seconds * 1000 / (1000 / 30)),
+    'the pause length does not match the seconds it is documented as');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('a pause hides the sky, and looking away costs nothing', async () => {
+  // The abuse a pause button invites is not that it is long, it is that it is
+  // a free look at where everything is. A limit on how OFTEN you may study the
+  // sky is not a limit on studying it, so the sky is not drawn at all.
+  const { context, page, errors } = await newGame();
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+  await page.waitForFunction(() => Game.entities.length > 2, null, { timeout: SKY_FILLS });
+
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+
+    // What the paused screen draws, by what it asks the entities to do.
+    let drew = 0;
+    Game.entities.forEach(e => {
+      const was = e.draw;
+      e.draw = function () { drew++; return was.apply(e, arguments); };
+    });
+
+    Game.askPause();
+    Screens.paused.draw(Game);
+    const whileAsked = drew;
+
+    // And a pause that came from looking away: free, and it waits.
+    Game.enter('playing');
+    const before = Game.pausesLeft;
+    Game.askedToPause = false;
+    Game.enter('paused');
+    const idle = { cost: before - Game.pausesLeft, steps: Game.pauseSteps };
+    for (let i = 0; i < 2000; i++) { Screens.paused.update(Game); }
+
+    return {
+      drewWhilePaused: whileAsked,
+      entities: Game.entities.length,
+      idleCost: idle.cost,
+      stillPaused: Game.screen === 'paused'
+    };
+  });
+
+  assert.ok(m.entities > 2, 'nothing was in the sky to hide');
+  assert.equal(m.drewWhilePaused, 0,
+    `the paused screen drew ${m.drewWhilePaused} things from the sky`);
+  assert.equal(m.idleCost, 0, 'looking away spent one of the pauses');
+  assert.ok(m.stillPaused,
+    'a pause that came from looking away resumed itself, so it can be used as a free one');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the About screen says what the tables say, and there is a way back', async () => {
+  // Every number on it is read from the table that decides it. A rules page
+  // that goes stale is worse than no rules page: it is one that lies.
+  const { context, page, errors } = await newGame();
+
+  const m = await page.evaluate(() => {
+    const words = Layout.about()
+      .map(s => s.heading + ' ' + s.lines.join(' ')).join(' ');
+    Game.enter('about');
+    Game.paint();
+    return {
+      screen: Game.screen,
+      words,
+      sections: Layout.about().length,
+      said: document.getElementById('game_status').textContent,
+      chipOnTitle: Game.layout.targets.some(t => t.id === 'about')
+    };
+  });
+
+  assert.equal(m.screen, 'about', 'the About chip did not open the About screen');
+  assert.ok(m.chipOnTitle, 'there is no way in to the About screen');
+  assert.ok(m.sections >= 4, `only ${m.sections} sections of rules`);
+
+  // Drawn from the tables rather than written down twice.
+  const facts = await page.evaluate(() => ({
+    levels: Ladder.MAX,
+    climb: Ladder.CLIMB_SECONDS,
+    pauses: Game.PAUSES,
+    pauseSeconds: Game.PAUSE_SECONDS,
+    bossTaps: Ladder.saucer(1).taps,
+    markTwoTaps: Ladder.saucer(2).taps
+  }));
+  Object.entries(facts).forEach(([what, value]) => {
+    assert.ok(m.words.includes(String(value)),
+      `the About screen never mentions ${what} (${value}), so it is not reading the table`);
+  });
+
+  // And it is read out, because it is nothing but text.
+  assert.ok(m.said.length > 200, 'the About screen is silent: ' + m.said);
+
+  const back = await page.evaluate(() => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    return Game.screen;
+  });
+  assert.equal(back, 'title', 'Escape does not leave the About screen');
+  assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
 
