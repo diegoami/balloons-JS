@@ -73,6 +73,26 @@ Layout.NAME_HINT = "Enter to save, Escape to cancel";
 Layout.SAVE_TEXT = "Save";
 Layout.PLAY_TEXT = "Play";
 
+/**
+ * The face everything is drawn in, and what to fall back to.
+ *
+ * Verdana was the browser's, chosen for being everywhere rather than for being
+ * right: a screen font from 1996 designed to survive 96dpi CRTs, which is a
+ * thing no phone has been since. Fredoka is rounded, has the weight to sit on
+ * a sky without a heavy scrim behind every word, and its digits are unmistakable
+ * at the size the countdown uses them.
+ *
+ * It is bundled rather than linked, because a request to a third party on load
+ * is a request that fails offline and inside an Android wrapper -- and because
+ * the canvas has to MEASURE this font before it can lay anything out, so a file
+ * that arrives late is a composition laid out to the wrong metrics.
+ *
+ * The fallback is deliberately Verdana: if the file ever fails to arrive the
+ * game is laid out in the face it was tuned for right up until this change,
+ * rather than in whatever the platform's default happens to be.
+ */
+Layout.FONT = "Fredoka, Verdana, sans-serif";
+
 Layout.GRID = {
     /** Fractions of canvas width. */
     columns: {
@@ -132,6 +152,16 @@ Layout.GRID = {
     panelPad: 0.7,
 
     /**
+     * The legend that replaces the rules sentence, in line heights.
+     *
+     * `icon` is how big each thing from the sky is drawn, `gap` the air
+     * between an icon and its verdict, and `pair` the air between one pair and
+     * the next -- which is the wider of the two on purpose, because "balloon,
+     * tick" has to read as one thing and not as "tick, saucer".
+     */
+    legend: { icon: 1.15, gap: 0.5, pair: 1.25 },
+
+    /**
      * The ground under each run of HUD text, in line heights.
      *
      * It used to be one bar across the whole width, and the whole width is the
@@ -187,14 +217,16 @@ Layout.GRID = {
      * the name line, and at 2560x1440 it was 24px. The number is measured
      * rather than reasoned, because the description wraps and how many lines
      * that comes to depends on the width, the font and which machine is
-     * rendering it.
+     * rendering it. It went up again when the rules sentence became a row of
+     * icons: a legend is two line heights tall where the line it replaced was
+     * one, and the tightest window was down to 18px of clearance.
      *
      * What it is given is the height less the name line, which sits on the
      * bottom edge outside the flow and takes a touch target plus a little air.
      * Without that reservation the flow ran into the footer on a letterboxed
      * window: at 1920x400 the last score row landed 5px below the name line.
      */
-    heightDivisor: 21,
+    heightDivisor: 22,
     footerReserve: 56
 };
 
@@ -260,19 +292,21 @@ Layout.applyFont = function (ctx, width, height) {
     );
 
     size = Math.round(size);
-    ctx.font = size + "px Verdana";
+    ctx.font = size + "px " + Layout.FONT;
 
     // Only the lines that CANNOT wrap decide whether the composition fits.
     //
-    // The description used to be measured here too, and on a 320px phone with
-    // real Verdana its second line came out eight pixels over — 3% — which
-    // scaled the entire type scale down past `minFontSize` and made a floor
-    // that is documented as a floor into a suggestion. One long sentence
-    // should cost itself a second line, not cost every other word on the
-    // screen a point of size. It wraps in `compute` instead.
+    // The description used to be measured here too, and on a 320px phone its
+    // second line came out eight pixels over — 3% — which scaled the entire
+    // type scale down past `minFontSize` and made a floor that is documented
+    // as a floor into a suggestion. One long sentence should cost itself a
+    // second line, not cost every other word on the screen a point of size.
+    // It wraps in `compute` instead.
     //
-    // This only showed up on Windows: the Linux boxes this was built on have
-    // no Verdana and substitute something narrower, so the same string fitted.
+    // That only showed up on Windows, back when the face was whatever the
+    // browser had: the Linux boxes this was built on substituted something
+    // narrower and the same string fitted. A bundled font is the fix for that
+    // class of bug — every machine now lays out against the same metrics.
     var available = width * (1 - 2 * G.columns.margin);
     var longest = 0;
     [Layout.INTRO_TEXT, Layout.START_TEXT].forEach(function (text) {
@@ -281,7 +315,7 @@ Layout.applyFont = function (ctx, width, height) {
 
     if (longest > available) {
         size = Math.max(1, Math.floor(size * (available / longest)));
-        ctx.font = size + "px Verdana";
+        ctx.font = size + "px " + Layout.FONT;
     }
 
     return size;
@@ -308,7 +342,8 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
     var fonts = {};
     for (var role in G.type) {
         if (Object.prototype.hasOwnProperty.call(G.type, role)) {
-            fonts[role] = Math.max(1, Math.round(fontSize * G.type[role])) + "px Verdana";
+            fonts[role] = Math.max(1, Math.round(fontSize * G.type[role])) +
+                "px " + Layout.FONT;
         }
     }
 
@@ -370,20 +405,33 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
     // because after wrapping there is no longer one line per entry in
     // Layout.DESCRIPTION for a painter to index into.
     ctx.font = fonts.label;
+    // The rules sentence is not among these any more: it is the legend below,
+    // drawn in the things it used to name. It stays in Layout.DESCRIPTION
+    // because that is what the screen reader is given, and a row of pictures
+    // says nothing at all to one.
     var wrapped = [];
-    Layout.DESCRIPTION.forEach(function (sentence) {
+    Layout.DESCRIPTION.slice(1).forEach(function (sentence) {
         Layout.wrap(ctx, sentence, available).forEach(function (text) {
             wrapped.push(text);
         });
     });
     ctx.font = fonts.score;
 
+    // The legend stands where that sentence stood, and the rest flows under
+    // it on the same rhythm.
+    var legend = Layout.legendRow(ctx, width, line, fontSize);
+    var legendTop = menuTop + line * 0.3;
+    legend.y = legendTop + legend.height / 2;
+    legend.chip.y = legendTop - line * 0.25;
+    legend.chip.height = legend.height + line * 0.5;
+
+    var textTop = legendTop + legend.height + line * 1.35;
     var description = wrapped.map(function (text, d) {
-        return { x: left, y: menuTop + line * (1 + d * G.descriptionStep), text: text };
+        return { x: left, y: textTop + line * (d * G.descriptionStep), text: text };
     });
     var menuBottom = buttons.length
         ? rowTop + buttonHeight
-        : menuTop + line * (description.length * G.descriptionStep + 0.4);
+        : textTop + line * ((description.length - 1) * G.descriptionStep + 0.6);
 
     // Drawn rect and hit rect are the same object now: buttons are laid out
     // rather than bracketing substrings, so both directions can meet the touch
@@ -600,6 +648,8 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
             rows: rows
         },
 
+        legend: legend,
+
         hud: {
             y: line * G.rows.hud,
 
@@ -613,6 +663,10 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
                 radius: line * G.hudPlate.radius
             },
 
+            // Small enough to sit inside the chip, big enough to read as a
+            // balloon rather than a dot.
+            life: line * 0.3,
+
             caught: width * G.columns.hudCaught,
             level: width * G.columns.hudLevel,
             time: width * G.columns.hudTime
@@ -625,6 +679,63 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
 
         targets: targets
     };
+};
+
+/**
+ * Where each icon and each verdict sits, centred as one row.
+ *
+ * Measured rather than spaced by eye, because the four pairs are a single
+ * object as far as the composition is concerned: it is centred as a whole, so
+ * the row has to be laid out before anybody knows where it starts.
+ *
+ * It shrinks to fit rather than wrapping. A legend that breaks over two lines
+ * stops reading as one sentence, and four pairs on a phone is the narrowest
+ * case there is -- so on a screen too tight for them at full size the icons
+ * get smaller together.
+ */
+Layout.legendRow = function (ctx, width, line, fontSize) {
+    var G = Layout.GRID;
+    var available = width * (1 - 2 * G.columns.margin);
+    var icon = line * G.legend.icon;
+    var gap = line * G.legend.gap;
+    var pair = line * G.legend.pair;
+
+    // Per pair: the icon's own box either side of its centre, the gap, and a
+    // slot for the verdict. This counted the verdict's slot out and the chip
+    // came up an icon short for every pair in the row.
+    var each = icon * 3 + gap;
+    var wide = Icons.RULES.length * each + (Icons.RULES.length - 1) * pair;
+
+    if (wide > available) {
+        var squeeze = available / wide;
+        icon *= squeeze;
+        gap *= squeeze;
+        pair *= squeeze;
+        wide = available;
+    }
+
+    // Left, with everything else. Centred, it floated away from the block it
+    // belongs to and read as decoration rather than as the line it replaced.
+    var x = width * G.columns.margin;
+    var row = {
+        icon: icon,
+        height: icon * 2,
+        items: [],
+        chip: { x: x - icon * 0.6, y: 0, width: wide + icon * 1.2, height: 0,
+                radius: line * G.footer.radius }
+    };
+
+    Icons.RULES.forEach(function (rule) {
+        row.items.push({
+            kind: rule.kind,
+            wanted: rule.wanted,
+            iconX: x + icon,
+            verdictX: x + icon * 2 + gap + icon * 0.5
+        });
+        x += icon * 2 + gap + icon + pair;
+    });
+
+    return row;
 };
 
 /** Traces a rounded rectangle. Path2D.roundRect is too new to rely on. */

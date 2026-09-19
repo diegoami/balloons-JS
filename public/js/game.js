@@ -891,6 +891,44 @@ Game.init = function () {
     this.watchVisibility();
 };
 
+/**
+ * Starts once the face everything is measured in has arrived.
+ *
+ * The canvas lays out by MEASURING text, so a font that turns up after the
+ * first measure leaves a composition built to the fallback's metrics and never
+ * rebuilt -- lines that wrap where they should not, a name chip that no longer
+ * clears the scores. `document.fonts.load` asks for it rather than waiting for
+ * something else to want it, since nothing on the page uses it in HTML.
+ *
+ * It is raced against a timeout and re-measured afterwards, because a game
+ * that will not start because a font is slow is worse than one drawn in
+ * Verdana for a moment.
+ */
 window.addEventListener("load", function () {
-    Game.init();
+    var waited = false;
+    var begin = function () {
+        if (waited) {
+            return;
+        }
+        waited = true;
+        Game.init();
+    };
+
+    if (window.document.fonts && document.fonts.load) {
+        document.fonts.load("16px Fredoka").catch(function () { return null; });
+        // Whichever comes first.
+        Promise.race([
+            document.fonts.ready,
+            new Promise(function (resolve) { window.setTimeout(resolve, 1500); })
+        ]).then(begin, begin);
+
+        // And if it lands after we gave up waiting, lay it out again.
+        document.fonts.ready.then(function () {
+            if (Game.canvas) {
+                Game.applyCanvasSize();
+            }
+        }, function () { return null; });
+    } else {
+        begin();
+    }
 }, false);

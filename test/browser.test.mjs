@@ -739,14 +739,26 @@ await t('there are no buttons left, and the name line is the only exception', as
   const m = await page.evaluate(() => ({
     buttons: Game.layout.menu.buttons.length,
     targets: Game.layout.targets.map(t => t.id),
-    lines: Layout.DESCRIPTION.length,
-    described: Game.layout.description.length
+    sentences: Layout.DESCRIPTION,
+    drawn: Game.layout.description.map(d => d.text),
+    legend: Game.layout.legend.items.map(i => i.kind),
+    rules: Icons.RULES.map(r => r.kind)
   }));
   assert.equal(m.buttons, 0, 'a button came back');
   assert.deepEqual(m.targets, ['replay', 'player', 'start'],
     'the only named targets should be the high-score line and the two chips');
-  assert.equal(m.described, m.lines,
+
+  // The rules sentence is NOT drawn: the legend of icons stands where it did.
+  // It stays in Layout.DESCRIPTION regardless, because that is what is read
+  // aloud, and a row of pictures says nothing at all to a screen reader.
+  assert.ok(!m.drawn.join(' ').includes('repel'),
+    'the rules sentence is drawn as well as being shown as icons');
+  assert.ok(m.drawn.join(' ').includes('Twenty levels'),
+    'the sentences that are not the legend stopped being drawn');
+  assert.ok(m.drawn.length >= m.sentences.length - 1,
     'the description has no baseline for every line it wants to draw');
+  assert.deepEqual(m.legend, m.rules,
+    'the legend does not show what the rules say it should');
   await context.close();
 });
 
@@ -4380,13 +4392,20 @@ await t('the HUD stands on the words rather than lying across the sky', async ()
     });
   });
 
-  // And the phone, where the runs crowd together and become a bar again.
+  // And the narrowest window the game supports, where the runs crowd together
+  // and become a bar again.
+  //
+  // The narrowest window, with the longest score and the most lives it can
+  // hold. WHICH width crowds depends on the face and on how wide the runs are
+  // — this asserted 390 with Verdana and a spelled-out life count, and both of
+  // those have since changed. The behaviour is the thing: runs that would
+  // overlap get merged instead. So it is driven to the case that must crowd.
   const narrow = await page.evaluate(() => {
     const was = { w: Game.width, h: Game.height };
-    Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true });
-    Object.defineProperty(window, 'innerHeight', { value: 780, configurable: true });
+    Object.defineProperty(window, 'innerWidth', { value: 320, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 568, configurable: true });
     Game.applyCanvasSize();
-    Game.score = 1420; Game.livesLost = 2; Game.allowance = 7;
+    Game.score = 99999; Game.livesLost = 9; Game.allowance = 9;
     Paint.sky(Game);
     const grounds = Paint.hudGround(Game);
     const got = {
@@ -4734,6 +4753,60 @@ await t('birds cross where the taps are, not where nobody is aiming', async () =
     `a bird crosses in ${m.crossingSeconds.toFixed(1)}s, which is barely time to be ` +
     'anywhere near a tap');
   assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+
+await t('no balloon outlives the level it was born in', async () => {
+  // The rung's speed column used to set only the FASTEST a balloon rose: the
+  // floor was an absolute 0.25 pixels a step, the same crawl at level 20 as at
+  // level 1. A quarter of level 1's balloons took over twenty seconds to cross
+  // and four in a hundred took over a minute, on a screen where a level lasts
+  // twenty. It cost twice, because the spawn throttle counts balloons — a
+  // ninety-six-second loiterer holds a slot for five levels and suppresses the
+  // arrivals that would have filled the sky it is making look empty.
+  const { context, page } = await newGame();
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    const rows = [];
+    for (let level = 1; level <= Ladder.MAX; level++) {
+      Game.applyLevel(level);
+      let slowest = 0;
+      let fastest = Infinity;
+      for (let i = 0; i < 600; i++) {
+        const b = Game.randomBalloon();
+        // Skin 1 only: a reinforced balloon is deliberately slower still, and
+        // it is allowed to be — it is paying for the taps it costs.
+        if (b.skin !== 1) { continue; }
+        const secs = Game.height / Math.abs(b.delta) / 30;
+        slowest = Math.max(slowest, secs);
+        fastest = Math.min(fastest, secs);
+      }
+      rows.push({ level, slowest, fastest });
+    }
+    return {
+      rows,
+      climb: Ladder.CLIMB_SECONDS,
+      share: BALLOON_SLOWEST,
+      // What the share is derived from, so a change to either end shows up
+      // here rather than quietly widening the tail again.
+      derived: REFERENCE_HEIGHT /
+        (Ladder.at(1).speed * (1000 / Game.STEP_MS) * Ladder.CLIMB_SECONDS)
+    };
+  });
+
+  assert.ok(Math.abs(m.share - m.derived) < 0.005,
+    `the slowest share is ${m.share} where the ladder's own pace gives ` +
+    `${m.derived.toFixed(3)} — one of them has moved`);
+
+  m.rows.forEach(row => {
+    assert.ok(row.slowest <= m.climb + 0.5,
+      `the slowest balloon at level ${row.level} takes ${row.slowest.toFixed(1)}s ` +
+      `to cross, and a level lasts ${m.climb}s`);
+    // And the sky is not uniform: variety is the point of a spread at all.
+    assert.ok(row.slowest > row.fastest * 1.5,
+      `every balloon at level ${row.level} rises at nearly the same speed`);
+  });
   await context.close();
 });
 

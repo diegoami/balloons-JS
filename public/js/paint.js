@@ -39,7 +39,11 @@ Paint.panel = function (game, box) {
     ground.addColorStop(0, Sky.transparent(game.palette.panel));
     ground.addColorStop(box.y / bottom, Sky.transparent(game.palette.panel));
     ground.addColorStop(0.42, game.palette.panel);
-    ground.addColorStop(0.9, game.palette.panel);
+    // Solid nearly to its own bottom edge. It used to start fading at 0.9, and
+    // once the legend pushed the leaderboard down into that fade the last
+    // rows came out at 4.1:1 against a brightening sky — under the 4.5 every
+    // other word on the screen is held to.
+    ground.addColorStop(0.97, game.palette.panel);
     ground.addColorStop(1, Sky.transparent(game.palette.panel));
 
     // Full width and no edges: a card inset from a composition that already
@@ -148,6 +152,31 @@ Paint.description = function (game) {
     // line per sentence in Layout.DESCRIPTION to index into.
     game.layout.description.forEach(function (line) {
         ctx.fillText(line.text, line.x, line.y);
+    });
+};
+
+/**
+ * The one rule, drawn in the things it is about.
+ *
+ * A balloon and a tick, a saucer and a tick, a bird and a cross, a firefly and
+ * a cross. It replaces the sentence that used to say the same thing in words —
+ * which is still there, in Layout.DESCRIPTION, because that is what gets read
+ * aloud and a row of pictures says nothing to a screen reader.
+ */
+Paint.legend = function (game) {
+    var legend = game.layout.legend;
+
+    // A ground of its own, for the same reason the HUD text has one: a bird is
+    // drawn in the palette's darkest ink and the panel behind this block is a
+    // scrim, so on the title screen it was a dark shape on a dark field. It
+    // also groups the four pairs as one legend rather than eight loose marks.
+    Layout.roundedRect(game.ctx, legend.chip, legend.chip.radius);
+    game.ctx.fillStyle = game.palette.buttonFill;
+    game.ctx.fill();
+
+    legend.items.forEach(function (item) {
+        Icons.draw(game, item.kind, item.iconX, legend.y, legend.icon);
+        Icons.verdict(game, item.wanted, item.verdictX, legend.y, legend.icon);
     });
 };
 
@@ -455,9 +484,11 @@ Paint.entities = function (game) {
  */
 Paint.hudRuns = function (game) {
     return [
-        { text: game.score + " points, " + game.livesLost + " of " +
-            game.allowance + " lost", x: game.layout.hud.caught,
-          ink: game.palette.ink },
+        // The lives are drawn beside this rather than spelled out in it: see
+        // Paint.hudLives. What is left is the score, which is the only thing
+        // here that needs words at all.
+        { text: String(game.score), x: game.layout.hud.caught,
+          ink: game.palette.ink, lives: true },
         { text: "LEVEL " + game.level, x: game.layout.hud.level,
           ink: game.palette.inkSoft },
         { text: game.elapsed() + "s", x: game.layout.hud.time,
@@ -484,10 +515,14 @@ Paint.hudGround = function (game) {
     // mistake where one bar reads as a decision — so a phone gets the old bar
     // back, arrived at rather than special-cased.
     Paint.hudRuns(game).forEach(function (run) {
+        // A run that carries the lives needs ground under them too.
+        var lives = run.lives
+            ? game.layout.hud.life * (2.1 * game.allowance + 1)
+            : 0;
         var box = {
             x: run.x - plate.padX,
             y: plate.y,
-            width: ctx.measureText(run.text).width + plate.padX * 2,
+            width: ctx.measureText(run.text).width + lives + plate.padX * 2,
             height: plate.height
         };
         var last = grounds[grounds.length - 1];
@@ -507,6 +542,33 @@ Paint.hudGround = function (game) {
     return grounds;
 };
 
+/**
+ * The lives, as the thing you lose them to.
+ *
+ * "2 of 7 lost" is a sum a player has to do while balloons are escaping, and
+ * it was a third of the width of the screen. A row of balloons is the count
+ * itself: the solid ones are what you have left. It also reads at a glance
+ * from the corner of an eye, which a number never does.
+ */
+Paint.hudLives = function (game, from) {
+    var size = game.layout.hud.life;
+    var left = game.allowance - game.livesLost;
+    var x = from + size;
+
+    for (var i = 0; i < game.allowance; i++) {
+        game.ctx.save();
+        // Spent ones stay in the row rather than vanishing, so the row does
+        // not change width as you lose them and the count of what is gone is
+        // as legible as the count of what is left.
+        game.ctx.globalAlpha = i < left ? 1 : 0.22;
+        Icons.draw(game, "balloon", x, game.layout.hud.y - size * 0.35, size);
+        game.ctx.restore();
+        x += size * 2.1;
+    }
+
+    return x - size;
+};
+
 Paint.hud = function (game) {
     Paint.hudGround(game);
 
@@ -515,5 +577,9 @@ Paint.hud = function (game) {
     Paint.hudRuns(game).forEach(function (run) {
         ctx.fillStyle = run.ink;
         ctx.fillText(run.text, run.x, game.layout.hud.y);
+        if (run.lives) {
+            Paint.hudLives(game,
+                run.x + ctx.measureText(run.text).width + game.layout.hud.life);
+        }
     });
 };
