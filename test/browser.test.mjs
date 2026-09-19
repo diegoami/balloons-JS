@@ -3051,16 +3051,22 @@ await t('looking away pauses the game and says so on the way back', async () => 
   await page.waitForTimeout(2500);
   await page.waitForFunction(() => Game.entities.length > 0, null, { timeout: SKY_FILLS });
 
-  const playing = await page.evaluate(() => ({
-    ticks: Game.ticks,
-    positions: Game.entities.map(e => e.ycoord)
-  }));
-
+  // Read the clock and hide the tab in ONE call. These were two, and the game
+  // went on running in the round trip between them — so a step could land
+  // after the sample and before the pause, and the test then reported the
+  // balloons as having risen while the tab was away. About one run in eight.
+  //
   // Playwright cannot background a tab, so this drives the event the browser
   // would fire. What it checks is the handler, which is the part that is ours.
-  await page.evaluate(() => {
+  // The handler runs synchronously, so nothing can step in between.
+  const playing = await page.evaluate(() => {
+    const before = {
+      ticks: Game.ticks,
+      positions: Game.entities.map(e => e.ycoord)
+    };
     Object.defineProperty(document, 'hidden', { value: true, configurable: true });
     document.dispatchEvent(new Event('visibilitychange'));
+    return before;
   });
   await page.waitForTimeout(300);
 
