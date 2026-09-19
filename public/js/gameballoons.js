@@ -15,6 +15,26 @@ var JANKY_REACH = 0.5;
 /** Steps between one sideways drift and the next. */
 var JANKY_TURN_STEPS = 22;
 
+/**
+ * The slowest a balloon may rise, as a share of its rung's speed.
+ *
+ * It used to be an absolute 0.25 pixels a step added to a random share of the
+ * rung -- so the ladder's `speed` column set only the FASTEST a balloon went,
+ * and the slowest balloon in the game was the same crawl at level 20 as at
+ * level 1. Measured, that put a quarter of level 1's balloons over twenty
+ * seconds and four in a hundred over a minute, on a screen where a level
+ * lasts twenty seconds. It cost twice over, because the spawn throttle counts
+ * balloons: one ninety-six-second loiterer holds a slot for five levels and
+ * suppresses the arrivals that would have made the sky feel alive.
+ *
+ * So the floor is a share of the rung, and the share comes from the ladder's
+ * own pace: A BALLOON SHOULD NOT OUTLIVE THE LEVEL IT WAS BORN IN. Crossing
+ * the reference screen takes REFERENCE_HEIGHT / (speed * share * 30) seconds,
+ * and setting that to CLIMB_SECONDS at the gentlest rung gives
+ * 720 / (4 * 30 * 20) = 0.3. A test keeps it honest if either number moves.
+ */
+var BALLOON_SLOWEST = 0.3;
+
 /** How much bigger a janky balloon is than a steady one of the same skin. */
 var JANKY_SIZE = 1.18;
 
@@ -207,8 +227,8 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
     // balloon takes to cross does not depend on how tall the window is. A
     // thicker balloon rises more slowly: the taps it costs have to fit
     // somewhere, and that somewhere is the time it is on screen.
-    that.delta = -1 * ((Math.random()*speed)+0.25) * (speedScale || 1)
-        * Ladder.skin(that.skin).speed;
+    that.delta = -1 * speed * (BALLOON_SLOWEST + (1 - BALLOON_SLOWEST) * Math.random())
+        * (speedScale || 1) * Ladder.skin(that.skin).speed;
     that.xdelta = -.5+ Math.random();
     that.xmax = xmax;
 

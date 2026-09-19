@@ -73,6 +73,26 @@ Layout.NAME_HINT = "Enter to save, Escape to cancel";
 Layout.SAVE_TEXT = "Save";
 Layout.PLAY_TEXT = "Play";
 
+/**
+ * The face everything is drawn in, and what to fall back to.
+ *
+ * Verdana was the browser's, chosen for being everywhere rather than for being
+ * right: a screen font from 1996 designed to survive 96dpi CRTs, which is a
+ * thing no phone has been since. Fredoka is rounded, has the weight to sit on
+ * a sky without a heavy scrim behind every word, and its digits are unmistakable
+ * at the size the countdown uses them.
+ *
+ * It is bundled rather than linked, because a request to a third party on load
+ * is a request that fails offline and inside an Android wrapper -- and because
+ * the canvas has to MEASURE this font before it can lay anything out, so a file
+ * that arrives late is a composition laid out to the wrong metrics.
+ *
+ * The fallback is deliberately Verdana: if the file ever fails to arrive the
+ * game is laid out in the face it was tuned for right up until this change,
+ * rather than in whatever the platform's default happens to be.
+ */
+Layout.FONT = "Fredoka, Verdana, sans-serif";
+
 Layout.GRID = {
     /** Fractions of canvas width. */
     columns: {
@@ -260,19 +280,21 @@ Layout.applyFont = function (ctx, width, height) {
     );
 
     size = Math.round(size);
-    ctx.font = size + "px Verdana";
+    ctx.font = size + "px " + Layout.FONT;
 
     // Only the lines that CANNOT wrap decide whether the composition fits.
     //
-    // The description used to be measured here too, and on a 320px phone with
-    // real Verdana its second line came out eight pixels over — 3% — which
-    // scaled the entire type scale down past `minFontSize` and made a floor
-    // that is documented as a floor into a suggestion. One long sentence
-    // should cost itself a second line, not cost every other word on the
-    // screen a point of size. It wraps in `compute` instead.
+    // The description used to be measured here too, and on a 320px phone its
+    // second line came out eight pixels over — 3% — which scaled the entire
+    // type scale down past `minFontSize` and made a floor that is documented
+    // as a floor into a suggestion. One long sentence should cost itself a
+    // second line, not cost every other word on the screen a point of size.
+    // It wraps in `compute` instead.
     //
-    // This only showed up on Windows: the Linux boxes this was built on have
-    // no Verdana and substitute something narrower, so the same string fitted.
+    // That only showed up on Windows, back when the face was whatever the
+    // browser had: the Linux boxes this was built on substituted something
+    // narrower and the same string fitted. A bundled font is the fix for that
+    // class of bug — every machine now lays out against the same metrics.
     var available = width * (1 - 2 * G.columns.margin);
     var longest = 0;
     [Layout.INTRO_TEXT, Layout.START_TEXT].forEach(function (text) {
@@ -281,7 +303,7 @@ Layout.applyFont = function (ctx, width, height) {
 
     if (longest > available) {
         size = Math.max(1, Math.floor(size * (available / longest)));
-        ctx.font = size + "px Verdana";
+        ctx.font = size + "px " + Layout.FONT;
     }
 
     return size;
@@ -308,7 +330,8 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
     var fonts = {};
     for (var role in G.type) {
         if (Object.prototype.hasOwnProperty.call(G.type, role)) {
-            fonts[role] = Math.max(1, Math.round(fontSize * G.type[role])) + "px Verdana";
+            fonts[role] = Math.max(1, Math.round(fontSize * G.type[role])) +
+                "px " + Layout.FONT;
         }
     }
 
