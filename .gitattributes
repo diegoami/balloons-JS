@@ -20,3 +20,7 @@
 *.PDF	 diff=astextplain
 *.rtf	 diff=astextplain
 *.RTF	 diff=astextplain
+
+# Generated, not written. Keeps the lockfile out of diffs and out of the
+# language stats; `git show` still has it if you actually want it.
+package-lock.json linguist-generated -diff
