@@ -5,13 +5,14 @@ Simple JavaScript / HTML5 game. Pop the balloons before too many escape.
 Working on it with an AI assistant: see [CLAUDE.md](CLAUDE.md).
 
 Play by clicking or tapping balloons. There is one game: press space, or the
-Play button, and you start at level 1. The level climbs every 25 seconds of
-play, up to 10, and everything gets faster, denser and smaller as it does.
-Five balloons may escape before the game ends.
+Play button, and you start at level 1. The level climbs every 20 seconds of
+play, up to 20 — a winning run is 6:40 — and everything gets faster, denser
+and smaller as it does. Five balloons may escape to begin with, and three more
+lives are earned on the way up, at 12, 15 and 18.
 
-From level 4 some balloons are reinforced and take two taps; from level 7 some
-are armoured and take three. They are bigger, slower and worth more, and they
-thin visibly as the skins come off. The sky climbs with the ladder too —
+From level 4 some balloons are reinforced and take two taps; from level 10
+some are armoured and take three. They are bigger, slower and worth more, and
+they thin visibly as the skins come off. The sky climbs with the ladder too —
 morning, afternoon, dusk, night — so how far up you are is visible without
 reading anything.
 
