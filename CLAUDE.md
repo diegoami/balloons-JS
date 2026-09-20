@@ -27,8 +27,8 @@ third copy of every file. Searching the repository root for `Ladder.skin`:
 
 | | files matched |
 |---|---|
-| `rg -l` | **3** — the three real ones in `public/js` |
-| `grep -rl` | 9 — each file three times over |
+| `rg -l` | **4** — three in `public/js`, plus this file for naming the symbol |
+| `grep -rl` | 10 — the same four, and each of the three copied twice more |
 
 The six extra are `android/app/src/main/assets/www/` and
 `android/app/build/intermediates/assets/release/mergeReleaseAssets/www/`.
@@ -93,9 +93,14 @@ claim rests on, not the surrounding hundred.
 | `npm run dev` | `netlify dev`, serving the site and the function. | Long-running; do not block on it. |
 | `npm run playtest` | A bot with human reaction time, reporting on tuning. Asserts nothing. | See README. |
 
-`npm run test:browser` and `npm run playtest` both bind **port 8899**. Only one
-can run at a time; a second starts, fails `EADDRINUSE`, and prints nothing
-useful. Never run two test loops at once.
+`npm run test:browser` binds **port 8899**, and nothing else does, so two
+browser suites at once will collide -- the second fails `EADDRINUSE` and
+prints nothing useful. Run one at a time.
+
+`npm run playtest` defaults to **8910** and takes `--port`, which exists so
+that several viewport sizes can be measured concurrently
+(`tools/playtest.mjs:52`). Sweeps in parallel are fine; give each its own
+port.
 
 ## Knowing a change works
 

@@ -31,9 +31,16 @@ const dir = path.join(root, 'public', 'js');
 
 const onDisk = readdirSync(dir).filter(n => n.endsWith('.js')).sort();
 
-// Every <script src="js/..."> in the page, in the order it loads them.
-const page = readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
-const loaded = [...page.matchAll(/<script[^>]+src="js\/([^"]+\.js)"/g)].map(m => m[1]);
+// Every <script src="js/..."> the page actually loads.
+//
+// Comments come out first. A tag inside <!-- --> is not loaded, and matching
+// it anyway reported a disabled module as present -- which is the one case
+// this cross-check exists for, since commenting a tag out is how you disable
+// a module while bisecting and forgetting to put it back is how it ships.
+const page = readFileSync(path.join(root, 'public', 'index.html'), 'utf8')
+  .replace(/<!--[\s\S]*?-->/g, '');
+const loaded = [...page.matchAll(/<script[^>]+src=["']js\/([^"']+\.js)["']/g)]
+  .map(m => m[1]);
 
 let bad = 0;
 
