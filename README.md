@@ -2,6 +2,8 @@
 
 Simple JavaScript / HTML5 game. Pop the balloons before too many escape.
 
+Working on it with an AI assistant: see [CLAUDE.md](CLAUDE.md).
+
 Play by clicking or tapping balloons. There is one game: press space, or the
 Play button, and you start at level 1. The level climbs every 25 seconds of
 play, up to 10, and everything gets faster, denser and smaller as it does.
