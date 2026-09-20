@@ -1,8 +1,14 @@
 # Working in this repository
 
 The game is plain static files with no build step. `README.md` has the module
-map and how to run things; this file is about what to read, what to leave
-alone, and how to know a change works.
+map and how to run things, `android/README.md` covers the app, and
+`docs/open-work.md` lists what is still open. This file is about what to read,
+what to leave alone, what has already been decided, and how to know a change
+works.
+
+Everything worth carrying between sessions lives in this repository. If you
+learn something durable — a trap, a decision, a reason — write it here or in
+one of those files, not into a note only you can see.
 
 Long threads cost more per turn than short ones, so starting fresh after a
 shipped and verified task is a good habit — but carry the reasoning over, not
@@ -102,6 +108,43 @@ that several viewport sizes can be measured concurrently
 (`tools/playtest.mjs:52`). Sweeps in parallel are fine; give each its own
 port.
 
+## Decided, and not to be re-opened
+
+**The tuning is closed.** On 2026-09-19 the owner looked at the measured
+outcomes and said the game is correctly tuned as it stands. Do not propose
+re-tuning the ladder unless they raise it. What was accepted, so that a later
+reading does not mistake it for a bug:
+
+- a careful mouse (bot at 12px aim error) wins every run, all 20 levels
+- one thumb (40px aim error) dies between levels 9 and 13, every run
+- two thumbs roughly doubles the tap rate, which is why the splash says
+  "Best played on a tablet"
+
+There is deliberately no middle ground: precise players finish, imprecise ones
+do not. That is the intended shape. The comments in `ladder.js` that justify
+the frequencies are stale and worth correcting — the numbers, not the
+behaviour. See `docs/open-work.md`.
+
+## Review
+
+Pull requests are reviewed by an assistant on the owner's own account, so its
+verdict arrives as a comment rather than a formal approval. Treat it as a real
+gate: it has caught defects that got past the author.
+
+Reproduce every finding before acting on it, **and reproduce your own before
+publishing it**. On the round that produced this file, both sides published a
+findings table from a test that had never run the fault — one repro used
+markup that its `sed` never matched, and one rule was written by generalising
+a true fact without opening the file it was about. Both slipped through
+because the faults tested were the faults thought of while writing, so the
+test set inherited the blind spot from the thing it was testing. What catches
+that is running old and new side by side: a broken harness shows up as both
+columns agreeing when they should differ.
+
+Flag out-of-scope defects in the PR body rather than fixing them silently. But
+if a fix turns out to be four errors where two were flagged, fix all four —
+half a correction is not what anyone wanted.
+
 ## Knowing a change works
 
 Climb the ladder: `npm run check` for syntax, `npm run test:scores` for the
@@ -120,6 +163,12 @@ that the code did what it said rather than that a player could tell. When a
 change is meant to be noticed, assert the thing a person would notice —
 pixels, contrast, timing — and then go and play it.
 
-Run `npm test` repeatedly before pushing anything that touches game logic; the
-browser suite has timing in it and a single green run proves less than it
-looks. Re-run it after the last edit, not before.
+Run `npm test` **eight times** before pushing anything that touches game
+logic, and read the pass COUNT rather than the absence of a FAIL line. The
+browser suite has timing in it, and three passes once let a one-in-eight flake
+through twice. Re-run after the last edit, not before — a green run from
+before the final change has verified nothing.
+
+A change that touches no file under `public/` or `netlify/` cannot move any of
+that timing, and one pass plus the diff is proportionate. Say which you did
+rather than implying the higher bar.

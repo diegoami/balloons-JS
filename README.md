@@ -3,6 +3,8 @@
 Simple JavaScript / HTML5 game. Pop the balloons before too many escape.
 
 Working on it with an AI assistant: see [CLAUDE.md](CLAUDE.md).
+The Android app is in [android/](android/README.md); what is still open is in
+[docs/open-work.md](docs/open-work.md).
 
 Play by clicking or tapping balloons. There is one game: press space, or the
 Play button, and you start at level 1. The level climbs every 20 seconds of
