@@ -118,10 +118,9 @@ Input.menu = function (game, signal) {
             return;
         }
 
-        // A tap anywhere starts a game. There is one game to start and the
-        // screen behind this is already showing it being played, so asking
-        // someone to find a button first is a step for its own sake. The two
-        // chips along the bottom are the things that mean something else.
+        // Only the Play button starts a game. A tap on empty sky does nothing:
+        // the button is the way in, and the two chips along the bottom are the
+        // only other things that mean something.
         var clicked = Input.point(game, event);
         if (game.screen === "title" && Layout.hitRect(Play.rect(game), clicked)) {
             game.restart();
@@ -135,8 +134,6 @@ Input.menu = function (game, signal) {
             game.enter("about");
         } else if (target && target.id === "start") {
             game.cycleStartLevel();
-        } else {
-            game.restart();
         }
     }, { signal: signal });
 

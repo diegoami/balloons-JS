@@ -4,14 +4,14 @@
  * The Play button, which drifts about the sky and will not be missed.
  *
  * The title screen used to say "Tap anywhere to play" and mean it: a tap
- * anywhere did start a game, and that is still true. Played by somebody who
- * had not built it, the line went unread -- which is what a line of text on a
- * screen full of moving balloons does. People look for a button.
+ * anywhere started a game. Played by somebody who had not built it, the line
+ * went unread -- which is what a line of text on a screen full of moving
+ * balloons does. People look for a button.
  *
- * So there is a button. It is deliberately NOT the only way in: tapping the
- * sky still works, because that was a good idea and the button is a signpost
- * rather than a gate. What it has to do is be impossible to miss, which is
- * why it moves and why it changes colour.
+ * So there is a button, and it is now the ONLY way in: the tap-anywhere
+ * shortcut is gone, and a tap on empty sky does nothing. What it has to do is
+ * be impossible to miss, which is why it moves and why it changes colour --
+ * and why it keeps clear of the footer chips, which do something else.
  *
  * WHERE IT MAY GO
  *
@@ -105,15 +105,30 @@ Play.rect = function (game) {
         Play.begin(game);
     }
 
-    // The band: under the words, over the chips, and never off an edge.
-    var top = game.layout.splash.y + game.layout.splash.height + line * 0.4;
-    var bottom = game.layout.player.y - line * 0.6 - height;
+    // Never over a footer chip: a button that wanders onto one steals its tap.
+    // The chips share a row, or wrap onto the row above it on a narrow screen,
+    // so the button's bottom must clear the highest of them.
+    var chipsTop = Math.min(
+        game.layout.player.y,
+        game.layout.about.y,
+        game.layout.start.y
+    );
+
+    // The band wanted: the whole bottom half, or below the panel where that is
+    // lower, down to a margin above the chips.
+    var splash = game.layout.splash;
+    var top = Math.max(game.height * 0.5, splash.y + splash.height + line * 0.4);
+    var bottom = chipsTop - line * 0.6 - height;
+
+    // On a short screen there may be no room above the chips at all. Then the
+    // button is pinned just above them — over the panel if it must, which is
+    // not a tap target — rather than allowed to overlap a chip.
+    if (bottom < top) {
+        top = bottom;
+    }
+
     var left = game.width * Layout.GRID.columns.margin;
     var right = game.width - left - width;
-
-    if (bottom < top) {
-        bottom = top;
-    }
 
     return {
         x: left + (right - left) * Play.at.x,

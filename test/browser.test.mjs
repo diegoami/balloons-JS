@@ -293,10 +293,21 @@ await t('the title screen is playing the game behind its own text', async () => 
   await context.close();
 });
 
-await t('clicking anywhere on the sky starts the game', async () => {
+await t('only the Play button starts the game', async () => {
   const { context, page, errors } = await newGame();
-  const point = await page.evaluate(() => ({ x: Game.width * 0.62, y: Game.height * 0.42 }));
-  await page.mouse.click(point.x, point.y);
+
+  // Empty sky does nothing now: the button is the way in.
+  const empty = await page.evaluate(() => ({ x: Game.width * 0.62, y: Game.height * 0.42 }));
+  await page.mouse.click(empty.x, empty.y);
+  await page.waitForTimeout(500);
+  assert.equal(await page.evaluate(() => Game.screen), 'title',
+    'a tap on empty sky started a game');
+
+  const play = await page.evaluate(() => {
+    const r = Play.rect(Game);
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  await page.mouse.click(play.x, play.y);
   await page.waitForTimeout(2600);
   const state = await page.evaluate(() => ({
     screen: Game.screen, level: Game.level, lives: Game.allowance, running: Game.running
@@ -655,16 +666,79 @@ await t('resizing re-sizes the canvas and repaints the title screen', async () =
   await context.close();
 });
 
-await t('a tap still starts a game after a resize', async () => {
+await t('the Play button still starts a game after a resize', async () => {
   const { context, page, errors } = await newGame({ width: 900, height: 700 });
   await page.setViewportSize({ width: 1300, height: 800 });
   await page.waitForTimeout(300);
-  const point = await page.evaluate(() => ({ x: Game.width * 0.5, y: Game.height * 0.5 }));
+  const point = await page.evaluate(() => {
+    const r = Play.rect(Game);
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
   await page.mouse.click(point.x, point.y);
   await page.waitForTimeout(2600);
   const state = await page.evaluate(() => ({ screen: Game.screen, lives: Game.allowance }));
   assert.equal(state.screen, 'playing', 'hit regions went stale after resize');
   assert.equal(state.lives, 5);
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the Play button never covers a footer chip, at any size', async () => {
+  // The button roams the bottom half, so every position it can take, at every
+  // viewport, must clear the name and About chips and stay on the canvas.
+  const { context, page, errors } = await newGame();
+  const sizes = [[320, 480], [240, 240], [390, 844], [900, 500], [1280, 720]];
+  for (const [w, h] of sizes) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.waitForTimeout(150);
+    const m = await page.evaluate(() => {
+      const overlap = (a, b) =>
+        a.x < b.x + b.width && b.x < a.x + a.width &&
+        a.y < b.y + b.height && b.y < a.y + a.height;
+      let worst = null;
+      for (let i = 0; i <= 20 && !worst; i++) {
+        for (let j = 0; j <= 20 && !worst; j++) {
+          Play.at = { x: i / 20, y: j / 20 };
+          const r = Play.rect(Game);
+          for (const id of ['player', 'about', 'start']) {
+            const chip = Game.layout[id];
+            if (chip && overlap(r, chip)) { worst = { id, r, chip }; }
+          }
+          if (r.x < 0 || r.y < 0 ||
+              r.x + r.width > Game.width || r.y + r.height > Game.height) {
+            worst = { id: 'off-canvas', r };
+          }
+        }
+      }
+      return worst;
+    });
+    assert.equal(m, null,
+      `${w}x${h}: the Play button overlapped ${m && m.id}: ` + JSON.stringify(m));
+  }
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the name chip and title announcement show the name alone', async () => {
+  const { context, page, errors } = await newGame({ name: 'Diego' });
+  const m = await page.evaluate(() => {
+    const seen = [];
+    const orig = Paint.chip;
+    Paint.chip = function (game, rect, label) {
+      seen.push(label);
+      return orig.apply(this, arguments);
+    };
+    Paint.player(Game);
+    Paint.chip = orig;
+    return { labels: seen, said: document.getElementById('game_status').textContent };
+  });
+  assert.ok(m.labels.includes('Diego'),
+    'the bare name was not drawn: ' + JSON.stringify(m.labels));
+  assert.ok(!m.labels.some(l => /Playing as/.test(l)),
+    'the chip still says "Playing as": ' + JSON.stringify(m.labels));
+  assert.doesNotMatch(m.said, /Playing as/,
+    'the announcement still says "Playing as": ' + m.said);
+  assert.match(m.said, /Diego/, 'the announcement does not name the player');
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
@@ -860,14 +934,15 @@ await t('the menu never overflows, even at extreme widths', async () => {
   }
 });
 
-await t('clicking the high-score line starts a game', async () => {
+await t('the old high-score line no longer starts a game', async () => {
+  // The title screen draws no board any more, and no longer starts on a tap
+  // anywhere. The place the score heading used to be is now empty sky.
   const { context, page, errors } = await newGame();
   const hit = await page.evaluate(() => Game.layout.scores.hit);
   await page.mouse.click(hit.x + hit.width / 2, hit.y + hit.height / 2);
-  await page.waitForTimeout(2600);
-  assert.equal(await page.evaluate(() => Game.screen), 'playing',
-    'the high-score line did not start a game');
-  assert.equal(await page.evaluate(() => Game.level), 1);
+  await page.waitForTimeout(600);
+  assert.equal(await page.evaluate(() => Game.screen), 'title',
+    'clicking where the score heading was still started a game');
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
@@ -950,7 +1025,7 @@ await t('an imprecise tap still lands on the button', async () => {
   await context.close();
 });
 
-await t('a real touch tap starts a game on an emulated phone', async () => {
+await t('tapping Play starts a game on an emulated phone', async () => {
   const phones = ['iPhone 13', 'Pixel 7'];
   for (const name of phones) {
     const device = devices[name];
@@ -963,8 +1038,11 @@ await t('a real touch tap starts a game on an emulated phone', async () => {
     await page.goto('http://localhost:8899/', { waitUntil: 'load' });
     await page.waitForTimeout(500);
 
-    // Nowhere in particular, which is the point: there is no button to miss.
-    const point = await page.evaluate(() => ({ x: Game.width * 0.55, y: Game.height * 0.45 }));
+    // On the Play button, which is now the only way in on a touch screen too.
+    const point = await page.evaluate(() => {
+      const r = Play.rect(Game);
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
     await page.touchscreen.tap(point.x, point.y);
     await page.waitForTimeout(2800);
 
@@ -1044,14 +1122,6 @@ const patchPaint = (page, rect) => page.evaluate((r) => {
   return [Math.round(red / n), Math.round(green / n), Math.round(blue / n)];
 }, rect);
 
-/** The strip the start prompt is drawn in. */
-const promptRect = (page) => page.evaluate(() => ({
-  x: Game.layout.hint.x,
-  y: Game.layout.hint.y - Game.layout.line,
-  width: Game.layout.line * 10,
-  height: Game.layout.line * 1.3
-}));
-
 await t('the menu is not live during the countdown, and a tap does nothing', async () => {
   const { context, page, errors } = await newGame();
   await page.keyboard.press(' ');
@@ -1063,9 +1133,9 @@ await t('the menu is not live during the countdown, and a tap does nothing', asy
   assert.equal(during.screen, 'starting');
   assert.equal(during.live, false, 'menu reported live while the game was starting');
 
-  // The countdown used to be restartable by tapping through it. Now that a tap
-  // anywhere starts a game, this is the check that matters more than how the
-  // screen looks: the tap has to land on nothing.
+  // The countdown used to be restartable by tapping through it. This is the
+  // check that matters more than how the screen looks: the tap has to land on
+  // nothing, because only the Play button starts a game.
   await page.mouse.click(600, 400);
   await page.waitForTimeout(200);
   const after = await page.evaluate(() => ({ screen: Game.screen, endsAt: Game.state.endsAt }));
@@ -1148,11 +1218,19 @@ await t('the menu is dead briefly after a game, then live', async () => {
   assert.equal(await page.evaluate(() => Game.screen), 'title',
     'the menu did not respond once live');
 
-  // And now it works.
+  // And now it works — but only on the Play button; the sky does nothing.
   await page.mouse.click(where.sky.x, where.sky.y);
   await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => Game.screen), 'title',
+    'tapping the sky on the title started a game');
+  const play = await page.evaluate(() => {
+    const r = Play.rect(Game);
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  await page.mouse.click(play.x, play.y);
+  await page.waitForTimeout(300);
   assert.equal(await page.evaluate(() => Game.screen), 'starting',
-    'the menu did not respond once live');
+    'the Play button did not respond once live');
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
@@ -1190,9 +1268,9 @@ await t('pressing the name line changes how it looks, and releasing puts it back
   assert.equal(await page.evaluate(() => Game.pressed), 'player');
   assert.notDeepEqual(pressed, before, 'pressing the name line did not change its paint');
 
-  // Cancelled rather than released: a release anywhere on the canvas is now a
-  // click, and a click anywhere starts a game. pointercancel is the path a
-  // browser takes when a gesture is taken over, and the one the code binds.
+  // Cancelled rather than released: a release on the canvas is a click, and a
+  // click on the title only starts a game on the Play button. pointercancel is
+  // the path a browser takes when a gesture is taken over.
   await page.evaluate(() => {
     Game.canvas.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true }));
   });
@@ -1451,10 +1529,9 @@ await t('keys and the menu do nothing while a game is being played', async () =>
   await page.waitForTimeout(2400);
   assert.equal(await page.evaluate(() => Game.screen), 'playing');
 
-  // Only the popping handler is bound during play: the difficulty keys and the
-  // menu buttons are not listening, so neither can restart the game under you.
-  // A click during play means "pop what is under it", never "start a game" —
-  // which matters far more now that a click anywhere starts one on the title.
+  // Only the popping handler is bound during play: the menu buttons are not
+  // listening, so they cannot restart the game under you. A click during play
+  // means "pop what is under it", never "start a game".
   const centre = await page.evaluate(() => ({ x: Game.width * 0.5, y: Game.height * 0.45 }));
   await page.keyboard.press(' ');
   await page.mouse.click(centre.x, centre.y);
@@ -2013,7 +2090,7 @@ await t('the game says what screen it is on, and what happened', async () => {
   assert.equal(region.live, 'polite', 'the region interrupts instead of waiting');
   assert.equal(region.role, 'status');
   assert.equal(region.atomic, 'true', 'a partial update would be read out of context');
-  assert.match(region.text, /Tap anywhere to play/, 'the title screen does not say how to start');
+  assert.match(region.text, /Press Play to start/, 'the title screen does not say how to start');
   assert.match(region.text, /Twenty levels/,
     'the title screen does not describe the game a reader cannot watch');
   assert.match(region.text, /Listener/, 'the title screen does not say who is playing');
@@ -2143,7 +2220,6 @@ await t('every colour the game draws text in is readable on its ground', async (
 
       // On the static screens everything sits on the panel.
       check('intro', p.ink, L.intro.x + 40, L.intro.y, true);
-      check('start prompt', p.inkSoft, L.hint.x + 40, L.hint.y, true);
       check('description', p.inkSoft, L.description[0].x + 40, L.description[0].y, true);
       check('score name', p.ink, L.scores.columns.name, L.scores.rows[2], true);
       check('score date', p.inkSoft, L.scores.columns.date + 20, L.scores.rows[2], true);
@@ -3975,7 +4051,11 @@ await t('a real touch is recorded as touch, and a real mouse as mouse', async ()
   });
   await touchPage.goto('http://localhost:8899/', { waitUntil: 'load' });
   await touchPage.waitForTimeout(400);
-  await touchPage.touchscreen.tap(180, 400);
+  const touchPlay = await touchPage.evaluate(() => {
+    const r = Play.rect(Game);
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  await touchPage.touchscreen.tap(touchPlay.x, touchPlay.y);
   await touchPage.waitForTimeout(2600);
   for (let i = 0; i < 5; i++) {
     await touchPage.touchscreen.tap(110 + i * 30, 500);
@@ -3986,7 +4066,11 @@ await t('a real touch is recorded as touch, and a real mouse as mouse', async ()
   await touchContext.close();
 
   const { context, page } = await newGame({ name: 'Mouser' });
-  await page.mouse.click(700, 400);
+  const mousePlay = await page.evaluate(() => {
+    const r = Play.rect(Game);
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  await page.mouse.click(mousePlay.x, mousePlay.y);
   await page.waitForTimeout(2600);
   for (let i = 0; i < 5; i++) {
     await page.mouse.click(300 + i * 40, 500);

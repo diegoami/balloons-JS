@@ -250,13 +250,14 @@ Paint.menu = function (game) {
 
     ctx.restore();
 
-    ctx.font = game.layout.fonts.label;
-    ctx.fillStyle = live ? palette.inkSoft : palette.inkDisabled;
-    ctx.fillText(
-        live ? Layout.START_TEXT : "Hold on...",
-        game.layout.hint.x,
-        game.layout.hint.y
-    );
+    // Only the wait says anything now. The line that used to sit here on the
+    // title — "or tap anywhere" — went with the tap-anywhere shortcut; the
+    // Play button is the instruction, so there is nothing to repeat beside it.
+    if (!live) {
+        ctx.font = game.layout.fonts.label;
+        ctx.fillStyle = palette.inkDisabled;
+        ctx.fillText("Hold on...", game.layout.hint.x, game.layout.hint.y);
+    }
 };
 
 /**
@@ -522,7 +523,7 @@ Paint.player = function (game) {
     // The sky is at its brightest along the bottom edge, so the chip carries
     // the same scrim the sky uses behind its own text rather than trusting
     // pale ink to hold up over a lit horizon.
-    Paint.chip(game, rect, Layout.PLAYER_PREFIX + game.name, live,
+    Paint.chip(game, rect, game.name, live,
         game.pressed === "player");
 };
 

@@ -46,7 +46,7 @@ Announce.say = function (text) {
 Announce.title = function (game) {
     Announce.say(
         "Balloons. " + Layout.DESCRIPTION.join(" ") +
-        " Playing as " + game.name + ". Tap anywhere to play."
+        " " + game.name + ". Press Play to start."
     );
 };
 

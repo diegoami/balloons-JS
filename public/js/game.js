@@ -368,7 +368,7 @@ Game.measureLayout = function () {
     this.fontSize = Layout.applyFont(this.ctx, this.width, this.height);
     this.layout = Layout.compute(
         this.ctx, this.width, this.height, this.fontSize,
-        Layout.PLAYER_PREFIX + this.name,
+        this.name,
         this.startLevel
     );
 };
