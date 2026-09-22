@@ -271,7 +271,6 @@ Paint.runBreakdown = function (game) {
     var b = game.breakdown;
     var left = L.intro.x;
     var mid = game.width * 0.5;
-    var step = L.line * 1.5;
 
     ctx.save();
     ctx.textAlign = "left";
@@ -287,6 +286,11 @@ Paint.runBreakdown = function (game) {
     );
 
     var top = L.intro.y + L.line * 2.8;
+
+    // The columns have to fit between the intro and the OK button, so the step
+    // shrinks on a short screen rather than running under the button.
+    var room = L.okay.y - L.line - top;
+    var step = Math.max(L.line * 0.8, Math.min(L.line * 1.5, room / 6.6));
 
     ctx.font = L.fonts.label;
     ctx.fillStyle = game.palette.accent;

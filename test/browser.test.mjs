@@ -560,6 +560,32 @@ await t('a practice run is not remembered locally', async () => {
   await context.close();
 });
 
+await t('the OK button does not overlap the run breakdown', async () => {
+  for (const [w, h] of [[390, 844], [820, 1180], [1280, 720], [1920, 400]]) {
+    const { context, page } = await newGame({ width: w, height: h });
+    await page.keyboard.press(' ');
+    await page.waitForTimeout(2400);
+    await page.evaluate(() => { Game.livesLost = Game.allowance; });
+    await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
+    const m = await page.evaluate(() => {
+      const L = Game.layout;
+      return {
+        okayY: L.okay.y,
+        okayBottom: L.okay.y + L.okay.height,
+        playerY: L.player.y,
+        // The lowest baseline the breakdown can draw, at its smallest step.
+        lowest: L.intro.y + L.line * 2.8 + L.line * 0.8 * 5
+      };
+    });
+    assert.ok(m.okayY >= m.lowest,
+      `the OK button at ${m.okayY.toFixed(0)} overlaps the breakdown ` +
+      `(lowest ${m.lowest.toFixed(0)}) at ${w}x${h}`);
+    assert.ok(m.okayBottom <= m.playerY,
+      `the OK button runs into the name chip at ${w}x${h}`);
+    await context.close();
+  }
+});
+
 await t('no listeners leak across repeated restarts', async () => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await context.newPage();
