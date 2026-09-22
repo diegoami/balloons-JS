@@ -271,11 +271,22 @@ Paint.runBreakdown = function (game) {
     var b = game.breakdown;
     var left = L.intro.x;
     var mid = game.width * 0.5;
-    var top = L.intro.y + L.line * 2.0;
     var step = L.line * 1.5;
 
     ctx.save();
     ctx.textAlign = "left";
+
+    // How far the run got, and what it was played with. The ladder is
+    // calibrated for one pointer, so the device is part of the result.
+    ctx.font = L.fonts.label;
+    ctx.fillStyle = game.palette.inkSoft;
+    ctx.fillText(
+        "LEVEL " + game.level + (game.won ? " WON" : "") +
+            "  \u00b7  " + game.pointerKind(),
+        left, L.intro.y + L.line * 1.5
+    );
+
+    var top = L.intro.y + L.line * 2.8;
 
     ctx.font = L.fonts.label;
     ctx.fillStyle = game.palette.accent;

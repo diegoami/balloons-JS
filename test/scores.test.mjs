@@ -190,6 +190,44 @@ await t('a pointer we do not know is not recorded at all', async () => {
   });
 });
 
+await t('a valid breakdown is stored with the score', async () => {
+  __reset();
+  const breakdown = {
+    points: { ordinary: 10, reinforced: 3, armoured: 2, saucer1: 12, saucer2: 20 },
+    losses: { escapes: 1, saucers: 1, birds: 0, fireflies: 2 }
+  };
+  await post({ name: 'Detailed', score: 47, level: 12, breakdown });
+  const board = await (await get()).json();
+  assert.deepEqual(board[0].breakdown, breakdown, 'the breakdown was not stored intact');
+});
+
+await t('a bad breakdown is dropped, and the score is not', async () => {
+  __reset();
+  const good = {
+    points: { ordinary: 5, reinforced: 0, armoured: 0, saucer1: 0, saucer2: 0 },
+    losses: { escapes: 0, saucers: 0, birds: 0, fireflies: 0 }
+  };
+  const cases = [
+    undefined,
+    { ...good, points: { ...good.points, ordinary: -1 } },
+    { ...good, points: { ...good.points, ordinary: 1.5 } },
+    { ...good, points: { ...good.points, ordinary: 6 } },   // does not sum to the score
+    { points: good.points },                                 // no losses at all
+    { ...good, losses: { escapes: 1000, saucers: 0, birds: 0, fireflies: 0 } },
+    { ...good, points: { ...good.points, ordinary: NaN } }
+  ];
+  for (const breakdown of cases) {
+    const r = await post({ name: 'Forged', score: 5, level: 3, breakdown });
+    assert.equal(r.status, 200, 'a bad breakdown rejected the whole score');
+  }
+  const board = await (await get()).json();
+  assert.equal(board.length, cases.length, 'a bad breakdown cost the score');
+  board.forEach((row, i) => {
+    assert.equal(row.breakdown, undefined, `row ${i} kept a breakdown it should not have`);
+    assert.equal(row.score, 5, `row ${i} lost its score`);
+  });
+});
+
 await t('unsupported methods are rejected with 405', async () => {
   const r = await handler(new Request('https://x/api/scores', { method: 'DELETE' }), ctx());
   assert.equal(r.status, 405);

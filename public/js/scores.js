@@ -78,6 +78,11 @@ Scores.load = function (game) {
             if (Scores.pending === mine) {
                 Scores.pending = null;
             }
+            // A static screen (the board) has to be repainted on failure too,
+            // or it keeps showing the last board and never says it fell back.
+            if (Screens[game.screen] && !Screens[game.screen].animated) {
+                game.paint();
+            }
         });
 
     Scores.pending = mine;

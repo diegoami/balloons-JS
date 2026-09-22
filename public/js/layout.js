@@ -137,8 +137,6 @@ Layout.ONE_PAUSE_LEFT = "1 pause left";
 Layout.NO_PAUSES_LEFT = "That was your last pause";
 Layout.RESUMING_IN = "Resuming in ";
 Layout.PAUSED_HINT = "You looked away, so the game waited.";
-Layout.HIGH_SCORES_TEXT = "High Scores";
-
 /** The Scores chip, the screen behind it, and the breakdown it explains. */
 Layout.BOARD_TEXT = "\u2605";
 Layout.BOARD_TITLE = "High Scores";
@@ -357,20 +355,6 @@ Layout.wrap = function (ctx, sentence, available) {
     return lines;
 };
 
-/** Grows a rect about its own centre until it meets the touch minimum. */
-function atLeastTouchSize(rect) {
-    var min = Layout.GRID.minTouchTarget;
-    var width = Math.max(rect.width, min);
-    var height = Math.max(rect.height, min);
-
-    return {
-        x: rect.x + rect.width / 2 - width / 2,
-        y: rect.y + rect.height / 2 - height / 2,
-        width: width,
-        height: height
-    };
-}
-
 /**
  * Picks a font size for the viewport and sets it on the context.
  *
@@ -542,17 +526,10 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
 
     var hintY = menuBottom + line * G.gaps.afterMenu;
     var headingY = hintY + line * G.gaps.afterHint;
-    var firstRowY = headingY + line * G.gaps.beforeScores;
 
-    var rows = [];
-    for (var r = 0; r < G.scoreRowCount; r++) {
-        rows.push(firstRowY + line * r * G.scoreRowStep);
-    }
-
-    // The ground the text block stands on: from above the headline to below
-    // the last score row, with a margin of air. Everything drawn on a static
-    // screen sits inside it, which is what makes one ink colour legible on
-    // every palette.
+    // The ground the text block stands on. Everything drawn on a static screen
+    // sits inside it, which is what makes one ink colour legible on every
+    // palette.
     var panelPad = line * G.panelPad;
     var panelTop = line * G.rows.intro - line;
     var panel = {
@@ -562,13 +539,6 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
         height: 0,
         radius: line * G.button.radius * 2
     };
-
-    var scoresHit = atLeastTouchSize({
-        x: width * G.columns.scoresHeading,
-        y: headingY - line / 2,
-        width: ctx.measureText(Layout.HIGH_SCORES_TEXT + "S").width,
-        height: line
-    });
 
     // --- the name line, anchored to the bottom edge rather than to the flow
 
@@ -743,7 +713,10 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
     // sets it directly to measure the top of the ladder, which is the only
     // thing that ever really needed a way in.
 
-    panel.height = rows[rows.length - 1] + line - panel.y + panelPad;
+    // The full panel, drawn on the game-over screen: the intro line, the two
+    // breakdown columns, and room under them for the personal-best line.
+    var panelBottom = line * (G.rows.intro + 13.2);
+    panel.height = Math.max(0, panelBottom - panel.y + panelPad);
 
     // A shorter panel for the title screen, which has the game playing behind
     // it. The full one reaches the bottom of the score table and so covers
@@ -836,18 +809,6 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
         resume: resume,
 
         countdown: { x: width / 2, y: headingY + line * 1.4 },
-
-        scores: {
-            heading: { x: width * G.columns.scoresHeading, y: headingY },
-            hit: scoresHit,
-            columns: {
-                date: width * G.columns.scoreDate,
-                name: width * G.columns.scoreName,
-                level: width * G.columns.scoreLevel,
-                value: width * G.columns.scoreValue
-            },
-            rows: rows
-        },
 
         legend: legend,
 

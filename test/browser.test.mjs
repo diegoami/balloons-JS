@@ -214,9 +214,7 @@ await t('every drawn region lines up with its click target', async () => {
           labelWidth: ctx.measureText(b.label).width,
           x: b.x, y: b.y, width: b.width, height: b.height,
           hit: b.hit
-        })),
-        heading: L.scores.heading,
-        hit: L.scores.hit
+        }))
       };
     });
 
@@ -232,8 +230,6 @@ await t('every drawn region lines up with its click target', async () => {
         `(${button.width.toFixed(0)}) at ${w}x${h}`);
     });
 
-    assert.ok(m.heading.y > m.hit.y && m.heading.y < m.hit.y + m.hit.height,
-      `scores baseline outside its hit rect at ${w}x${h}`);
     await context.close();
   }
 });
@@ -367,10 +363,13 @@ await t('clicking a balloon pops it and scores a point', async () => {
   await context.close();
 });
 
-await t('game over submits the score and asks for the board', async () => {
+await t('game over submits the score; the board fetches on its own screen', async () => {
   boards.clear();
   apiHits.length = 0;
   const { context, page, errors } = await newGame({ name: 'Diego' });
+  // The title screen fetches the board on arrival; clear that before the run.
+  await page.waitForTimeout(500);
+  apiHits.length = 0;
   await page.keyboard.press(' ');
   await page.waitForTimeout(2500);
   await page.evaluate(() => { Game.score = 17; });
@@ -386,9 +385,15 @@ await t('game over submits the score and asks for the board', async () => {
   assert.equal(boards.get('all')[0].name, 'Diego');
   assert.equal(boards.get('all')[0].score, 17);
 
-  // After the 5s pause the board is fetched and drawn.
-  await page.waitForTimeout(5600);
-  assert.ok(apiHits.some(h => h.method === 'GET'), 'board was never fetched');
+  // Game over shows the run breakdown; it has no reason to fetch the board.
+  await page.waitForTimeout(1500);
+  assert.ok(!apiHits.some(h => h.method === 'GET'),
+    'game over fetched the board; the breakdown does not need it');
+
+  // The board screen is where the board is fetched.
+  await page.evaluate(() => { Game.enter('board'); });
+  await page.waitForTimeout(600);
+  assert.ok(apiHits.some(h => h.method === 'GET'), 'the board screen never fetched');
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
@@ -414,6 +419,10 @@ await t('the breakdown records each kind of point and each cause of loss', async
     const two = bossConstructor(400, 200, 30, 800, 2, 0);
     for (let i = 0; i < Ladder.saucer(2).taps; i++) { two.tapped(Game); }
 
+    // A saucer that runs out its fuse costs a life, recorded as a saucer loss.
+    const fired = bossConstructor(200, 200, 30, 800, 1, 0);
+    for (let i = 0; i < Ladder.saucer(1).fuse; i++) { fired.step(Game, false); }
+
     birdConstructor(0, 300, 20, 4, true).tapped(Game);
     fireflyConstructor(400, 300, 15, 0.5, Game.width, Game.height).tapped(Game);
 
@@ -431,10 +440,37 @@ await t('the breakdown records each kind of point and each cause of loss', async
   assert.equal(m.p.armoured, 6, 'an armoured balloon is not worth six');
   assert.equal(m.p.saucer1, m.saucer1Worth, 'the first saucer is in the wrong bucket');
   assert.equal(m.p.saucer2, m.saucer2Worth, 'the mark II is in the wrong bucket');
+  assert.equal(m.l.saucers, 1, 'a saucer that fired was not recorded');
   assert.equal(m.l.birds, 1, 'touching a bird was not recorded');
   assert.equal(m.l.fireflies, 1, 'touching a firefly was not recorded');
   assert.equal(m.totals.points, m.score, 'the points do not add up to the score');
   assert.equal(m.totals.losses, m.livesLost, 'the losses do not add up to the lives lost');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('an escaped balloon is recorded by cause', async () => {
+  const { context, page, errors } = await newGame();
+  // Driven through the real playing update rather than waited for: a balloon's
+  // crossing time is random, so a fixed wait is a coin toss.
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    Game.entities = [];
+    Game.livesLost = 0;
+    Game.breakdown = Game.blankBreakdown();
+    const b = Game.randomBalloon();
+    b.ycoord = -9999;               // already over the top
+    Game.add(b);
+    Screens.playing.update(Game);
+    return {
+      escapes: Game.breakdown.losses.escapes,
+      livesLost: Game.livesLost,
+      totals: Game.breakdownTotals()
+    };
+  });
+  assert.equal(m.escapes, 1, 'the escape was not recorded by cause: ' + JSON.stringify(m));
+  assert.equal(m.livesLost, 1, 'the escape did not cost a life');
+  assert.equal(m.totals.losses, m.livesLost, 'losses do not add up after an escape');
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
@@ -995,14 +1031,14 @@ await t('the whole composition stays on screen at every viewport', async () => {
       const L = Game.layout;
       return {
         fontSize: Game.fontSize,
-        deepest: L.scores.rows[L.scores.rows.length - 1],
+        deepest: L.boardScreen.rows[L.boardScreen.rows.length - 1],
         menuRight: Math.max(...L.menu.buttons.map(b => b.x + b.width)),
         introRight: Game.ctx.measureText(Layout.INTRO_TEXT).width + L.intro.x,
-        scoreValueX: L.scores.columns.value,
+        scoreValueX: L.boardScreen.columns.value,
         hudTime: L.hud.time
       };
     });
-    assert.ok(m.deepest < h, `bottom score row ${m.deepest.toFixed(0)} below ${h}px screen at ${w}x${h}`);
+    assert.ok(m.deepest < h, `bottom board row ${m.deepest.toFixed(0)} below ${h}px screen at ${w}x${h}`);
     assert.ok(m.menuRight <= w, `menu boxes run to ${m.menuRight.toFixed(0)} past ${w}px at ${w}x${h}`);
     assert.ok(m.introRight <= w, `intro text runs to ${m.introRight.toFixed(0)} past ${w}px at ${w}x${h}`);
     assert.ok(m.scoreValueX < w && m.hudTime < w, `right-hand columns off screen at ${w}x${h}`);
@@ -1019,7 +1055,7 @@ await t('vertical rhythm follows the type scale, not screen height', async () =>
     const { context, page } = await newGame({ width: 800, height: h });
     const m = await page.evaluate(() => ({
       font: Game.fontSize,
-      rows: Game.layout.scores.rows.map(Math.round),
+      row0: Math.round(Game.layout.boardScreen.rows[0]),
       menuTop: Math.round(Game.layout.menu.top)
     }));
     await context.close();
@@ -1028,8 +1064,8 @@ await t('vertical rhythm follows the type scale, not screen height', async () =>
   const tall = await read(1200);
   const taller = await read(1600);
   assert.equal(tall.font, taller.font, 'font should not depend on height here');
-  assert.deepEqual(tall.rows, taller.rows,
-    `rows moved with screen height: ${tall.rows} vs ${taller.rows}`);
+  assert.equal(tall.row0, taller.row0,
+    `rows moved with screen height: ${tall.row0} vs ${taller.row0}`);
   assert.equal(tall.menuTop, taller.menuTop);
 });
 
@@ -1039,8 +1075,8 @@ await t('row spacing is proportional to the line height', async () => {
     const L = Game.layout;
     return {
       line: L.line,
-      gaps: L.scores.rows.slice(1).map((y, i) => y - L.scores.rows[i]),
-      step: Layout.GRID.scoreRowStep
+      gaps: L.boardScreen.rows.slice(1).map((y, i) => y - L.boardScreen.rows[i]),
+      step: L.boardScreen.step / L.line
     };
   });
   m.gaps.forEach(gap => {
@@ -1069,11 +1105,14 @@ await t('the old high-score line no longer starts a game', async () => {
   // The title screen draws no board any more, and no longer starts on a tap
   // anywhere. The place the score heading used to be is now empty sky.
   const { context, page, errors } = await newGame();
-  const hit = await page.evaluate(() => Game.layout.scores.hit);
+  // Empty sky on the title: above the Play band and clear of the footer chips.
+  const hit = await page.evaluate(() => ({
+    x: Game.width * 0.5, y: Game.height * 0.22, width: 1, height: 1
+  }));
   await page.mouse.click(hit.x + hit.width / 2, hit.y + hit.height / 2);
   await page.waitForTimeout(600);
   assert.equal(await page.evaluate(() => Game.screen), 'title',
-    'clicking where the score heading was still started a game');
+    'clicking empty sky started a game');
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();
 });
@@ -1119,8 +1158,7 @@ await t('the menu box stays on screen after growing to touch size', async () => 
     const m = await page.evaluate(() => ({
       top: Game.layout.menu.top,
       bottom: Game.layout.menu.bottom,
-      introY: Game.layout.intro.y,
-      scoresY: Game.layout.scores.heading.y
+      introY: Game.layout.intro.y
     }));
     assert.ok(m.top >= 0, `menu box starts above the canvas (${m.top.toFixed(1)}) at ${w}x${h}`);
     assert.ok(m.bottom <= h, `menu box runs past the bottom at ${w}x${h}`);
@@ -1366,20 +1404,14 @@ await t('the menu is dead briefly after a game, then live', async () => {
   await context.close();
 });
 
-await t('scores are requested without waiting out the lockout', async () => {
+await t('the board screen asks for the board as soon as it opens', async () => {
   boards.clear();
   apiHits.length = 0;
   const { context, page } = await newGame({ name: 'Diego' });
-  await page.keyboard.press(' ');
-  await page.waitForTimeout(2400);
-  // Spend the allowance rather than waiting to lose it: the bottom of the
-  // ladder releases about one balloon a second on purpose, so dying here
-  // naturally takes most of a minute.
-  await page.evaluate(() => { Game.livesLost = Game.allowance; });
-  await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
-  await page.waitForTimeout(1500);
+  await page.evaluate(() => { Game.enter('board'); });
+  await page.waitForTimeout(800);
   assert.ok(apiHits.some(h => h.method === 'GET'),
-    'the board was not fetched shortly after game over');
+    'the board was not fetched when its screen opened');
   await context.close();
 });
 
@@ -1893,12 +1925,12 @@ await t('the name line clears the composition at every viewport', async () => {
     const m = await page.evaluate(() => {
       const L = Game.layout;
       return {
-        deepest: L.scores.rows[L.scores.rows.length - 1],
+        deepest: L.description[L.description.length - 1].y,
         top: L.player.y,
         bottom: L.player.y + L.player.height
       };
     });
-    assert.ok(m.top > m.deepest, `the name line overlaps the last score row at ${w}x${h}`);
+    assert.ok(m.top > m.deepest, `the name line overlaps the last line of text at ${w}x${h}`);
     assert.ok(m.bottom <= h, `the name line runs off the bottom at ${w}x${h}`);
     await context.close();
   }
@@ -2352,9 +2384,10 @@ await t('every colour the game draws text in is readable on its ground', async (
       // On the static screens everything sits on the panel.
       check('intro', p.ink, L.intro.x + 40, L.intro.y, true);
       check('description', p.inkSoft, L.description[0].x + 40, L.description[0].y, true);
-      check('score name', p.ink, L.scores.columns.name, L.scores.rows[2], true);
-      check('score date', p.inkSoft, L.scores.columns.date + 20, L.scores.rows[2], true);
-      check('score value', p.accent, L.scores.columns.value, L.scores.rows[2], true);
+      check('board name', p.ink, L.boardScreen.columns.name, L.boardScreen.rows[0], true);
+      check('board score', p.accent, L.boardScreen.columns.value, L.boardScreen.rows[0], true);
+      check('board breakdown', p.inkSoft,
+        L.boardScreen.columns.name, L.boardScreen.rows[0] + L.line * 0.95, true);
 
       // The HUD is drawn during play, where each run of it has a chip of its
       // own. Painted by the game rather than rebuilt here, so the ground the
@@ -3426,8 +3459,8 @@ await t('a row says won, a level, or nothing, and never invents one', async () =
 
   const m = await page.evaluate(() => ({
     reached: Scores.board.map(row => Paint.reached(row)),
-    hasLevelColumn: typeof Game.layout.scores.columns.level === 'number',
-    levelLeftOfValue: Game.layout.scores.columns.level < Game.layout.scores.columns.value
+    hasLevelColumn: typeof Game.layout.boardScreen.columns.level === 'number',
+    levelLeftOfValue: Game.layout.boardScreen.columns.level < Game.layout.boardScreen.columns.value
   }));
 
   // An em dash, not a zero: a row written before levels existed has no level,

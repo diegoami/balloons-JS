@@ -394,7 +394,8 @@ Screens.gameover = {
         Scores.remember(game);
         game.state.isBest = !game.isPractice() &&
             previousBest !== null && game.score > previousBest;
-        Scores.load(game);
+        // No board fetch here: this screen shows the run's own breakdown, and
+        // the board has a screen of its own to fetch and draw it.
         Announce.gameover(game);
     },
 

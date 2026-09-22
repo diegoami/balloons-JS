@@ -218,8 +218,14 @@ Input.board = function (game, signal) {
     }, { signal: signal });
 
     document.addEventListener("keydown", function (event) {
-        if (event.key === "Escape" || event.key === " " || event.key === "Enter") {
+        if (event.key === "Escape") {
             game.enter("title");
+        } else if (event.key === " " || event.key === "Enter") {
+            // The toggle is the only other thing here, so the keys work it:
+            // Escape is back out, Space/Enter switches the list.
+            game.state.mine = !game.state.mine;
+            Announce.board(game);
+            game.paint();
         }
     }, { signal: signal });
 };

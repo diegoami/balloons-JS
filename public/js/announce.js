@@ -254,7 +254,9 @@ Announce.gameover = function (game) {
         (game.won
             ? "You win. Level " + Ladder.MAX + " survived. "
             : "Game over. ") +
-        game.score + " points in " + game.end_time + " seconds." +
+        game.score + " points in " + game.end_time + " seconds. Level " +
+        game.level + (game.won ? ", won" : "") + ", played with " +
+        game.pointerKind() + "." +
         (game.state && game.state.isBest ? " " + Layout.PERSONAL_BEST_TEXT : "") +
         where +
         (game.isPractice()
