@@ -111,6 +111,7 @@ Play.rect = function (game) {
     var chipsTop = Math.min(
         game.layout.player.y,
         game.layout.about.y,
+        game.layout.board.y,
         game.layout.start.y
     );
 

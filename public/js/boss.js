@@ -182,6 +182,7 @@ var bossConstructor = function (xcoord, ycoord, radius, xmax, mark, ceiling) {
         if (that.fuse <= 0) {
             leaving = true;
             game.livesLost++;
+            game.breakdown.losses.saucers++;
             game.bossSettled(game);
             Announce.bossFired(game);
         }
@@ -302,6 +303,7 @@ var bossConstructor = function (xcoord, ycoord, radius, xmax, mark, ceiling) {
 
         leaving = true;
         game.score += kind.points;
+        game.breakdown.points[kind.mark === 2 ? "saucer2" : "saucer1"] += kind.points;
         game.bossSettled(game);
         Announce.bossDestroyed(game);
         // False, not true: it is not removed on the spot. It lifts out of the

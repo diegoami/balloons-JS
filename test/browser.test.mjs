@@ -367,7 +367,7 @@ await t('clicking a balloon pops it and scores a point', async () => {
   await context.close();
 });
 
-await t('game over submits the score and shows the leaderboard', async () => {
+await t('game over submits the score and asks for the board', async () => {
   boards.clear();
   apiHits.length = 0;
   const { context, page, errors } = await newGame({ name: 'Diego' });
@@ -390,6 +390,137 @@ await t('game over submits the score and shows the leaderboard', async () => {
   await page.waitForTimeout(5600);
   assert.ok(apiHits.some(h => h.method === 'GET'), 'board was never fetched');
   assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the breakdown records each kind of point and each cause of loss', async () => {
+  const { context, page, errors } = await newGame();
+  const m = await page.evaluate(() => {
+    const make = (skin, x, y) =>
+      balloonConstructor(x, y, 60, { r: 200, g: 60, b: 60 }, Game.width, 5, 1, skin);
+    Game.stopLoop();
+    Game.entities = [];
+    Game.score = 0;
+    Game.livesLost = 0;
+    Game.breakdown = Game.blankBreakdown();
+
+    [1, 2, 3].forEach(function (skin) {
+      const b = make(skin, 400, 300);
+      while (b.skin > 0) { b.tapped(Game); }
+    });
+
+    const one = bossConstructor(400, 200, 30, 800, 1, 0);
+    for (let i = 0; i < Ladder.saucer(1).taps; i++) { one.tapped(Game); }
+    const two = bossConstructor(400, 200, 30, 800, 2, 0);
+    for (let i = 0; i < Ladder.saucer(2).taps; i++) { two.tapped(Game); }
+
+    birdConstructor(0, 300, 20, 4, true).tapped(Game);
+    fireflyConstructor(400, 300, 15, 0.5, Game.width, Game.height).tapped(Game);
+
+    return {
+      p: Game.breakdown.points, l: Game.breakdown.losses,
+      score: Game.score, livesLost: Game.livesLost,
+      totals: Game.breakdownTotals(),
+      saucer1Worth: Ladder.saucer(1).points,
+      saucer2Worth: Ladder.saucer(2).points
+    };
+  });
+
+  assert.equal(m.p.ordinary, 1, 'an ordinary balloon is not worth one point');
+  assert.equal(m.p.reinforced, 3, 'a reinforced balloon is not worth three');
+  assert.equal(m.p.armoured, 6, 'an armoured balloon is not worth six');
+  assert.equal(m.p.saucer1, m.saucer1Worth, 'the first saucer is in the wrong bucket');
+  assert.equal(m.p.saucer2, m.saucer2Worth, 'the mark II is in the wrong bucket');
+  assert.equal(m.l.birds, 1, 'touching a bird was not recorded');
+  assert.equal(m.l.fireflies, 1, 'touching a firefly was not recorded');
+  assert.equal(m.totals.points, m.score, 'the points do not add up to the score');
+  assert.equal(m.totals.losses, m.livesLost, 'the losses do not add up to the lives lost');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the board screen opens from its chip, toggles, and comes back', async () => {
+  boards.clear();
+  apiHits.length = 0;
+  const { context, page, errors } = await newGame({ name: 'Diego' });
+  const chip = await page.evaluate(() => {
+    const r = Game.layout.board;
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  await page.mouse.click(chip.x, chip.y);
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => Game.screen), 'board');
+  assert.equal(await page.evaluate(() => Game.state.mine), false, 'not showing everyone first');
+
+  const toggle = await page.evaluate(() => {
+    const r = Game.layout.boardScreen.toggle;
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  await page.mouse.click(toggle.x, toggle.y);
+  await page.waitForTimeout(120);
+  assert.equal(await page.evaluate(() => Game.state.mine), true, 'the toggle did nothing');
+
+  const back = await page.evaluate(() => {
+    const r = Game.layout.boardScreen.back;
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  await page.mouse.click(back.x, back.y);
+  await page.waitForTimeout(120);
+  assert.equal(await page.evaluate(() => Game.screen), 'title', 'the back chip did not leave');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('game over remembers the run locally, with its breakdown', async () => {
+  boards.clear();
+  apiHits.length = 0;
+  const { context, page, errors } = await newGame({ name: 'Diego' });
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(3000);
+  await page.evaluate(() => {
+    const missing = Game.allowance - Game.livesLost;
+    Game.livesLost = Game.allowance;
+    Game.breakdown.losses.escapes += missing;
+  });
+  await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
+
+  const m = await page.evaluate(() => {
+    const totals = Game.breakdownTotals();
+    return {
+      history: Scores.history(),
+      totals,
+      score: Game.score,
+      said: document.getElementById('game_status').textContent
+    };
+  });
+  assert.ok(m.history.length >= 1, 'the run was not remembered locally');
+  const run = m.history[0];
+  assert.equal(run.name, 'Diego');
+  assert.equal(run.score, m.score);
+  assert.ok(run.breakdown && run.breakdown.points, 'the run carried no breakdown');
+  assert.equal(m.totals.points, m.score, 'the remembered points do not add up');
+  assert.match(m.said, /Lives lost/, 'the breakdown is not spoken: ' + m.said);
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('a practice run is not remembered locally', async () => {
+  const { context, page } = await newGame({ name: 'Diego' });
+  await page.evaluate(() => { Game.startLevel = Ladder.starts()[1]; });
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(2500);
+  await page.evaluate(() => {
+    const missing = Game.allowance - Game.livesLost;
+    Game.livesLost = Game.allowance;
+    Game.breakdown.losses.escapes += missing;
+  });
+  await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
+  const m = await page.evaluate(() => ({
+    practice: Game.isPractice(),
+    history: Scores.history()
+  }));
+  assert.ok(m.practice, 'the run was not a practice run');
+  assert.equal(m.history.length, 0, 'a practice run was remembered');
   await context.close();
 });
 
@@ -700,7 +831,7 @@ await t('the Play button never covers a footer chip, at any size', async () => {
         for (let j = 0; j <= 20 && !worst; j++) {
           Play.at = { x: i / 20, y: j / 20 };
           const r = Play.rect(Game);
-          for (const id of ['player', 'about', 'start']) {
+          for (const id of ['player', 'about', 'board', 'start']) {
             const chip = Game.layout[id];
             if (chip && overlap(r, chip)) { worst = { id, r, chip }; }
           }
@@ -840,8 +971,8 @@ await t('there are no buttons left, and the name line is the only exception', as
     rules: Icons.RULES.map(r => r.kind)
   }));
   assert.equal(m.buttons, 0, 'a button came back');
-  assert.deepEqual(m.targets, ['about', 'replay', 'player'],
-    'the only named targets should be the high-score line and the two chips');
+  assert.deepEqual(m.targets, ['about', 'board', 'player'],
+    'the named targets should be the Scores and About chips and the name');
 
   // The rules sentence is NOT drawn: the legend of icons stands where it did.
   // It stays in Layout.DESCRIPTION regardless, because that is what is read
@@ -1506,8 +1637,8 @@ await t('each screen keeps its own state, and gets a clean one', async () => {
     keys: Object.keys(Game.state),
     locked: Game.state.liveAt > Date.now()
   }));
-  assert.deepEqual(over.keys.sort(), ['liveAt', 'stepsHome'],
-    'game over should hold the menu lockout and the walk back to the title');
+  assert.deepEqual(over.keys.sort(), ['isBest', 'liveAt', 'stepsHome'],
+    'game over should hold the lockout, the walk back to the title, and whether it was a best');
   assert.ok(over.locked, 'the menu lockout deadline was not set on arrival');
   assert.deepEqual(errors, [], errors.join(' | '));
   await context.close();

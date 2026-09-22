@@ -29,6 +29,9 @@ Scores.URL = window.BALLOONS_SCORES_URL || "/api/scores";
 /** What has arrived, or null. */
 Scores.board = null;
 
+/** Whether the last fetch failed, so the board can fall back to local runs. */
+Scores.failed = false;
+
 /** The request in flight, or null. Also the token that says it is still wanted. */
 Scores.pending = null;
 
@@ -62,13 +65,16 @@ Scores.load = function (game) {
             }
             Scores.pending = null;
             Scores.board = data;
+            Scores.failed = false;
 
             if (!Screens[game.screen].animated) {
                 game.paint();
             }
         })
         .catch(function () {
-            /* The leaderboard is a nicety; the game plays fine without it. */
+            /* The leaderboard is a nicety; the game plays fine without it. The
+               board screen falls back to the local history and says so. */
+            Scores.failed = true;
             if (Scores.pending === mine) {
                 Scores.pending = null;
             }
@@ -96,9 +102,76 @@ Scores.submit = function (game, score) {
             // What it was played with. The ladder assumes one pointer at about
             // 2.29 taps a second; two thumbs on a touchscreen doubles that, and
             // the board should not pretend the two are the same achievement.
-            pointer: game.pointerKind()
+            pointer: game.pointerKind(),
+            // Where the points and the lives went. Optional on the server, and
+            // there only to explain the score.
+            breakdown: game.breakdown
         })
     }).catch(function () {
         /* Ignore: a failed submission shouldn't block the game-over screen. */
     });
+};
+
+/**
+ * Where the player's own runs are kept, separate from the public board.
+ *
+ * The "just mine" view is local history, not a server query: it works offline,
+ * it needs no per-player endpoint, and it is the only thing that can say
+ * "new personal best" the moment a run ends. The public board is still the
+ * server's; this is a personal tally beside it.
+ */
+Scores.HISTORY_KEY = "balloons_runs";
+
+/** How many of them. Small: this is a personal tally, not an archive. */
+Scores.HISTORY_MAX = 20;
+
+/** The player's own runs, newest first. Never throws. */
+Scores.history = function () {
+    try {
+        var raw = window.localStorage.getItem(Scores.HISTORY_KEY);
+        var list = raw ? JSON.parse(raw) : [];
+        return Array.isArray(list) ? list : [];
+    } catch (e) {
+        return [];
+    }
+};
+
+/**
+ * Records a finished run in the local history.
+ *
+ * A practice run is not recorded at all: it is not posted either, and a
+ * personal best set by skipping the climb would be the same lie in a smaller
+ * place.
+ */
+Scores.remember = function (game) {
+    if (game.isPractice()) {
+        return;
+    }
+    var entry = {
+        name: game.name,
+        score: game.score,
+        level: game.level,
+        won: game.won === true,
+        time: game.end_time,
+        pointer: game.pointerKind(),
+        breakdown: game.breakdown,
+        at: Date.now()
+    };
+    var list = [entry].concat(Scores.history()).slice(0, Scores.HISTORY_MAX);
+    try {
+        window.localStorage.setItem(Scores.HISTORY_KEY, JSON.stringify(list));
+    } catch (e) {
+        /* Storage blocked or full; the board still works. */
+    }
+};
+
+/** The best score this player has recorded locally, or null. */
+Scores.personalBest = function (name) {
+    var best = null;
+    Scores.history().forEach(function (run) {
+        if (run && run.name === name && (best === null || run.score > best)) {
+            best = run.score;
+        }
+    });
+    return best;
 };

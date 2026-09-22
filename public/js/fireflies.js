@@ -209,6 +209,7 @@ var fireflyConstructor = function (xcoord, ycoord, radius, drift, xmax, ymax) {
         // a new one, so it is not charged again.
         if (flinch <= 0) {
             game.livesLost++;
+            game.breakdown.losses.fireflies++;
             Announce.touchedFirefly(game);
         }
         flinch = FIREFLY_FLINCH_STEPS;

@@ -139,6 +139,31 @@ Layout.RESUMING_IN = "Resuming in ";
 Layout.PAUSED_HINT = "You looked away, so the game waited.";
 Layout.HIGH_SCORES_TEXT = "High Scores";
 
+/** The Scores chip, the screen behind it, and the breakdown it explains. */
+Layout.BOARD_TEXT = "\u2605";
+Layout.BOARD_TITLE = "High Scores";
+Layout.MINE_TEXT = "Just mine";
+Layout.ALL_TEXT = "Everyone";
+Layout.NO_SCORES_TEXT = "No scores yet.";
+Layout.BOARD_OFFLINE_TEXT = "Board unavailable \u2014 showing your runs.";
+Layout.BOARD_LEGEND = "B/R/A/S points \u00b7 E/S/Bi/F lost";
+Layout.PERSONAL_BEST_TEXT = "New personal best!";
+Layout.POINTS_LABEL = "Points";
+Layout.LOSSES_LABEL = "Lives lost";
+Layout.BREAKDOWN_POINTS = [
+    { key: "ordinary", label: "Balloons" },
+    { key: "reinforced", label: "Reinforced" },
+    { key: "armoured", label: "Armoured" },
+    { key: "saucer1", label: "Saucers" },
+    { key: "saucer2", label: "Big saucers" }
+];
+Layout.BREAKDOWN_LOSSES = [
+    { key: "escapes", label: "Escaped" },
+    { key: "saucers", label: "Saucers fired" },
+    { key: "birds", label: "Birds" },
+    { key: "fireflies", label: "Fireflies" }
+];
+
 /** The name line along the bottom, and the screen it opens. */
 Layout.NAME_TEXT = "Who is playing?";
 Layout.NAME_HINT = "Enter to save, Escape to cancel";
@@ -677,6 +702,24 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
         about.y = player.y - footerHeight - line * G.footer.inset;
     }
 
+    // The Scores chip, sized like About and sitting beside it. On a screen too
+    // narrow for both, it stacks above, where About already went.
+    var boardWidth = Math.max(
+        G.minTouchTarget,
+        ctx.measureText(Layout.BOARD_TEXT).width + line * G.footer.padX * 2
+    );
+    var board = {
+        x: about.x - boardWidth - line * G.footer.padX,
+        y: about.y,
+        width: boardWidth,
+        height: player.height,
+        radius: player.radius
+    };
+    if (board.x < player.x + player.width + line * G.footer.padX) {
+        board.x = width - width * G.columns.margin - boardWidth;
+        board.y = about.y - footerHeight - line * G.footer.inset;
+    }
+
     // The way out of the About screen is a word, not a mark, and a chip sized
     // for one character is not a chip sized for "Back".
     var backWidth = Math.max(
@@ -692,7 +735,7 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
     };
 
     targets.push({ id: "about", hit: about });
-    targets.push({ id: "replay", hit: scoresHit });
+    targets.push({ id: "board", hit: board });
     targets.push({ id: "player", hit: player });
 
     // The level chip is gone from the screen, so it is gone from the targets.
@@ -711,6 +754,55 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
         y: panel.y,
         width: panel.width,
         height: hintY + line - panel.y + panelPad
+    };
+
+    // --- the Scores screen
+    //
+    // A full panel of rows drawn smaller and tighter than the title's board
+    // ever was, two lines to an entry: the run on the first, where its points
+    // and lives went on the second. How many fit depends on the screen, so the
+    // count is measured rather than fixed.
+    var toggleHeight = Math.max(G.minTouchTarget, line * 1.5);
+    var toggleWidth = Math.max(
+        G.minTouchTarget * 1.6,
+        ctx.measureText(Layout.MINE_TEXT + " / " + Layout.ALL_TEXT).width +
+            line * G.footer.padX * 2
+    );
+    var boardFootY = Math.max(0, height - toggleHeight - line * G.footer.inset);
+    var boardTop = line * (G.rows.scoresHeading + 2.2);
+    var entryStep = line * 2.0;
+    var boardRoom = boardFootY - line * 0.7 - boardTop;
+    var boardMax = Math.min(10, Math.max(1, Math.floor(boardRoom / entryStep)));
+    var boardRows = [];
+    for (var br = 0; br < boardMax; br++) {
+        boardRows.push(boardTop + line * br * 2.0);
+    }
+    var boardScreen = {
+        heading: { x: left, y: line * G.rows.scoresHeading },
+        columns: {
+            date: width * G.columns.scoreDate,
+            name: width * G.columns.scoreName,
+            level: width * G.columns.scoreLevel,
+            value: width * G.columns.scoreValue
+        },
+        rows: boardRows,
+        step: entryStep,
+        bodySize: Math.max(1, Math.round(fontSize * 0.62)) + "px " + Layout.FONT,
+        tinySize: Math.max(1, Math.round(fontSize * 0.5)) + "px " + Layout.FONT,
+        toggle: {
+            x: left,
+            y: boardFootY,
+            width: toggleWidth,
+            height: toggleHeight,
+            radius: line * G.footer.radius
+        },
+        back: {
+            x: width - width * G.columns.margin - Math.max(G.minTouchTarget, line * 1.5),
+            y: boardFootY,
+            width: Math.max(G.minTouchTarget, line * 1.5),
+            height: toggleHeight,
+            radius: line * G.footer.radius
+        }
     };
 
 
@@ -840,6 +932,8 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
 
         about: about,
         back: back,
+        board: board,
+        boardScreen: boardScreen,
         targets: targets
     };
 };

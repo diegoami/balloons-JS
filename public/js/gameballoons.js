@@ -209,6 +209,9 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
     that.xcoord = xcoord ;
     that.ycoord = ycoord ;
     that.skin = Math.max(1, skin || 1);
+    // The class it was born as, for the run breakdown: `skin` is spent as it
+    // is tapped, so by the time it pops the class would otherwise be gone.
+    that.balloonClass = that.skin;
 
     /**
      * Which of the two awkward kinds this one is, if either. They are rolled
@@ -394,6 +397,9 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
         }
 
         game.score += that.points;
+        var ofClass = that.balloonClass === 3 ? "armoured"
+            : (that.balloonClass === 2 ? "reinforced" : "ordinary");
+        game.breakdown.points[ofClass] += that.points;
         return true;
     };
 

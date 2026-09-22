@@ -66,6 +66,7 @@ Screens.title = {
         Paint.legend(game);
         Paint.description(game);
         Paint.aboutChip(game);
+        Paint.boardChip(game);
         Paint.playButton(game);
         Paint.menu(game);
         Paint.player(game);
@@ -180,6 +181,7 @@ Screens.playing = {
         var escaped = game.reap();
         if (escaped > 0) {
             game.livesLost += escaped;
+            game.breakdown.losses.escapes += escaped;
             Announce.lost(game);
         }
 
@@ -249,6 +251,38 @@ Screens.about = {
         // the last paragraph on a lit horizon.
         Paint.panel(game, { y: 0, height: game.height });
         Paint.about(game);
+    },
+
+    menuLive: function () {
+        return true;
+    }
+};
+
+/**
+ * The board, and the player's own runs.
+ *
+ * A static screen, like About: reading it is the point, and a sky drifting
+ * behind text is the enemy of that. Everyone's board comes from the server;
+ * "just mine" is the local history, so it works offline.
+ */
+Screens.board = {
+    animated: false,
+
+    enter: function (game) {
+        game.pressed = null;
+        game.state.mine = false;
+        Scores.load(game);
+        Announce.board(game);
+    },
+
+    bind: function (game, signal) {
+        Input.board(game, signal);
+    },
+
+    draw: function (game) {
+        Paint.sky(game);
+        Paint.panel(game, { y: 0, height: game.height });
+        Paint.board(game);
     },
 
     menuLive: function () {
@@ -354,6 +388,12 @@ Screens.gameover = {
         if (!game.isPractice()) {
             Scores.submit(game, game.score);
         }
+        // The personal tally, which is where "new personal best" comes from.
+        // Remembered before reading the best, so a first run is its own best.
+        var previousBest = Scores.personalBest(game.name);
+        Scores.remember(game);
+        game.state.isBest = !game.isPractice() &&
+            previousBest !== null && game.score > previousBest;
         Scores.load(game);
         Announce.gameover(game);
     },
@@ -384,7 +424,7 @@ Screens.gameover = {
                 (game.isPractice() ? " (practice, not saved)" : "")
         );
         Paint.okayButton(game);
-        Paint.scores(game);
+        Paint.runBreakdown(game);
         Paint.player(game);
         Paint.entities(game);
     },
