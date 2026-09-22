@@ -39,7 +39,7 @@ Attract.FILL_DEPTH = 0.5;
 /**
  * How hard the demo player works, as a share of what the level is releasing.
  *
- * Not a fixed tap rate. A person supplies about 2.1 taps a second, which is
+ * Not a fixed tap rate. A person supplies about 2.29 taps a second, which is
  * more than the lower levels release — so a demo tapping at a person's rate
  * empties the sky and the footage shows three balloons and a lot of blue.
  * Popping most of what arrives instead keeps the sky at the level's own

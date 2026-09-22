@@ -2,7 +2,7 @@
 
 Small unfinished jobs and one planned feature. None of these block anything;
 raise them when there is a lull rather than interrupting a bigger piece of
-work. Current as of 2.1.
+work. Current as of 2.2.
 
 ## Loose ends
 
@@ -29,13 +29,6 @@ second sighting is recognised as the second rather than the first.
 `enableV3Signing` would allow rotating the key later; without it the current
 keystore is the app's permanent identity.
 
-**Stale numbers in `ladder.js` comments.** `Ladder.SKY` says the sky holds
-5–11 balloons where it really holds 2–4, so the demand figures in the
-surrounding prose understate the real ones by 20–25%, and the "2.1 taps a
-second" supply constant came from a 58% bot hit rate that is now 65–67%.
-Fixing the **comments** is safe and worth doing. Changing the frequencies they
-justify is not — see "Tuning is closed" below.
-
 ## Planned: an ammunition mode
 
 A **second mode** for the version after 2.1, explicitly not a change to the
@@ -57,7 +50,7 @@ Pieces that already exist and should be reused rather than reinvented:
 `Ladder` is a table of twenty rows and a new column is the established way to
 add a mechanic; `tools/playtest.mjs` can measure a mode at any aim error and
 tap rate; the measured supply figure to balance against is 2.29 taps a second
-against a demand peaking at 2.82.
+against a demand peaking at 2.72.
 
 Open questions nobody has answered: where ammunition comes from (time? popped
 balloons? a reload action?), what running out does, whether the board keeps

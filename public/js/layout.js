@@ -41,9 +41,9 @@ Layout.INTRO_TEXT = "Pop the balloons before they get away";
  * moment a new player is looking at nothing else.
  *
  * The third line is advice and it is earned: the ladder is calibrated against
- * about 2.1 taps a second from ONE pointer, and a touchscreen lets you use two
- * thumbs. Measured, that is the difference between dying around level 8 and
- * finishing every run — which is why the board records which was used.
+ * about 2.29 taps a second from ONE pointer, and a touchscreen lets you use two
+ * thumbs. Measured, that is the difference between dying around level 10 and
+ * usually finishing — which is why the board records which was used.
  */
 Layout.DESCRIPTION = [
     "Pop up the balloons, repel the saucers, save the birds and the fireflies.",

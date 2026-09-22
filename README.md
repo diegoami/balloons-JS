@@ -29,6 +29,7 @@ public/               everything served to the browser
   css/styles.css
   js/game.js          the game: the loop, the canvas, the balloons
   js/screens.js       what it is being: name, title, countdown, play, game over
+  js/attract.js       the title screen playing the game to itself
   js/paint.js         what it draws
   js/input.js         what it listens to
   js/scores.js        the leaderboard client
@@ -36,11 +37,16 @@ public/               everything served to the browser
   js/namefield.js     the one DOM element in the game
   js/layout.js        grid, type scale and every on-screen position
   js/sky.js           the drawn sky: one palette per time of day
-  js/ladder.js        the ten levels, and what a balloon is like on each
+  js/ladder.js        the twenty levels, and what a balloon is like on each
   js/entities.js      what the sky can hold, and the contract each kind keeps
   js/gameballoons.js  balloon entity: position, drift, collision
   js/htmlballoons.js  draws a balloon on a canvas with bezier curves
   js/color.js         lighten/darken helpers and the gradient palette
+  js/birds.js         a thing you are meant to leave alone
+  js/boss.js          the saucer, its fuse, and what a fight costs
+  js/fireflies.js     hoverers that eat a tap and a life
+  js/icons.js         the game's own painter, run small
+  js/play.js          the Play button and the pause control
   favicon.svg         the tab icon; the .ico and touch icon are built from it
 netlify/functions/
   scores.mts          high-score API, backed by Netlify Blobs
@@ -49,7 +55,7 @@ netlify.toml          publish directory and headers
 ```
 
 There is no build step and no runtime dependencies in the browser: the page
-loads twelve plain scripts and nothing else. Each one defines a namespace and
+loads twenty plain scripts and nothing else. Each one defines a namespace and
 touches nothing at parse time, so the order they load in does not matter. The
 sky is drawn, not an image, so apart from the tab icon the game ships no images
 at all.

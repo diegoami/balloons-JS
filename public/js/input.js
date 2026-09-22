@@ -32,10 +32,10 @@ Input.popping = function (game, signal) {
     // What the taps are being made WITH, counted as they happen.
     //
     // A click event does not say; a pointerdown does. It is worth knowing
-    // because the whole ladder is calibrated against about 2.1 taps a second
+    // because the whole ladder is calibrated against about 2.29 taps a second
     // from ONE pointer, and a touchscreen lets you use two thumbs — measured,
-    // that is the difference between dying around level 8 and finishing every
-    // run. The board records which, because a score set with two thumbs and
+    // that is the difference between dying around level 10 and usually
+    // finishing. The board records which, because a score set with two thumbs and
     // one set with a mouse are not the same achievement.
     game.canvas.addEventListener("pointerdown", function (event) {
         game.countPointer(event.pointerType);

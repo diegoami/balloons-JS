@@ -2065,9 +2065,10 @@ await t('the canvas can be reached and described without seeing it', async () =>
   });
 
   assert.equal(m.tabindex, '0', 'a keyboard cannot reach the game at all');
-  assert.equal(m.role, 'application', 'the difficulty keys would be swallowed by the reader');
+  assert.equal(m.role, 'application', 'the game keys would be swallowed by the reader');
   assert.ok(m.label && m.label.length > 3, 'the canvas has no name');
-  assert.match(m.help, /E, S, H or V/, 'the description does not say which keys work');
+  assert.match(m.help, /space/i, 'the description does not say which keys work');
+  assert.match(m.help, /Play button/, 'the description does not say the button works too');
   assert.match(m.help, /pointer/, 'the description does not admit that popping needs a pointer');
   assert.ok(m.hiddenToSight, 'the description is drawn on the page as well as read');
   await context.close();
@@ -2758,25 +2759,32 @@ await t('the sky thins out as what is in it gets heavier', async () => {
   const under = m.find(r => r.level === 3);
   assert.ok(arriving.arrivals < under.arrivals,
     'the rung that brings reinforced balloons releases as many as the one below');
-  assert.ok(arriving.demand > under.demand,
-    'the rung that brings reinforced balloons asks no more of the player');
+  // Heavier per balloon, not necessarily more taps a second. Measured, the
+  // heavy rung can ask NO MORE demand than the one below: slow three-tap
+  // balloons linger, the sky fills, and the throttle then releases fewer of
+  // them, so `arrivals x meanTaps` dips even as the sky gets fuller and every
+  // balloon in it costs more. That relation is stable and player-independent;
+  // the demand comparison was a coin toss between measurement batches. See
+  // issue #46.
+  assert.ok(arriving.taps > under.taps,
+    'the rung that brings reinforced balloons is no heavier per balloon');
 
   const armoured = m.find(r => r.level === 10);
   const belowArmoured = m.find(r => r.level === 9);
   assert.ok(armoured.arrivals < belowArmoured.arrivals,
     'the rung that brings armoured balloons releases as many as the one below');
-  assert.ok(armoured.demand > belowArmoured.demand,
-    'the rung that brings armoured balloons asks no more of the player');
+  assert.ok(armoured.taps > belowArmoured.taps,
+    'the rung that brings armoured balloons is no heavier per balloon');
 
   // Across the whole ladder the two numbers move in opposite directions — from
   // the PEAK onwards, which is the honest version of this.
   //
   // It used to say level 20 releases fewer balloons a second than level 1, and
   // that passed only while the sky column overstated how full the sky gets.
-  // Measured, arrivals climb from 1.24 a second at level 1 to about 2.07 at
-  // level 9 and then fall to 1.33 by the top: the sky thins from its own peak,
-  // not from the tutorial. Level 20 is still busier than level 1 AND every
-  // balloon in it costs 1.7 taps instead of 1.
+  // Measured for 2.2, arrivals climb from 1.49 a second at level 1 to about
+  // 2.12 at level 9 and then fall to 1.52 by the top: the sky thins from its
+  // own peak, not from the tutorial. Level 20 is still busier than level 1 AND
+  // every balloon in it costs 1.52 taps instead of 1.
   const first = m.find(r => r.level === 1);
   const last = m.find(r => r.level === 20);
   const busiest = m.reduce((a, b) => (b.arrivals > a.arrivals ? b : a));
@@ -3385,7 +3393,7 @@ await t('birds arrive at level 8, and never before it', async () => {
   });
   assert.ok(Array.isArray(m.news), 'level 8 does not say that birds have arrived');
   assert.match(m.news[1], /cost a life/i, 'the break does not say what a bird costs');
-  assert.equal(m.tapsAt8, 1.24, 'birds changed what a balloon costs in taps');
+  assert.equal(m.tapsAt8, 1.20, 'birds changed what a balloon costs in taps');
   await context.close();
 });
 
@@ -3869,9 +3877,9 @@ await t('a firefly takes a tap aimed at the balloon beside it', async () => {
 
 
 await t('the game records what a run was played with, and only when it knows', async () => {
-  // The ladder assumes one pointer at about 2.1 taps a second. Two thumbs on a
+  // The ladder assumes one pointer at about 2.29 taps a second. Two thumbs on a
   // touchscreen doubles that -- measured, the difference between dying around
-  // level 8 and finishing every run -- so the board should not pretend the two
+  // level 10 and usually finishing -- so the board should not pretend the two
   // are the same achievement.
   const { context, page } = await newGame();
   const m = await page.evaluate(() => {
