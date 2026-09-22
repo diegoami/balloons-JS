@@ -4,14 +4,14 @@
  * The Play button, which drifts about the sky and will not be missed.
  *
  * The title screen used to say "Tap anywhere to play" and mean it: a tap
- * anywhere did start a game, and that is still true. Played by somebody who
- * had not built it, the line went unread -- which is what a line of text on a
- * screen full of moving balloons does. People look for a button.
+ * anywhere started a game. Played by somebody who had not built it, the line
+ * went unread -- which is what a line of text on a screen full of moving
+ * balloons does. People look for a button.
  *
- * So there is a button. It is deliberately NOT the only way in: tapping the
- * sky still works, because that was a good idea and the button is a signpost
- * rather than a gate. What it has to do is be impossible to miss, which is
- * why it moves and why it changes colour.
+ * So there is a button, and it is now the ONLY way in: the tap-anywhere
+ * shortcut is gone, and a tap on empty sky does nothing. What it has to do is
+ * be impossible to miss, which is why it moves and why it changes colour --
+ * and why it keeps clear of the footer chips, which do something else.
  *
  * WHERE IT MAY GO
  *

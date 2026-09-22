@@ -1122,14 +1122,6 @@ const patchPaint = (page, rect) => page.evaluate((r) => {
   return [Math.round(red / n), Math.round(green / n), Math.round(blue / n)];
 }, rect);
 
-/** The strip the start prompt is drawn in. */
-const promptRect = (page) => page.evaluate(() => ({
-  x: Game.layout.hint.x,
-  y: Game.layout.hint.y - Game.layout.line,
-  width: Game.layout.line * 10,
-  height: Game.layout.line * 1.3
-}));
-
 await t('the menu is not live during the countdown, and a tap does nothing', async () => {
   const { context, page, errors } = await newGame();
   await page.keyboard.press(' ');
