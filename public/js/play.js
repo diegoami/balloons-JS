@@ -105,20 +105,30 @@ Play.rect = function (game) {
         Play.begin(game);
     }
 
-    // The band: the whole bottom half of the canvas, but never over a footer
-    // chip. Literal height/2, or the panel's bottom where that is lower (a
-    // short screen), down to a margin above the name and About chips.
-    var top = Math.max(
-        game.height * 0.5,
-        game.layout.splash.y + game.layout.splash.height + line * 0.4
+    // Never over a footer chip: a button that wanders onto one steals its tap.
+    // The chips share a row, or wrap onto the row above it on a narrow screen,
+    // so the button's bottom must clear the highest of them.
+    var chipsTop = Math.min(
+        game.layout.player.y,
+        game.layout.about.y,
+        game.layout.start.y
     );
-    var bottom = game.layout.player.y - line * 0.6 - height;
+
+    // The band wanted: the whole bottom half, or below the panel where that is
+    // lower, down to a margin above the chips.
+    var splash = game.layout.splash;
+    var top = Math.max(game.height * 0.5, splash.y + splash.height + line * 0.4);
+    var bottom = chipsTop - line * 0.6 - height;
+
+    // On a short screen there may be no room above the chips at all. Then the
+    // button is pinned just above them — over the panel if it must, which is
+    // not a tap target — rather than allowed to overlap a chip.
+    if (bottom < top) {
+        top = bottom;
+    }
+
     var left = game.width * Layout.GRID.columns.margin;
     var right = game.width - left - width;
-
-    if (bottom < top) {
-        bottom = top;
-    }
 
     return {
         x: left + (right - left) * Play.at.x,

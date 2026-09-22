@@ -683,6 +683,66 @@ await t('the Play button still starts a game after a resize', async () => {
   await context.close();
 });
 
+await t('the Play button never covers a footer chip, at any size', async () => {
+  // The button roams the bottom half, so every position it can take, at every
+  // viewport, must clear the name and About chips and stay on the canvas.
+  const { context, page, errors } = await newGame();
+  const sizes = [[320, 480], [240, 240], [390, 844], [900, 500], [1280, 720]];
+  for (const [w, h] of sizes) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.waitForTimeout(150);
+    const m = await page.evaluate(() => {
+      const overlap = (a, b) =>
+        a.x < b.x + b.width && b.x < a.x + a.width &&
+        a.y < b.y + b.height && b.y < a.y + a.height;
+      let worst = null;
+      for (let i = 0; i <= 20 && !worst; i++) {
+        for (let j = 0; j <= 20 && !worst; j++) {
+          Play.at = { x: i / 20, y: j / 20 };
+          const r = Play.rect(Game);
+          for (const id of ['player', 'about', 'start']) {
+            const chip = Game.layout[id];
+            if (chip && overlap(r, chip)) { worst = { id, r, chip }; }
+          }
+          if (r.x < 0 || r.y < 0 ||
+              r.x + r.width > Game.width || r.y + r.height > Game.height) {
+            worst = { id: 'off-canvas', r };
+          }
+        }
+      }
+      return worst;
+    });
+    assert.equal(m, null,
+      `${w}x${h}: the Play button overlapped ${m && m.id}: ` + JSON.stringify(m));
+  }
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the name chip and title announcement show the name alone', async () => {
+  const { context, page, errors } = await newGame({ name: 'Diego' });
+  const m = await page.evaluate(() => {
+    const seen = [];
+    const orig = Paint.chip;
+    Paint.chip = function (game, rect, label) {
+      seen.push(label);
+      return orig.apply(this, arguments);
+    };
+    Paint.player(Game);
+    Paint.chip = orig;
+    return { labels: seen, said: document.getElementById('game_status').textContent };
+  });
+  assert.ok(m.labels.includes('Diego'),
+    'the bare name was not drawn: ' + JSON.stringify(m.labels));
+  assert.ok(!m.labels.some(l => /Playing as/.test(l)),
+    'the chip still says "Playing as": ' + JSON.stringify(m.labels));
+  assert.doesNotMatch(m.said, /Playing as/,
+    'the announcement still says "Playing as": ' + m.said);
+  assert.match(m.said, /Diego/, 'the announcement does not name the player');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
 await t('rotating mid-game keeps play running and balloons in bounds', async () => {
   const { context, page, errors } = await newGame({ width: 900, height: 500 });
   await page.keyboard.press(' ');
