@@ -19,7 +19,7 @@ morning, afternoon, dusk, night — so how far up you are is visible without
 reading anything.
 
 Your name is asked for once, on the page rather than in a browser dialog, and
-can be changed any time from the `Playing as ...` chip along the bottom.
+can be changed any time from the name chip along the bottom.
 
 ## Layout
 

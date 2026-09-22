@@ -119,9 +119,8 @@ Layout.about = function () {
     ];
 };
 
-// Still true, and still worth saying for anyone who reads it — the button is
-// a signpost, not a gate.
-Layout.START_TEXT = "or tap anywhere";
+// The button is the way in now, not a signpost: the title screen no longer
+// starts a game on a tap anywhere, so there is no "or tap anywhere" line.
 Layout.RESUME_TEXT = "Resume";
 
 /** The level chip, and what it warns when it is not on level 1. */
@@ -141,7 +140,6 @@ Layout.PAUSED_HINT = "You looked away, so the game waited.";
 Layout.HIGH_SCORES_TEXT = "High Scores";
 
 /** The name line along the bottom, and the screen it opens. */
-Layout.PLAYER_PREFIX = "Playing as ";
 Layout.NAME_TEXT = "Who is playing?";
 Layout.NAME_HINT = "Enter to save, Escape to cancel";
 Layout.SAVE_TEXT = "Save";
@@ -383,10 +381,7 @@ Layout.applyFont = function (ctx, width, height) {
     // narrower and the same string fitted. A bundled font is the fix for that
     // class of bug — every machine now lays out against the same metrics.
     var available = width * (1 - 2 * G.columns.margin);
-    var longest = 0;
-    [Layout.INTRO_TEXT, Layout.START_TEXT].forEach(function (text) {
-        longest = Math.max(longest, ctx.measureText(text).width);
-    });
+    var longest = ctx.measureText(Layout.INTRO_TEXT).width;
 
     if (longest > available) {
         size = Math.max(1, Math.floor(size * (available / longest)));
@@ -429,11 +424,11 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
     var gap = line * G.button.gap;
     var buttonHeight = Math.max(line + padY * 2, G.minTouchTarget);
 
-    // No buttons. A tap anywhere on the sky starts a game, so a button would
-    // be a smaller target for the same thing — and it would sit on top of the
-    // footage it was competing with. The flow below is kept because it still
-    // wraps, still grows to the touch minimum, and the name screen's Save
-    // button and whatever comes next go through the same machinery.
+    // Nothing flows here. The Play button is laid out and drawn on its own,
+    // and the footer chips are anchored rather than flowed — but the flow
+    // below is kept because it still wraps, still grows to the touch minimum,
+    // and the name screen's Save button and whatever comes next go through the
+    // same machinery.
     var items = [];
 
     ctx.font = fonts.menu;

@@ -55,4 +55,4 @@ against a demand peaking at 2.72.
 Open questions nobody has answered: where ammunition comes from (time? popped
 balloons? a reload action?), what running out does, whether the board keeps
 one leaderboard or two, and how a player picks a mode when the title screen
-starts a game on a tap anywhere.
+starts a game from the Play button.

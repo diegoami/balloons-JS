@@ -105,8 +105,13 @@ Play.rect = function (game) {
         Play.begin(game);
     }
 
-    // The band: under the words, over the chips, and never off an edge.
-    var top = game.layout.splash.y + game.layout.splash.height + line * 0.4;
+    // The band: the whole bottom half of the canvas, but never over a footer
+    // chip. Literal height/2, or the panel's bottom where that is lower (a
+    // short screen), down to a margin above the name and About chips.
+    var top = Math.max(
+        game.height * 0.5,
+        game.layout.splash.y + game.layout.splash.height + line * 0.4
+    );
     var bottom = game.layout.player.y - line * 0.6 - height;
     var left = game.width * Layout.GRID.columns.margin;
     var right = game.width - left - width;
