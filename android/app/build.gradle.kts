@@ -26,8 +26,8 @@ android {
         // a WebView new enough to run this without surprises.
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "2.2"
+        versionCode = 4
+        versionName = "2.3"
     }
 
     if (hasSigning) {
