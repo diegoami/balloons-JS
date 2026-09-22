@@ -1740,9 +1740,9 @@ await t('the leaderboard is fetched once, however often it is asked for', async 
   await page.waitForTimeout(300);
   const onLoad = apiHits.filter(h => h.method === 'GET').length;
 
-  // The game-over screen asks for the board on every frame it draws. Asking
+  // A static screen asks for the board as it draws, frame after frame. Asking
   // used to mean fetching: until the first response landed, the game issued
-  // thirty requests a second.
+  // thirty requests a second. The promise in flight is the lock that stops it.
   await page.evaluate(async () => {
     Scores.board = null;
     for (let i = 0; i < 10; i++) { Scores.load(Game); }
