@@ -713,10 +713,13 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
     // sets it directly to measure the top of the ladder, which is the only
     // thing that ever really needed a way in.
 
-    // The full panel, drawn on the game-over screen: the intro line, the two
-    // breakdown columns, and room under them for the personal-best line.
-    var panelBottom = line * (G.rows.intro + 13.2);
-    panel.height = Math.max(0, panelBottom - panel.y + panelPad);
+    // The OK button sits just above the name chip, and the panel reaches below
+    // it: the breakdown columns fill the space between the intro and the
+    // button. Pinning the button to the title's text flow put it in the middle
+    // of the columns, which is where it was seen overlapping them.
+    var okayHeight = Math.max(G.minTouchTarget, line * 1.5);
+    var okayY = player.y - line * 0.6 - okayHeight;
+    panel.height = Math.max(0, okayY + okayHeight - panel.y + panelPad);
 
     // A shorter panel for the title screen, which has the game playing behind
     // it. The full one reaches the bottom of the score table and so covers
@@ -812,16 +815,15 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
 
         legend: legend,
 
-        // The two answers to "give up?", side by side above the footer. Keep
-        // playing sits on the right, under the thumb that was already there.
-        // The way off the game-over screen. Where the hint line sits, above
-        // the board, because the board is the thing you are being given time
-        // to read and a button over it would be a button in the way.
+        // The way off the game-over screen, anchored above the name chip rather
+        // than to the title's text flow: the breakdown columns own the middle
+        // of this screen now, and a button placed by the title's metrics lands
+        // in the middle of them.
         okay: {
             x: width * G.columns.margin,
-            y: hintY - line * 0.95,
+            y: okayY,
             width: Math.max(G.minTouchTarget * 2, line * 3.2),
-            height: Math.max(G.minTouchTarget, line * 1.5),
+            height: okayHeight,
             radius: line * G.footer.radius
         },
 
