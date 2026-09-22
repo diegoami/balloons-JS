@@ -3877,9 +3877,9 @@ await t('a firefly takes a tap aimed at the balloon beside it', async () => {
 
 
 await t('the game records what a run was played with, and only when it knows', async () => {
-  // The ladder assumes one pointer at about 2.1 taps a second. Two thumbs on a
+  // The ladder assumes one pointer at about 2.29 taps a second. Two thumbs on a
   // touchscreen doubles that -- measured, the difference between dying around
-  // level 8 and finishing every run -- so the board should not pretend the two
+  // level 10 and finishing every run -- so the board should not pretend the two
   // are the same achievement.
   const { context, page } = await newGame();
   const m = await page.evaluate(() => {

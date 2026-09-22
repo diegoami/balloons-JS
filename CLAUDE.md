@@ -110,20 +110,21 @@ port.
 
 ## Decided, and not to be re-opened
 
-**The tuning is closed.** On 2026-09-19 the owner looked at the measured
-outcomes and said the game is correctly tuned as it stands. Do not propose
-re-tuning the ladder unless they raise it. What was accepted, so that a later
-reading does not mistake it for a bug:
+**The tuning is closed, again.** 2.1 was accepted on 2026-09-19. The owner
+then played it, reopened the tuning, and 2.2 shipped the rebalance designed and
+reviewed in issue #46. Do not propose re-tuning the ladder unless they raise it
+again. The measured outcomes as of 2.2, so that a later reading does not mistake
+them for a bug:
 
-- a careful mouse (bot at 12px aim error) wins every run, all 20 levels
-- one thumb (40px aim error) dies between levels 9 and 13, every run
+- a careful mouse (bot at 12px aim error) wins most runs, all 20 levels; a run
+  can still hit the cap rather than finish
+- one thumb (40px aim error) dies somewhere between levels 7 and 15
 - two thumbs roughly doubles the tap rate, which is why the splash says
   "Best played on a tablet"
 
 There is deliberately no middle ground: precise players finish, imprecise ones
-do not. That is the intended shape. The comments in `ladder.js` that justify
-the frequencies are stale and worth correcting — the numbers, not the
-behaviour. See `docs/open-work.md`.
+do not. That is the intended shape. The `ladder.js` comments now describe the
+2.2 table and the measured `SKY`; issue #46 holds the evidence.
 
 ## Review
 

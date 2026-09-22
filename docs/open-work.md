@@ -2,7 +2,7 @@
 
 Small unfinished jobs and one planned feature. None of these block anything;
 raise them when there is a lull rather than interrupting a bigger piece of
-work. Current as of 2.1.
+work. Current as of 2.2.
 
 ## Loose ends
 
@@ -28,15 +28,6 @@ second sighting is recognised as the second rather than the first.
 **Release APKs are signed v2 only.** Fine for `minSdk 26`. Adding
 `enableV3Signing` would allow rotating the key later; without it the current
 keystore is the app's permanent identity.
-
-**A rebalance is in progress — issue #46.** The tuning was declared closed in
-`CLAUDE.md`, then the owner played the released game and reopened it: levels
-1–4 too slow, a spike at 6, too hard from 11, birds too small. The design was
-reviewed by Luna on GitHub and agreed before any code changed. The stale-number
-cleanup that used to live here — `Ladder.SKY` and the "2.1 taps a second"
-supply constant, both long since corrected in `ladder.js` — is folded into that
-work, which also updates the comments to the new table and the measured `SKY`.
-See issue #46 for the approved candidate and the measurement protocol.
 
 ## Planned: an ammunition mode
 
