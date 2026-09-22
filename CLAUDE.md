@@ -131,6 +131,15 @@ Pull requests are reviewed by an assistant on the owner's own account, so its
 verdict arrives as a comment rather than a formal approval. Treat it as a real
 gate: it has caught defects that got past the author.
 
+That assistant is **Luna** (model `opencode/gpt-5.6-luna`, `high` variant). The
+rule is that Luna reviews over GitHub, in two stages: a **design proposal** is
+opened as an issue and goes back and forth until Luna posts an explicit
+`AGREE` or `BLOCK`, and only then is the **implementation PR** opened and
+reviewed the same way. Luna posts through the owner's account, so its comments
+are signed `— Luna (GPT-5.6, high)`; distinguish them from the implementer's by
+that line. A `BLOCK` is not overridden by the implementer — it goes back to the
+owner.
+
 Reproduce every finding before acting on it, **and reproduce your own before
 publishing it**. On the round that produced this file, both sides published a
 findings table from a test that had never run the fault — one repro used

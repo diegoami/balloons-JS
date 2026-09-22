@@ -309,7 +309,7 @@ Paint.reached = function (row) {
     // Only when it is not a mouse.
     //
     // A fifth column would not fit a phone, and a marker on every row would be
-    // noise. One pointer at about 2.1 taps a second is what the ladder is
+    // noise. One pointer at about 2.29 taps a second is what the ladder is
     // calibrated against, so a mouse is the baseline and needs no label; two
     // thumbs is the thing worth flagging. Same rule as the practice warning:
     // say it when it applies and stay quiet when it does not.

@@ -85,13 +85,13 @@
  * WHAT THE CURVE ACTUALLY DOES
  *
  *   level    1     5     8    10    12    15    18    20
- *   demand  1.24  2.16  2.52  2.74  2.82  2.60  2.36  2.26
+ *   demand  1.49  2.13  2.43  2.54  2.72  2.48  2.40  2.31
  *
- * It crosses supply around level 6 and stays above it for the rest of the
- * game, peaking about a quarter over at level 12 before easing back to just
- * under by 20. The old text here claimed it climbed to 2.16 and stopped below
- * a supply of 2.1 -- that the game never asks for more than you have. It does,
- * from level 6 onwards.
+ * It crosses supply around level 8 -- later than it used to, because 2.2 asks
+ * more of the opening and less of the back half -- peaks about a sixth over at
+ * level 12, and eases to just over supply by 20. The old text here claimed it
+ * climbed to 2.16 and stopped below a supply of 2.1 -- that the game never asks
+ * for more than you have. It does, from level 8 onwards.
  *
  * THAT IS NOT A BUG, AND IT IS WHY THERE ARE LIVES
  *
@@ -102,8 +102,8 @@
  * under supply would be a game you could play perfectly, and a twenty-rung
  * ladder nobody could ever lose is not a ladder.
  *
- * The SHAPE was right all along: up, a plateau, then easing off. Only the
- * height was wrong. Levels 11 to 20 still get harder by taking taps AWAY
+ * The SHAPE is unchanged: up, a plateau, then easing off. The height is what
+ * 2.2 rebalanced. Levels 11 to 20 still get harder by taking taps AWAY
  * rather than asking for more — a balloon that jinks lowers your hit rate, one
  * that fades costs you time to find it, a firefly eats whole taps and a life,
  * a saucer takes a burst. The sky thins out to pay for them, exactly as it
@@ -111,12 +111,12 @@
  * for the mark II saucer, which asks for eight taps where the first asked
  * five.
  *
- * The budget, now that both sides are in taps. The back half runs 200 seconds
- * and asks about 0.3 taps a second more than a player supplies, which is some
- * sixty taps, or forty balloons, more than anyone can reach. Three lives are
+ * The budget, now that both sides are in taps. The back half averages about
+ * 2.45 taps a second against a supply of 2.29 -- some 0.16 a second more, or
+ * about thirty taps, twenty balloons, over its 200 seconds. Three lives are
  * handed out over the same stretch and a run arrives with five: eight lives
- * against forty balloons is not meant to be survivable by clearing the sky. It
- * is meant to be survivable by choosing which ones to let go, which is the
+ * against twenty balloons is not meant to be survivable by clearing the sky.
+ * It is meant to be survivable by choosing which ones to let go, which is the
  * game the back half is actually asking you to play.
  *
  * MEASURED, NOT SOLVED. These figures are what the game does, taken from the
@@ -148,41 +148,41 @@ var Ladder = {};
  * one fading balloon in eight meant whole levels went by without one being on
  * screen at all, and the feature read as not being there.
  *
- * The spawn rate FALLS where a heavier balloon arrives — 0.0833 at 3, 0.0807 at
+ * The spawn rate FALLS where a heavier balloon arrives — 0.0630 at 3, 0.0596 at
  * 4 — and that is not a mistake. A three-tap balloon costs three of the two
  * taps a second anyone has, so the sky has to thin out as the balloons in it
  * get heavier. Fewer balloons, more work each. Every frequency below was solved
  * from the demand curve and the mix rather than picked and hoped over.
  */
 Ladder.LEVELS = [
-    { level: 1 , speed:  4.0, frequency: 0.0422, size: 1.00, reinforced: 0.00, armoured: 0.00 },
-    { level: 2 , speed:  4.4, frequency: 0.0502, size: 0.97, reinforced: 0.00, armoured: 0.00 },
-    { level: 3 , speed:  4.8, frequency: 0.0569, size: 0.94, reinforced: 0.00, armoured: 0.00 },
-    { level: 4 , speed:  5.2, frequency: 0.0556, size: 0.91, reinforced: 0.15, armoured: 0.00,
+    { level: 1 , speed:  4.0, frequency: 0.0509, size: 1.00, reinforced: 0.00, armoured: 0.00 },
+    { level: 2 , speed:  4.4, frequency: 0.0572, size: 0.97, reinforced: 0.00, armoured: 0.00 },
+    { level: 3 , speed:  4.8, frequency: 0.0630, size: 0.95, reinforced: 0.00, armoured: 0.00 },
+    { level: 4 , speed:  5.2, frequency: 0.0596, size: 0.92, reinforced: 0.15, armoured: 0.00,
       news: ["Reinforced balloons", "Two taps, and they rise slower."] },
-    { level: 5 , speed:  5.6, frequency: 0.0629, size: 0.88, reinforced: 0.18, armoured: 0.00 },
-    { level: 6 , speed:  6.0, frequency: 0.0665, size: 0.85, reinforced: 0.20, armoured: 0.00, bossAt: 1, bossEvery: 540,
+    { level: 5 , speed:  5.6, frequency: 0.0629, size: 0.90, reinforced: 0.16, armoured: 0.00 },
+    { level: 6 , speed:  6.0, frequency: 0.0617, size: 0.88, reinforced: 0.17, armoured: 0.00, bossAt: 1, bossEvery: 540,
       news: ["A saucer", "Tap it down before it shoots. Five taps, three seconds."] },
-    { level: 7 , speed:  6.4, frequency: 0.0693, size: 0.82, reinforced: 0.22, armoured: 0.00, bossAt: 1, bossEvery: 520 },
-    { level: 8 , speed:  6.9, frequency: 0.0719, size: 0.79, reinforced: 0.24, armoured: 0.00, birds: 0.004,
+    { level: 7 , speed:  6.4, frequency: 0.0662, size: 0.86, reinforced: 0.18, armoured: 0.00, bossAt: 1, bossEvery: 520 },
+    { level: 8 , speed:  6.9, frequency: 0.0702, size: 0.84, reinforced: 0.20, armoured: 0.00, birds: 0.004,
       news: ["Birds", "Do not touch them. They cost a life."], bossAt: 2, bossEvery: 500 },
-    { level: 9 , speed:  7.4, frequency: 0.0735, size: 0.76, reinforced: 0.26, armoured: 0.00, birds: 0.005, bossAt: 2, bossEvery: 480 },
-    { level: 10, speed:  7.9, frequency: 0.0686, size: 0.73, reinforced: 0.25, armoured: 0.08,
+    { level: 9 , speed:  7.4, frequency: 0.0746, size: 0.82, reinforced: 0.22, armoured: 0.00, birds: 0.005, bossAt: 2, bossEvery: 480 },
+    { level: 10, speed:  7.5, frequency: 0.0704, size: 0.80, reinforced: 0.18, armoured: 0.06,
       news: ["Armoured balloons", "Three taps. Worth six points."], birds: 0.005, bossAt: 3, bossEvery: 460 },
-    { level: 11, speed:  8.4, frequency: 0.0680, size: 0.70, reinforced: 0.25, armoured: 0.10, birds: 0.006, bossAt: 3, bossEvery: 440 },
-    { level: 12, speed:  8.9, frequency: 0.0675, size: 0.68, reinforced: 0.25, armoured: 0.12, life: 1, birds: 0.006, bossAt: 4, bossEvery: 420, janky: 0.20,
+    { level: 11, speed:  7.6, frequency: 0.0717, size: 0.78, reinforced: 0.18, armoured: 0.075, birds: 0.006, bossAt: 3, bossEvery: 440 },
+    { level: 12, speed:  7.7, frequency: 0.0707, size: 0.76, reinforced: 0.18, armoured: 0.09, life: 1, birds: 0.006, bossAt: 4, bossEvery: 420, janky: 0.20,
       news: ["Janky balloons", "Some of them wander as they rise. They are bigger, too."] },
-    { level: 13, speed:  9.4, frequency: 0.0656, size: 0.66, reinforced: 0.26, armoured: 0.13, birds: 0.007, bossAt: 4, bossEvery: 400, janky: 0.24 },
-    { level: 14, speed:  9.9, frequency: 0.0609, size: 0.64, reinforced: 0.26, armoured: 0.14, birds: 0.007, bossAt: 4, bossEvery: 390, janky: 0.18, fading: 0.24,
+    { level: 13, speed:  7.8, frequency: 0.0687, size: 0.74, reinforced: 0.19, armoured: 0.095, birds: 0.007, bossAt: 4, bossEvery: 400, janky: 0.24 },
+    { level: 14, speed:  7.9, frequency: 0.0655, size: 0.72, reinforced: 0.20, armoured: 0.10, birds: 0.007, bossAt: 4, bossEvery: 390, janky: 0.18, fading: 0.24,
       news: ["Fading balloons", "Some of them thin out as they rise. Take them early."] },
-    { level: 15, speed: 10.4, frequency: 0.0587, size: 0.62, reinforced: 0.27, armoured: 0.15, life: 1, birds: 0.008, bossAt: 5, bossEvery: 380, janky: 0.19, fading: 0.26 },
-    { level: 16, speed: 10.9, frequency: 0.0565, size: 0.60, reinforced: 0.27, armoured: 0.16, birds: 0.008, bossAt: 5, bossEvery: 370, fireflies: 2,
+    { level: 15, speed:  8.0, frequency: 0.0621, size: 0.70, reinforced: 0.20, armoured: 0.11, life: 1, birds: 0.008, bossAt: 5, bossEvery: 380, janky: 0.19, fading: 0.26 },
+    { level: 16, speed:  8.2, frequency: 0.0602, size: 0.68, reinforced: 0.21, armoured: 0.115, birds: 0.008, bossAt: 5, bossEvery: 370, fireflies: 2,
       news: ["Fireflies", "Pretty, and in the way. Touching one costs a life."], janky: 0.19, fading: 0.28 },
-    { level: 17, speed: 11.4, frequency: 0.0543, size: 0.58, reinforced: 0.28, armoured: 0.17, birds: 0.009, bossAt: 5, bossEvery: 360, fireflies: 3, janky: 0.20, fading: 0.30 },
-    { level: 18, speed: 11.9, frequency: 0.0521, size: 0.56, reinforced: 0.28, armoured: 0.18, life: 1, birds: 0.009, bossAt: 6, bossEvery: 300, bossMark: 2, fireflies: 3, janky: 0.21, fading: 0.31,
+    { level: 17, speed:  8.3, frequency: 0.0600, size: 0.66, reinforced: 0.22, armoured: 0.12, birds: 0.009, bossAt: 5, bossEvery: 360, fireflies: 3, janky: 0.20, fading: 0.30 },
+    { level: 18, speed:  8.4, frequency: 0.0581, size: 0.64, reinforced: 0.22, armoured: 0.13, life: 1, birds: 0.009, bossAt: 6, bossEvery: 300, bossMark: 2, fireflies: 3, janky: 0.21, fading: 0.31,
       news: ["A bigger saucer", "Eight taps, and it will not hold still."] },
-    { level: 19, speed: 12.4, frequency: 0.0500, size: 0.54, reinforced: 0.30, armoured: 0.19, birds: 0.010, bossAt: 6, bossEvery: 285, bossMark: 2, fireflies: 4, janky: 0.21, fading: 0.33 },
-    { level: 20, speed: 13.0, frequency: 0.0478, size: 0.52, reinforced: 0.30, armoured: 0.20, birds: 0.010, bossAt: 6, bossEvery: 270, bossMark: 2, fireflies: 4, janky: 0.22, fading: 0.34 }
+    { level: 19, speed:  8.6, frequency: 0.0554, size: 0.62, reinforced: 0.23, armoured: 0.135, birds: 0.010, bossAt: 6, bossEvery: 285, bossMark: 2, fireflies: 4, janky: 0.21, fading: 0.33 },
+    { level: 20, speed:  8.8, frequency: 0.0543, size: 0.60, reinforced: 0.24, armoured: 0.14, birds: 0.010, bossAt: 6, bossEvery: 270, bossMark: 2, fireflies: 4, janky: 0.22, fading: 0.34 }
 ];
 
 /**
@@ -205,7 +205,7 @@ Ladder.SKINS = [
  * The two saucers.
  *
  * `taps` and `fuse` are the fight. They move TOGETHER on purpose: 5 taps in 3
- * seconds and 8 in 4.8 both ask for 1.67 taps a second, against the 2.1 a
+ * seconds and 8 in 4.8 both ask for 1.67 taps a second, against the 2.29 a
  * player supplies. The mark II is not harder per second -- a fight that asked
  * for more than a person can produce would not be a fight -- it is harder
  * because it is longer, because it moves, and because every one of those 4.8
@@ -343,18 +343,25 @@ Ladder.at = function (level) {
  * means less throttling means more arrivals -- so the emptier the sky, the
  * harder the game pushes.
  *
- * THE NUMBERS HERE WERE ALSO WRONG, BY TWO TO FOUR TIMES. They said 5 to 11
- * balloons across the middle of the ladder; measured over two full runs at a
- * careful mouse it is 2 to 3.6. Every demand figure computed from them was
- * understated by 20 to 25%, which is how a table documented as peaking at 2.16
- * taps a second was really peaking at 2.82.
+ * MEASURED, NOT ASSUMED, AND RE-MEASURED FOR 2.2. The values below are the
+ * pooled per-level means of ten full-cap runs at a careful mouse (1280x720,
+ * two batches of five runs, 250ms reaction, 12px aim) -- the strong-player
+ * configuration this column is meant to describe. An earlier version of this
+ * column said 5 to 11 balloons across the middle and understated every demand
+ * figure by 20 to 25%, which is how a table documented as peaking at 2.16 taps
+ * a second was really peaking at 2.82.
+ *
+ * THE SPREAD IS LARGE AND IS NOT A TUNING SIGNAL. Within a level the count
+ * swings by about a standard deviation as balloons arrive and pop; more to the
+ * point, the batch-to-batch spread is real and largest late -- level 20 read
+ * 3.3 in one batch and 1.5 in the other. So these are honest means, not
+ * precise ones, and nothing should be asserted adjacent-level about them.
  *
  * OCCUPANCY IS NOT A PROPERTY OF THE LADDER. It is a property of the ladder
- * AND the player: the same levels sit at 2 to 3.6 balloons under a bot that
- * pops nearly everything and reach 9 by level 12 under one with a thumb's aim,
- * because what is left in the sky is what you did not get to. These are the
- * strong-player numbers, which is the honest choice for a column whose job is
- * to say how hard the game pushes when it is being played well.
+ * AND the player: what is left in the sky is what you did not get to, so the
+ * same levels sit far fuller under a thumb's aim than under a careful mouse.
+ * These are the strong-player numbers, which is the honest choice for a column
+ * whose job is to say how hard the game pushes when it is being played well.
  *
  * They are documentation, and one dial. `demand` reads them, and so does the
  * title screen's footage, which fills the sky to whatever this says a level
@@ -363,8 +370,8 @@ Ladder.at = function (level) {
  * the live count.
  */
 Ladder.SKY = [
-    0.6, 0.8, 0.9, 1.1, 1.3, 2.0, 2.3, 2.7, 3.1, 2.5,
-    3.5, 3.0, 3.6, 3.2, 2.3, 2.3, 3.2, 2.7, 2.0, 2.3
+    0.80, 0.80, 1.10, 1.05, 1.10, 1.50, 1.65, 1.85, 2.70, 3.50,
+    2.50, 2.65, 2.85, 2.35, 2.65, 2.60, 2.40, 2.75, 3.75, 2.40
 ];
 
 /** How full the sky is when a given level is being played. */

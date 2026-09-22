@@ -26,9 +26,9 @@ type ScoreEntry = {
   /**
    * What the run was played with: "touch", "mouse" or "mixed".
    *
-   * The ladder is calibrated against roughly 2.1 taps a second from ONE
+   * The ladder is calibrated against roughly 2.29 taps a second from ONE
    * pointer. A touchscreen lets you use two thumbs, which measured is the
-   * difference between dying around level 8 and finishing every run -- so a
+   * difference between dying around level 10 and finishing every run -- so a
    * score set that way is not the same achievement as one set with a mouse,
    * and the board says which rather than quietly mixing them.
    *

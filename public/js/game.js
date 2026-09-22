@@ -173,7 +173,7 @@ Game.PAUSE_STEPS = Math.round(Game.PAUSE_SECONDS * 1000 / Game.STEP_MS);
  *
  * It is a starting number rather than the whole story, because five flat lives
  * cannot reach level 20. The back half of the ladder runs at break-even: five
- * lives across ten rungs buys about seven and a half taps more than a player
+ * lives across twenty rungs buys about seven and a half taps more than a player
  * supplies, over 200 seconds. The ladder awards a life at 12, 15 and 18 — at
  * each level where a new thing arrives to take one — and `game.allowance` is
  * where those land.

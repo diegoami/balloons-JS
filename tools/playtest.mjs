@@ -328,13 +328,15 @@ console.log(
   `${Math.round(1000 / OPTIONS.interval * 10) / 10} clicks/sec ` +
   `· ${OPTIONS.width}×${OPTIONS.height} · ${OPTIONS.capMs / 1000}s cap\n`
 );
-console.log('run   lives  survived   points  pops/tap  taps/s   sky    lost  birds  boss     flies  rung   outcome');
+console.log('run   lives  survived   points  pops/clk  taps/s   sky    lost  birds  boss     flies  rung   outcome');
 
 const mean = list => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
 
 settled.forEach(r => {
   const accuracy = r.stats.clicks ? (r.stats.hits / r.stats.clicks * 100) : 0;
-  const seconds = r.time || (r.survived / 1000) || 1;
+  // `r.time` is null when the run hit the cap, and there is no `r.survived`:
+  // falling back to 1 printed the raw landed-tap count as `taps/s` (490).
+  const seconds = r.time !== null ? r.time : (r.wall || 1);
   const tapsPerSecond = r.stats.onTarget / seconds;
   console.log(
     String(r.run).padEnd(5),
@@ -376,9 +378,24 @@ all.forEach(r => {
   });
 });
 const levels = Object.keys(occupancy).map(Number).sort((a, b) => a - b);
+
+/**
+ * Spread as well as the mean, because `Ladder.SKY` is a dial that `demand`
+ * divides by, and a mean taken from a single sample is a coin toss. A level
+ * whose samples are all over the place is not a level to set a number from.
+ */
+const stdev = list => {
+  const m = mean(list);
+  return Math.sqrt(mean(list.map(x => (x - m) * (x - m))));
+};
 if (levels.length) {
   console.log('\nhow full the sky actually is, per level (MAX_BALLOONS is 20):');
-  console.log(levels.map(l => `${l}:${round(mean(occupancy[l]))}`).join('  '));
+  console.log(levels
+    .map(l => `${l}:${round(mean(occupancy[l]))}±${round(stdev(occupancy[l]))}(n${occupancy[l].length})`)
+    .join('  '));
+  // Per-run means as well, so the run-to-run spread is visible rather than
+  // hidden inside a pooled average.
+  console.log('per-run mean sky: ' + all.map((r, i) => `r${i + 1}:${round(mean(r.stats.sky))}`).join('  '));
 }
 
 const lifetimes = all.flatMap(r => r.stats.lifetimes).sort((a, b) => a - b);
