@@ -36,6 +36,24 @@ type ScoreEntry = {
    * old browser that reports no pointer type sends none.
    */
   pointer?: "touch" | "mouse" | "mixed";
+  /**
+   * Where the run's points and lives went, if the client that posted it knew.
+   *
+   * Optional, like `level` and `pointer`: rows written before this existed have
+   * none. It is advisory — it explains the score, it does not change it — and
+   * it is dropped whole if any field is missing, out of range, or does not sum
+   * to the score, so a partial or forged breakdown can never become a second,
+   * disagreeing score.
+   */
+  breakdown?: {
+    points: {
+      ordinary: number; reinforced: number; armoured: number;
+      saucer1: number; saucer2: number;
+    };
+    losses: {
+      escapes: number; saucers: number; birds: number; fireflies: number;
+    };
+  };
 };
 
 const STORE_NAME = "highscores";
@@ -104,6 +122,58 @@ function cleanLevel(value: unknown): number | undefined {
   if (typeof value !== "number" || !Number.isInteger(value)) return undefined;
   if (value < 1 || value > MAX_LEVEL) return undefined;
   return value;
+}
+
+/** A run cannot lose more than this many lives, however it is played. */
+const MAX_LOSSES = 99;
+
+/** A non-negative integer inside `max`, or null. */
+function cleanCount(value: unknown, max: number): number | null {
+  if (typeof value !== "number" || !Number.isInteger(value)) return null;
+  if (value < 0 || value > max) return null;
+  return value;
+}
+
+/**
+ * The optional run breakdown, validated field by field.
+ *
+ * Points are capped at the score itself and must sum to it; losses are capped
+ * at MAX_LOSSES. Anything short of that is dropped rather than stored half
+ * true.
+ */
+function cleanBreakdown(value: unknown, score: number): ScoreEntry["breakdown"] {
+  if (typeof value !== "object" || value === null) return undefined;
+  const v = value as Record<string, unknown>;
+  const p = (v.points ?? {}) as Record<string, unknown>;
+  const l = (v.losses ?? {}) as Record<string, unknown>;
+
+  const ordinary = cleanCount(p.ordinary, score);
+  const reinforced = cleanCount(p.reinforced, score);
+  const armoured = cleanCount(p.armoured, score);
+  const saucer1 = cleanCount(p.saucer1, score);
+  const saucer2 = cleanCount(p.saucer2, score);
+  const escapes = cleanCount(l.escapes, MAX_LOSSES);
+  const saucers = cleanCount(l.saucers, MAX_LOSSES);
+  const birds = cleanCount(l.birds, MAX_LOSSES);
+  const fireflies = cleanCount(l.fireflies, MAX_LOSSES);
+
+  const all = [ordinary, reinforced, armoured, saucer1, saucer2,
+    escapes, saucers, birds, fireflies];
+  if (all.some(n => n === null)) return undefined;
+  const total = (ordinary as number) + (reinforced as number) + (armoured as number) +
+    (saucer1 as number) + (saucer2 as number);
+  if (total !== score) return undefined;
+
+  return {
+    points: {
+      ordinary: ordinary as number, reinforced: reinforced as number,
+      armoured: armoured as number, saucer1: saucer1 as number, saucer2: saucer2 as number,
+    },
+    losses: {
+      escapes: escapes as number, saucers: saucers as number,
+      birds: birds as number, fireflies: fireflies as number,
+    },
+  };
 }
 
 const POINTERS = ["touch", "mouse", "mixed"] as const;
@@ -180,7 +250,7 @@ export default async (req: Request, context: Context) => {
     return json({ error: "body must be JSON" }, 400);
   }
 
-  const { name, score, level, won, pointer } =
+  const { name, score, level, won, pointer, breakdown } =
     (payload ?? {}) as Record<string, unknown>;
   const cleanedScore = cleanScore(score);
 
@@ -207,6 +277,11 @@ export default async (req: Request, context: Context) => {
   const cleanedPointer = cleanPointer(pointer);
   if (cleanedPointer !== undefined) {
     entry.pointer = cleanedPointer;
+  }
+
+  const cleanedBreakdown = cleanBreakdown(breakdown, cleanedScore);
+  if (cleanedBreakdown !== undefined) {
+    entry.breakdown = cleanedBreakdown;
   }
 
   // Read-modify-write. Netlify Blobs has no compare-and-swap, so two scores

@@ -169,6 +169,7 @@ var birdConstructor = function (xcoord, ycoord, radius, speed, fromLeft) {
         if (!startled) {
             startled = true;
             game.livesLost++;
+            game.breakdown.losses.birds++;
             Announce.touchedBird(game);
         }
         return false;

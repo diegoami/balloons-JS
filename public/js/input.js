@@ -132,6 +132,8 @@ Input.menu = function (game, signal) {
             game.enter("name");
         } else if (target && target.id === "about") {
             game.enter("about");
+        } else if (target && target.id === "board") {
+            game.enter("board");
         } else if (target && target.id === "start") {
             game.cycleStartLevel();
         }
@@ -184,6 +186,46 @@ Input.about = function (game, signal) {
     document.addEventListener("keydown", function (event) {
         if (event.key === "Escape" || event.key === " " || event.key === "Enter") {
             leave();
+        }
+    }, { signal: signal });
+};
+
+/**
+ * The Scores screen: a back chip, a toggle, and Escape.
+ *
+ * "Just mine" switches which list is drawn without leaving the screen, so the
+ * change is said as well as drawn.
+ */
+Input.board = function (game, signal) {
+    var B = game.layout.boardScreen;
+
+    game.canvas.addEventListener("pointerdown", function (event) {
+        var at = Input.point(game, event);
+        game.pressed = Layout.hitRect(B.toggle, at) ? "boardToggle"
+            : (Layout.hitRect(B.back, at) ? "boardBack" : null);
+    }, { signal: signal });
+
+    game.canvas.addEventListener("click", function (event) {
+        var at = Input.point(game, event);
+        game.pressed = null;
+        if (Layout.hitRect(B.back, at)) {
+            game.enter("title");
+        } else if (Layout.hitRect(B.toggle, at)) {
+            game.state.mine = !game.state.mine;
+            Announce.board(game);
+            game.paint();
+        }
+    }, { signal: signal });
+
+    document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+            game.enter("title");
+        } else if (event.key === " " || event.key === "Enter") {
+            // The toggle is the only other thing here, so the keys work it:
+            // Escape is back out, Space/Enter switches the list.
+            game.state.mine = !game.state.mine;
+            Announce.board(game);
+            game.paint();
         }
     }, { signal: signal });
 };

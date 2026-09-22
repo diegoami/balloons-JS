@@ -223,16 +223,46 @@ Announce.lost = function (game) {
     );
 };
 
+/**
+ * The board screen, and the toggle that changes what it shows.
+ *
+ * The rows are not read out one by one: a screen of numbers read aloud is
+ * noise. It says how many there are and which list, and leaves the rest.
+ */
+Announce.board = function (game) {
+    var mine = !!(game.state && game.state.mine);
+    var rows = mine ? Scores.history() : (Scores.board || []);
+    Announce.say(
+        "High scores. " + (mine ? "Your runs. " : "Everyone. ") +
+        (rows.length
+            ? rows.length + (rows.length === 1 ? " entry." : " entries.")
+            : "Nothing recorded yet.")
+    );
+};
+
 Announce.gameover = function (game) {
+    var b = game.breakdown;
+    var where = b
+        ? " Points: " + b.points.ordinary + " from balloons, " +
+          b.points.reinforced + " from reinforced, " + b.points.armoured +
+          " from armoured, " + (b.points.saucer1 + b.points.saucer2) +
+          " from saucers. Lives lost: " + b.losses.escapes + " escaped, " +
+          b.losses.saucers + " to saucers, " + b.losses.birds + " to birds, " +
+          b.losses.fireflies + " to fireflies."
+        : "";
     Announce.say(
         (game.won
             ? "You win. Level " + Ladder.MAX + " survived. "
             : "Game over. ") +
-        game.score + " points in " + game.end_time + " seconds. " +
+        game.score + " points in " + game.end_time + " seconds. Level " +
+        game.level + (game.won ? ", won" : "") + ", played with " +
+        game.pointerKind() + "." +
+        (game.state && game.state.isBest ? " " + Layout.PERSONAL_BEST_TEXT : "") +
+        where +
         (game.isPractice()
-            ? "Practice run: not saved. "
+            ? " Practice run: not saved."
             : "") +
-        "Press space to play again."
+        " Press space to play again."
     );
 };
 

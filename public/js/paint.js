@@ -174,6 +174,143 @@ Paint.about = function (game) {
     Paint.chip(game, L.back, Layout.BACK_TEXT, true, game.pressed === "about");
 };
 
+/** The Scores chip, beside About. */
+Paint.boardChip = function (game) {
+    Paint.chip(game, game.layout.board, Layout.BOARD_TEXT,
+        game.isMenuLive(), game.pressed === "board");
+};
+
+/** One board row's second line: the compact breakdown, or a dash. */
+Paint.breakdownLine = function (row) {
+    var b = row.breakdown;
+    if (!b) {
+        return "\u2014";
+    }
+    var p = b.points, l = b.losses;
+    return "B" + p.ordinary + " R" + p.reinforced + " A" + p.armoured +
+        " S" + (p.saucer1 + p.saucer2) + " \u00b7 E" + l.escapes +
+        " S" + l.saucers + " Bi" + l.birds + " F" + l.fireflies;
+};
+
+/**
+ * The Scores screen.
+ *
+ * Everyone's board comes from the server; "just mine" comes from the local
+ * history, so it works offline. Rows are two lines: the run, then where its
+ * points and lives went. Old rows written before the breakdown existed show a
+ * dash rather than a made-up figure.
+ */
+Paint.board = function (game) {
+    var ctx = game.ctx;
+    var L = game.layout;
+    var B = L.boardScreen;
+    var mine = !!(game.state && game.state.mine);
+
+    Paint.intro(game, Layout.BOARD_TITLE);
+
+    var source;
+    var note = null;
+    if (mine) {
+        source = Scores.history();
+    } else if (Scores.failed) {
+        source = Scores.history();
+        note = Layout.BOARD_OFFLINE_TEXT;
+    } else {
+        source = Scores.board || [];
+    }
+    var rows = source.slice(0, B.rows.length);
+
+    ctx.save();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+
+    ctx.font = L.fonts.label;
+    ctx.fillStyle = game.palette.inkSoft;
+    ctx.fillText(Layout.BOARD_LEGEND, B.heading.x, B.heading.y + L.line * 1.1);
+    if (note) {
+        ctx.fillStyle = game.palette.accent;
+        ctx.fillText(note, B.heading.x, B.heading.y + L.line * 2.2);
+    }
+
+    if (!rows.length) {
+        ctx.fillStyle = game.palette.inkSoft;
+        ctx.fillText(Layout.NO_SCORES_TEXT, B.columns.name, B.rows[0]);
+    }
+
+    rows.forEach(function (row, i) {
+        var y = B.rows[i];
+        ctx.font = B.bodySize;
+        ctx.fillStyle = game.palette.inkSoft;
+        ctx.fillText(row.score_day || "", B.columns.date, y);
+        ctx.fillStyle = game.palette.ink;
+        ctx.fillText(row.name || "anonymous", B.columns.name, y);
+        ctx.fillStyle = row.won ? game.palette.accent : game.palette.inkSoft;
+        ctx.fillText(Paint.reached(row), B.columns.level, y);
+        ctx.fillStyle = game.palette.accent;
+        ctx.fillText(String(row.score), B.columns.value, y);
+
+        ctx.font = B.tinySize;
+        ctx.fillStyle = game.palette.inkSoft;
+        ctx.fillText(Paint.breakdownLine(row), B.columns.name, y + L.line * 0.95);
+    });
+
+    Paint.chip(game, B.toggle, mine ? Layout.MINE_TEXT : Layout.ALL_TEXT,
+        true, game.pressed === "boardToggle");
+    Paint.chip(game, B.back, Layout.BACK_TEXT, true, game.pressed === "boardBack");
+    ctx.restore();
+};
+
+/**
+ * The game-over screen's account of the run: where the points came from and
+ * where the lives went. It replaces the board, which has a screen of its own
+ * now.
+ */
+Paint.runBreakdown = function (game) {
+    var ctx = game.ctx;
+    var L = game.layout;
+    var b = game.breakdown;
+    var left = L.intro.x;
+    var mid = game.width * 0.5;
+    var step = L.line * 1.5;
+
+    ctx.save();
+    ctx.textAlign = "left";
+
+    // How far the run got, and what it was played with. The ladder is
+    // calibrated for one pointer, so the device is part of the result.
+    ctx.font = L.fonts.label;
+    ctx.fillStyle = game.palette.inkSoft;
+    ctx.fillText(
+        "LEVEL " + game.level + (game.won ? " WON" : "") +
+            "  \u00b7  " + game.pointerKind(),
+        left, L.intro.y + L.line * 1.5
+    );
+
+    var top = L.intro.y + L.line * 2.8;
+
+    ctx.font = L.fonts.label;
+    ctx.fillStyle = game.palette.accent;
+    ctx.fillText(Layout.POINTS_LABEL, left, top);
+    ctx.fillStyle = game.palette.inkSoft;
+    Layout.BREAKDOWN_POINTS.forEach(function (item, i) {
+        ctx.fillText(item.label + "  " + b.points[item.key], left, top + step * (i + 1));
+    });
+
+    ctx.fillStyle = game.palette.accent;
+    ctx.fillText(Layout.LOSSES_LABEL, mid, top);
+    ctx.fillStyle = game.palette.inkSoft;
+    Layout.BREAKDOWN_LOSSES.forEach(function (item, i) {
+        ctx.fillText(item.label + "  " + b.losses[item.key], mid, top + step * (i + 1));
+    });
+
+    if (game.state && game.state.isBest) {
+        ctx.font = L.fonts.menu;
+        ctx.fillStyle = game.palette.accent;
+        ctx.fillText(Layout.PERSONAL_BEST_TEXT, left, top + step * 6.4);
+    }
+    ctx.restore();
+};
+
 /** The one headline line, shared by the title and game-over screens. */
 Paint.intro = function (game, text) {
     game.ctx.font = game.layout.fonts.intro;
@@ -318,44 +455,6 @@ Paint.reached = function (row) {
         return got + " " + pointer;
     }
     return got;
-};
-
-/** The board, if one has arrived. Nothing is drawn before then. */
-Paint.scores = function (game) {
-    var scores = game.layout.scores;
-    var data = Scores.board;
-
-    if (!data) {
-        return;
-    }
-
-    game.ctx.font = game.layout.fonts.label;
-    game.ctx.fillStyle = game.palette.inkSoft;
-    game.ctx.fillText(Layout.HIGH_SCORES_TEXT, scores.heading.x, scores.heading.y);
-
-    game.ctx.font = game.layout.fonts.score;
-    for (var i = 0; i < scores.rows.length; i++) {
-        if (data.length > i) {
-            game.ctx.fillStyle = game.palette.inkSoft;
-            game.ctx.fillText(data[i]["score_day"], scores.columns.date, scores.rows[i]);
-            game.ctx.fillStyle = game.palette.ink;
-            game.ctx.fillText(data[i]["name"], scores.columns.name, scores.rows[i]);
-
-            // How far up the ladder that score got. Rows already on the board
-            // were set before this was recorded, so they get a dash: a missing
-            // fact is not a level of nothing.
-            game.ctx.fillStyle = data[i]["won"] ? game.palette.accent : game.palette.inkSoft;
-            game.ctx.fillText(
-                Paint.reached(data[i]),
-                scores.columns.level,
-                scores.rows[i]
-            );
-
-            game.ctx.fillStyle = game.palette.accent;
-            game.ctx.fillText(data[i]["score"], scores.columns.value, scores.rows[i]);
-        }
-    }
-    game.ctx.font = game.layout.fonts.menu;
 };
 
 /**

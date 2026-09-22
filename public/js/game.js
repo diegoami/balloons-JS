@@ -611,6 +611,38 @@ Game.awardLife = function (level) {
 };
 
 /**
+ * A fresh run breakdown: where a run's points and lives actually went.
+ *
+ * `points` is split the way the ladder makes points — by the balloon's own
+ * class, and by which saucer — and `losses` by the cause of each life. The two
+ * sums are meant to agree with `score` and `livesLost`; `breakdownTotals`
+ * checks that, and the tests assert it, so the breakdown cannot quietly drift
+ * from the numbers it explains.
+ */
+Game.blankBreakdown = function () {
+    return {
+        points: {
+            ordinary: 0, reinforced: 0, armoured: 0,
+            saucer1: 0, saucer2: 0
+        },
+        losses: {
+            escapes: 0, saucers: 0, birds: 0, fireflies: 0
+        }
+    };
+};
+
+/** The two sums the breakdown screens show. */
+Game.breakdownTotals = function () {
+    var b = this.breakdown;
+    return {
+        points: b.points.ordinary + b.points.reinforced + b.points.armoured +
+            b.points.saucer1 + b.points.saucer2,
+        losses: b.losses.escapes + b.losses.saucers +
+            b.losses.birds + b.losses.fireflies
+    };
+};
+
+/**
  * Clears the board for a new round. The clock is set here and again when play
  * actually begins, so nothing drawn during the countdown can read a time left
  * over from the previous game.
@@ -624,6 +656,7 @@ Game.resetRound = function () {
     // too, and a counter named after one of the two things that fill it is the
     // kind of name this project keeps having to fix.
     this.livesLost = 0;
+    this.breakdown = Game.blankBreakdown();
     this.pointers = { touch: 0, mouse: 0 };
     // Far enough back that the first boss is only waiting on the sky going
     // quiet, not on a cooldown left over from nothing.
@@ -948,6 +981,7 @@ Game.init = function () {
     this.entities = [];
     this.pressed = null;
     this.pointers = { touch: 0, mouse: 0 };
+    this.breakdown = Game.blankBreakdown();
 
     /**
      * Where the next run opens.

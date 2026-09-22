@@ -146,11 +146,16 @@ both the game and its score API together.
 the game:
 
 - `GET /api/scores` returns the board, highest first.
-- `POST /api/scores` with `{"name": "...", "score": 123}` adds an entry.
+- `POST /api/scores` with `{"name": "...", "score": 123}` adds an entry. An
+  optional `breakdown` — where the points came from and the lives went — is
+  stored when present and consistent, and ignored otherwise.
 
-One board, because one game: it keeps the top 10 and the game draws the top 3.
-There used to be four, one per difficulty, and they could not be compared with
-each other. The old four are still in the store under their own keys, unread.
+One board, because one game. It keeps the top 10, shown on a Scores screen
+reached from the title; the game-over screen shows that run's own breakdown
+instead. "Just mine" and the personal best come from a local history (the last
+20 runs, practice excluded), not the server, so they work offline. There used to
+be four boards, one per difficulty, and they could not be compared with each
+other. The old four are still in the store under their own keys, unread.
 
 Scores live in [Netlify Blobs](https://docs.netlify.com/build/data-and-storage/netlify-blobs/),
 which needs no configuration or provisioning. Production writes to a global
