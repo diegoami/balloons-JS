@@ -2,9 +2,8 @@
 
 # Working with a reviewer
 
-DeepSeek implements. Review by another model is **non-blocking**: it runs when
-the owner has the chance, lives in a GitHub issue, and nothing waits for it.
-This file describes that process; the product guidance — what to read, what
+DeepSeek implements. No PR waits for a review: review by another model
+happens once per **milestone** — a release — before its tag. This file describes that process; the product guidance — what to read, what
 to leave alone, what has already been decided, how to know a change works — is
 in `CLAUDE.md` and applies here too.
 
@@ -16,7 +15,8 @@ in `CLAUDE.md` and applies here too.
 - **Reviewer:** the owner's choice — Luna (`opencode/gpt-5.6-luna`, `high`
   variant, invoked as a subagent in a fresh context with that explicit model
   id), Codex, or another. It verifies against the real code rather than
-  trusting the description, and posts its findings on the review issue.
+  trusting the description, opens one issue per finding it reproduced, and
+  posts its verdict on the milestone issue.
 - Reviewers post through the owner's GitHub account — there is no separate bot
   identity — so each signs its comments on the last line, e.g.
   `— Luna (GPT-5.6, high)`. That signature line is the only marker of
@@ -31,19 +31,20 @@ in `CLAUDE.md` and applies here too.
    else waits for a review.
 2. **Implementation as a PR** that references the issue, if there is one. The
    owner merges when CI is green on the PR's final commit.
-3. **Review at milestones, in an issue.** At a milestone, open a `[Review]`
-   issue whose body is `docs/review-prompt.md` filled in and otherwise
-   unchanged. `CLAUDE.md` (Review) says what a milestone is, and how the range
-   and the one-waiting-at-a-time rule work; Claude Code opens the same issues,
-   so a review covers whatever landed on `master`, whoever wrote it.
+3. **Milestones.** A milestone is a release: an annotated `vX.Y` tag on
+   `master`, on the exact commit the APK is built from. `CLAUDE.md` (Review)
+   defines it and sets out the steps — the version bump as a PR, the
+   `[Milestone]` issue, one prompt from `docs/review-prompt.md`, `AGREE` or
+   `BLOCK`, and the round ceiling. It says "Claude"; under OpenCode the
+   implementer does the same, including creating the tag on exactly the
+   reviewed SHA after `AGREE`. The tag waits for the review; merges never do.
 4. **Findings.** Reproduce each one before acting on it. Fix what holds up in a
-   PR that references the review issue, and reply on the issue to every
-   finding — what you fixed, or why not. A finding you think is wrong goes to
-   the owner with your repro. Close the issue when every finding is fixed or
-   answered.
+   PR that references the finding's issue, and reply on that issue — what you
+   fixed, or why not. A finding you think is wrong goes to the owner with your
+   repro. Then give the owner a re-review prompt for the new candidate.
 
-A change to `AGENTS.md` or `CLAUDE.md` is a milestone like any other: it merges
-on green CI, and its review comes after.
+A change to `AGENTS.md` or `CLAUDE.md` is an ordinary PR: it merges on green
+CI.
 
 ## Principles
 

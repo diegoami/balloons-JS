@@ -137,32 +137,60 @@ got past the author. The principles below apply whichever tool is reviewing;
 the OpenCode process lives in `AGENTS.md`.
 
 **Claude Code's process.** Claude works on its own — design, code, tests, PR —
-and the owner merges when CI is green on the PR's final commit. Review by
-another model is **non-blocking** and lives in a **GitHub issue**: the owner
-runs it when they have the chance, and nothing waits for it. The reviewer is
-the owner's choice (Codex, Luna or another), and is never Claude.
+and the owner merges when CI is green on the PR's final commit. No PR waits
+for a review. Review by another model happens once per **milestone**, before
+its tag: the reviewer is the owner's choice (Codex, Luna or another), runs in
+a fresh session, and is never Claude.
 
-At a milestone, Claude opens an issue titled `[Review] <what it covers>` whose
-body is `docs/review-prompt.md` filled in and otherwise unchanged. It covers
-`master` from the head of the previous `[Review]` issue to now, so one review
-can span several merged PRs; list them. What you verified goes in as claims
-for the reviewer to check, not as evidence. A milestone is:
+**A milestone is a release**: an annotated `vX.Y` tag — the scheme the
+releases repository already uses — on `master`, on the exact commit the
+published APK is built from. Not a PR, a run of PRs, or a change to a
+particular file. Only stable releases, unless the owner says otherwise; a beta
+may be built from a candidate. The APK is published in
+`diegoami/balloons-js-releases`, but the tag goes here, and the release notes
+name the tagged commit.
 
-- after merging a PR, or a run of PRs, touching `public/` or `netlify/`;
-- after a change to `CLAUDE.md`, `AGENTS.md`, `docs/review-prompt.md` or
-  `.github/`;
-- after a release.
+The baseline is **`v2.4` on `2476864`**, the merge of #60. The 2.4 notes name
+no commit; `2476864` has the same files as the version bump `272270a` that
+#60 records the APK being built from. The owner confirmed it on 2026-09-23.
+The next milestone is `v2.5`.
 
-Only one review waits at a time. If the previous `[Review]` issue has had no
-review yet, open the new one from that issue's base and close the old one as
-superseded, rather than stacking them up.
+How a milestone happens:
 
-The reviewer posts its findings as a comment on the issue. At the start of a
-session, look for any that have arrived (`gh issue list --search "[Review] in:title"`).
-Reproduce each finding before acting on it (below). Fix what holds up in a PR
-that references the issue; take a finding you think is wrong to the owner with
-your repro rather than dropping it. Close the issue when every finding is fixed
-or answered.
+1. The owner calls one, or Claude proposes one when a release is due or a
+   coherent set of work has landed.
+2. The version bump merges as an ordinary PR (`android/README.md`,
+   Releasing), because the APK is built from the tagged commit and has to
+   carry its version. That merge commit on `master` is the **candidate**.
+3. Claude opens a milestone issue titled `[Milestone] vX.Y`: the proposed
+   tag, the candidate's full SHA, the previous tag, the PRs merged between
+   them, and CI's results on the candidate (the push run on `master`).
+4. Claude gives the owner one prompt, `docs/review-prompt.md` filled in and
+   otherwise unchanged, in one fenced block ready to paste. What you verified
+   goes in as claims for the reviewer to check, not as evidence. The reviewer
+   reviews `git diff <previous tag>..<candidate>`, opens one issue per finding
+   it reproduced, and posts one verdict, `AGREE` or `BLOCK`, on the milestone
+   issue.
+5. **The tag waits for the review; merges never do.** On `BLOCK`, reproduce
+   each finding before acting on it (below), fix what holds up in ordinary PRs
+   that reference the finding's issue, and take a finding you think is wrong
+   to the owner with your repro. The candidate moves to the new `master`
+   commit: update the milestone issue and give a re-review prompt without
+   being asked. A third round that does not end in `AGREE` goes to the owner.
+6. On `AGREE`, Claude tags exactly the reviewed SHA — never a later commit —
+   and pushes the tag; the APK is built from the tag. Work merged after the
+   candidate belongs to the next milestone. Anything that has to be played or
+   installed to be checked is done before tagging. Publishing the APK stays
+   with the owner.
+7. The owner may tag without a review; the milestone issue records that.
+
+At the start of a session, look for verdicts that have arrived
+(`gh issue list --search "[Milestone] in:title"`).
+
+Write issue and PR bodies to a file and pass them with `--body-file`. And do
+not write `close`, `fix` or `resolve` followed by `#N` in one unless you mean
+it: GitHub treats that as an instruction, and #64's "closes #62 as superseded"
+closed #62 on merge.
 
 Reproduce every finding before acting on it, **and reproduce your own before
 publishing it**. On the round that produced this file, both sides published a
