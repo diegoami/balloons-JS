@@ -30,8 +30,9 @@ decided, how to know a change works — is in `CLAUDE.md` and applies here too.
    implementation before that.
 2. **Implementation as a PR.** Implement the agreed design on a branch and open
    a PR that references the issue. Have Luna review the PR against the agreed
-   design; fix and iterate until Luna posts an explicit `AGREE`. The owner
-   merges.
+   design; fix and iterate until Luna posts an explicit `AGREE`. The `AGREE`
+   names the commit it reviewed. The owner merges when that is the PR's head
+   commit and CI is green on it.
 
 **Bootstrap.** A change to `AGENTS.md` or `CLAUDE.md` follows this same
 process: it is opened as a PR and reviewed to `AGREE` like any other change.
@@ -61,3 +62,10 @@ before pushing. Run the full suite **eight times** before pushing anything that
 touches game logic, and read the pass COUNT rather than the absence of a FAIL
 line. A change that touches no file under `public/` or `netlify/` cannot move
 timing; one pass plus the diff is proportionate there — say which you did.
+
+CI (`.github/workflows/test.yml`) runs `npm test` eight times on every PR —
+on GitHub's merge of it into `master`, filed under the head commit — and
+re-runs on every push. That, not a count in the PR body, is the record a merge
+rests on: a body is written once, and the fixes a review asks for land after
+it. Each run must print exactly the workflow's `EXPECT_SCORES` and
+`EXPECT_BROWSER` counts; a PR that adds or removes a test updates them.

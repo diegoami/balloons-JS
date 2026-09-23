@@ -4535,11 +4535,20 @@ await t('the level that announces fading balloons actually has them', async () =
   // the third assertion in this feature I have written too tight. What this
   // test is for is catching the feature NOT EXISTING, and when it did not
   // exist it delivered 0.07 of what it asked.
+  //
+  // The ceiling was the fourth, and it was CI that caught it. Since the 2.2
+  // table, over 300 repeats of this count, every level delivers its row's
+  // share on average (14: 0.240 of 0.24, 17: 0.301 of 0.30, 20: 0.341 of
+  // 0.34) with a spread of 0.010-0.011, and the worst run came in 0.040 over.
+  // A ceiling of +0.025 sat 2.2 to 2.4 spreads above the mean: one suite run
+  // in 38 failed it, one CI run of eight legs in five. +0.05 sits 4.5 spreads
+  // up, and still catches what it is for -- fading applied to everything.
+  // The floor has room too: the lowest of the 900 was 0.89 of its row.
   rows.forEach(r => {
     assert.ok(r.got >= r.wanted * 0.75,
       `level ${r.level} asks for ${r.wanted} fading balloons and delivers ${r.got.toFixed(3)}`);
-    assert.ok(r.got <= r.wanted + 0.025,
-      `level ${r.level} delivers more fading balloons than it asks for`);
+    assert.ok(r.got <= r.wanted + 0.05,
+      `level ${r.level} asks for ${r.wanted} fading balloons and delivers ${r.got.toFixed(3)}, too many`);
     // And they have to actually fade. A floor of 0.95 is a feature nobody sees.
     assert.ok(r.median <= 0.75,
       `the middling fading balloon at level ${r.level} only reaches ` +

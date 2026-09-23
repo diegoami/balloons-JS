@@ -135,6 +135,34 @@ passing test alone. Treat a review as a real gate: it has caught defects that
 got past the author. The principles below apply whichever tool is reviewing;
 the OpenCode process lives in `AGENTS.md`.
 
+**Claude Code's process.** Claude works on its own — design, code, tests, PR —
+and the owner merges when CI is green on the PR's final commit. Review by
+another model is **non-blocking** and lives in a **GitHub issue**: the owner
+runs it when they have the chance, and nothing waits for it. The reviewer is
+the owner's choice (Codex, Luna or another), and is never Claude.
+
+At a milestone, Claude opens an issue titled `[Review] <what it covers>` whose
+body is `docs/review-prompt.md` filled in and otherwise unchanged. It covers
+`master` from the head of the previous `[Review]` issue to now, so one review
+can span several merged PRs; list them. What you verified goes in as claims
+for the reviewer to check, not as evidence. A milestone is:
+
+- after merging a PR, or a run of PRs, touching `public/` or `netlify/`;
+- after a change to `CLAUDE.md`, `AGENTS.md`, `docs/review-prompt.md` or
+  `.github/`;
+- after a release.
+
+Only one review waits at a time. If the previous `[Review]` issue has had no
+review yet, open the new one from that issue's base and close the old one as
+superseded, rather than stacking them up.
+
+The reviewer posts its findings as a comment on the issue. At the start of a
+session, look for any that have arrived (`gh issue list --search "[Review] in:title"`).
+Reproduce each finding before acting on it (below). Fix what holds up in a PR
+that references the issue; take a finding you think is wrong to the owner with
+your repro rather than dropping it. Close the issue when every finding is fixed
+or answered.
+
 Reproduce every finding before acting on it, **and reproduce your own before
 publishing it**. On the round that produced this file, both sides published a
 findings table from a test that had never run the fault — one repro used
@@ -176,3 +204,17 @@ before the final change has verified nothing.
 A change that touches no file under `public/` or `netlify/` cannot move any of
 that timing, and one pass plus the diff is proportionate. Say which you did
 rather than implying the higher bar.
+
+CI runs `npm test` eight times on every pull request
+(`.github/workflows/test.yml`), and again after every push to it. What runs is
+GitHub's merge of the PR into `master` as `master` stood at the time — the code
+that would land — filed under the PR's head commit; if `master` moves before
+merging, re-run. That is the record that counts: a PR is ready to merge when
+all eight are green on its final commit. A count written into a PR body
+describes whichever commit was current when it was written — after a review
+round, usually not the last one. Run locally to find out before pushing; CI is
+how everyone else can tell.
+
+Each run must print exactly the pass counts in the workflow's `EXPECT_SCORES`
+and `EXPECT_BROWSER`, because a test that stops registering still exits 0. A
+PR that adds or removes a test updates them in the same commit.
