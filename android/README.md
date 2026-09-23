@@ -59,13 +59,36 @@ The keystore is the app's identity. **Do not generate one, and do not read
 fill it in. If the key is lost, no update can ever be installed over an
 existing copy of the app.
 
-Releasing:
+Releasing. A release is a milestone, and `CLAUDE.md` (Review) has the whole
+process; these are its build steps.
 
-1. Bump `versionCode` and `versionName` in `app/build.gradle.kts`.
-   `versionCode` must increase; 2.1 is `versionCode = 2`.
-2. `./gradlew assembleRelease`.
-3. Upload `app-release.apk` to a release in the releases repo, renamed
-   `baloncelli-v<version>.apk`.
+1. Bump `versionCode` and `versionName` in `app/build.gradle.kts`, in a PR
+   that merges on green CI. `versionCode` must increase; 2.1 is
+   `versionCode = 2`. The merge commit on `master` is the candidate.
+2. Review the candidate, per the `[Milestone]` issue. The tag waits for
+   `AGREE`, or for the owner to tag without a review.
+3. Tag exactly the reviewed commit, and push the tag:
+
+   ```bash
+   git tag -a v2.5 <candidate SHA> -m "Baloncelli 2.5"
+   git push origin v2.5
+   ```
+
+4. Build from the tag, not from `master`, which may have moved on.
+   `copyGame` copies `public/` from whatever is checked out, so the APK holds
+   the tagged game:
+
+   ```bash
+   git checkout v2.5
+   ./gradlew assembleRelease
+   ```
+
+5. The owner uploads `app-release.apk` to a release in the releases repo,
+   renamed `baloncelli-v<version>.apk`, with release notes that name the
+   tagged commit: the tag and its full SHA.
+
+2.4 and earlier were built before this process existed. `v2.4` goes on
+`2476864`, the merge commit of #60.
 
 **Installing a release build over a debug one fails on signature mismatch.**
 They are signed with different keys, and Android will not replace one with the
