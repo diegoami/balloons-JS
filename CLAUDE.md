@@ -208,9 +208,11 @@ rather than implying the higher bar.
 
 CI runs `npm test` eight times on every pull request
 (`.github/workflows/test.yml`), and again after every push to it. What runs is
-GitHub's merge of the PR into `master` as `master` stood at the time — the code
-that would land — filed under the PR's head commit; if `master` moves before
-merging, re-run. That is the record that counts: a PR is ready to merge when
+GitHub's merge of the PR into `master` as `master` stood at the push that
+started it — the code that would land — filed under the PR's head commit. If
+`master` moves before merging, update the branch (`gh pr update-branch N`),
+which pushes and so tests a fresh merge; a re-run does not, because it reuses
+the merge it had. That is the record that counts: a PR is ready to merge when
 all eight are green on its final commit. A count written into a PR body
 describes whichever commit was current when it was written — after a review
 round, usually not the last one. Run locally to find out before pushing; CI is
