@@ -2,7 +2,7 @@
 
 Small unfinished jobs and one planned feature. None of these block anything;
 raise them when there is a lull rather than interrupting a bigger piece of
-work. Current as of 2.2.
+work. Current as of 2.4.
 
 ## Loose ends
 
@@ -20,10 +20,14 @@ early means either emptying the `highscores` blob (key `board`) from the
 Netlify UI, or adding a guarded DELETE — a sharper tool than a toy
 leaderboard needs.
 
-**A test flake seen once and never reproduced.** One run reported
+**A test flake seen once, probably found.** One run reported
 `132 passed, 1 failed` just after PR #40 merged, and the failing test was
-never identified. Sixteen runs since have been clean. Written down so that a
-second sighting is recognised as the second rather than the first.
+never identified. CI's first red leg, on #61, was the fading-balloon ceiling
+in `the level that announces fading balloons actually has them`: measured on
+the 2.2 table, it failed about one suite run in 38, and #61 widened it. That
+ceiling was already in the tree when #40 merged, so it is the likely culprit
+— likely rather than certain, because the rows were different then. If a
+failure turns up in another test, this was not it.
 
 **Release APKs are signed v2 only.** Fine for `minSdk 26`. Adding
 `enableV3Signing` would allow rotating the key later; without it the current

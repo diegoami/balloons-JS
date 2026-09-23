@@ -7,10 +7,11 @@
 # push replaces it.
 #
 # What runs on a pull request is GitHub's merge of the head into master as
-# master stood when the run started (refs/pull/N/merge) -- the code that would
-# land -- and the checks are filed under the head commit. If master moves
-# before merging, re-run. The push to master afterwards runs it once more, on
-# what actually landed.
+# master stood at the push that started it (refs/pull/N/merge) -- the code
+# that would land -- and the checks are filed under the head commit. If master
+# moves before merging, update the branch (`gh pr update-branch N`): a re-run
+# reuses the old merge, and on #64 it merged with a master two commits stale.
+# The push to master afterwards runs it once more, on what actually landed.
 #
 # The eight are separate jobs rather than a loop, so a flake shows up as one
 # red leg among seven green ones and its log stands on its own.
