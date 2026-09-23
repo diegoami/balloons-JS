@@ -4521,8 +4521,9 @@ await t('the level that announces fading balloons actually has them', async () =
   // This is the test that caught the arithmetic. The first version of the
   // floor asked every height to survive the opacity of the TOP of the climb,
   // which almost no colour at level 14 can do: the share arrived at 0.008
-  // against the 0.12 its row asks for, and the feature did not exist on the
-  // level that announces it. A column is worth what it delivers.
+  // against the 0.12 its row asked for before the 2.2 table (0.24 since),
+  // and the feature did not exist on the level that announces it. A column
+  // is worth what it delivers.
   const { context, page } = await newGame();
   const rows = await page.evaluate(() => {
     Game.stopLoop();
@@ -4548,9 +4549,10 @@ await t('the level that announces fading balloons actually has them', async () =
 
   // Three quarters, and the three quarters is measured rather than picked.
   //
-  // Over twenty repeats of this exact count, level 14 delivers 0.114 of the
-  // 0.12 its row asks for -- the colour search still loses a few even at four
-  // hundred tries -- with a spread that reaches 0.82 of it. A threshold of
+  // On the table before 2.2, over twenty repeats of this exact count, level
+  // 14 delivered 0.114 of the 0.12 its row asked for -- the colour search
+  // still lost a few even at four hundred tries -- with a spread that reached
+  // 0.82 of it. A threshold of
   // 0.85 sat inside that noise and failed about one run in eight, which is
   // the third assertion in this feature I have written too tight. What this
   // test is for is catching the feature NOT EXISTING, and when it did not
