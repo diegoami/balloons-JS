@@ -136,26 +136,32 @@ got past the author. The principles below apply whichever tool is reviewing;
 the OpenCode process lives in `AGENTS.md`.
 
 **Claude Code's process.** Claude works on its own — design, code, tests, PR —
-with no reviewer in the loop. At a milestone it stops and gives the owner a
-prompt for an independent model, which reviews the repository and posts its
-findings on the PR. The reviewer is the owner's choice (Codex, Luna or
-another), and is never Claude. A milestone is:
+and the owner merges when CI is green on the PR's final commit. Review by
+another model is **non-blocking** and lives in a **GitHub issue**: the owner
+runs it when they have the chance, and nothing waits for it. The reviewer is
+the owner's choice (Codex, Luna or another), and is never Claude.
 
-- a PR touching `public/` or `netlify/`, once it is ready to merge;
-- a change to `CLAUDE.md`, `AGENTS.md`, `docs/review-prompt.md` or `.github/`;
-- a release, before the version bump.
+At a milestone, Claude opens an issue titled `[Review] <what it covers>` whose
+body is `docs/review-prompt.md` filled in and otherwise unchanged. It covers
+`master` from the head of the previous `[Review]` issue to now, so one review
+can span several merged PRs; list them. What you verified goes in as claims
+for the reviewer to check, not as evidence. A milestone is:
 
-One review covers one PR: the prompt has one range, one head and one
-verdict, and the merge rule below needs a verdict per head. The prompt is
-`docs/review-prompt.md`, filled in and otherwise unchanged, handed over in one
-fenced block ready to paste. What you verified goes in as claims for the
-reviewer to check, not as evidence.
+- after merging a PR, or a run of PRs, touching `public/` or `netlify/`;
+- after a change to `CLAUDE.md`, `AGENTS.md`, `docs/review-prompt.md` or
+  `.github/`;
+- after a release.
 
-When the review comes back, reproduce each finding before acting on it (below).
-Fix what holds up, push, and give a re-review prompt for the new head. Take a
-finding you think is wrong to the owner with your repro rather than dropping
-it. The owner merges when the reviewer's `AGREE` names the PR's head commit
-and CI's checks on that commit are green.
+Only one review waits at a time. If the previous `[Review]` issue has had no
+review yet, open the new one from that issue's base and close the old one as
+superseded, rather than stacking them up.
+
+The reviewer posts its findings as a comment on the issue. At the start of a
+session, look for any that have arrived (`gh issue list --search "[Review] in:title"`).
+Reproduce each finding before acting on it (below). Fix what holds up in a PR
+that references the issue; take a finding you think is wrong to the owner with
+your repro rather than dropping it. Close the issue when every finding is fixed
+or answered.
 
 Reproduce every finding before acting on it, **and reproduce your own before
 publishing it**. On the round that produced this file, both sides published a
