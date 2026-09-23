@@ -38,7 +38,8 @@ How to review:
   same answer on both has tested nothing.
 - The ladder: `npm run check`, `npm run test:scores`, then `npm test`. The
   browser suite binds port 8899, so run one at a time. CI runs `npm test`
-  eight times on the head commit; its results and pass counts are on the PR.
+  eight times on GitHub's merge of the PR into master, filed under the head
+  commit; its results and pass counts are on the PR.
 - For anything a player can see, check what a player would notice — pixels,
   contrast, timing — not only that the code does what it says.
 - If you cannot run something (no network, no browser), say so and say what

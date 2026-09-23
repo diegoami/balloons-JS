@@ -145,7 +145,8 @@ another), and is never Claude. A milestone is:
 - a change to `CLAUDE.md`, `AGENTS.md`, `docs/review-prompt.md` or `.github/`;
 - a release, before the version bump.
 
-Small PRs may share one review; say which ones it covers. The prompt is
+One review covers one PR: the prompt has one range, one head and one
+verdict, and the merge rule below needs a verdict per head. The prompt is
 `docs/review-prompt.md`, filled in and otherwise unchanged, handed over in one
 fenced block ready to paste. What you verified goes in as claims for the
 reviewer to check, not as evidence.
@@ -154,7 +155,7 @@ When the review comes back, reproduce each finding before acting on it (below).
 Fix what holds up, push, and give a re-review prompt for the new head. Take a
 finding you think is wrong to the owner with your repro rather than dropping
 it. The owner merges when the reviewer's `AGREE` names the PR's head commit
-and CI is green on that commit.
+and CI's checks on that commit are green.
 
 Reproduce every finding before acting on it, **and reproduce your own before
 publishing it**. On the round that produced this file, both sides published a
@@ -199,9 +200,15 @@ that timing, and one pass plus the diff is proportionate. Say which you did
 rather than implying the higher bar.
 
 CI runs `npm test` eight times on every pull request
-(`.github/workflows/test.yml`), against its head commit, and again after every
-push to it. That is the record that counts: a PR is ready to merge when all
-eight are green on its final commit, and each run's pass counts are
-annotations on the run page. A count written into a PR body describes whichever commit was
-current when it was written — after a review round, usually not the last one.
-Run locally to find out before pushing; CI is how everyone else can tell.
+(`.github/workflows/test.yml`), and again after every push to it. What runs is
+GitHub's merge of the PR into `master` as `master` stood at the time — the code
+that would land — filed under the PR's head commit; if `master` moves before
+merging, re-run. That is the record that counts: a PR is ready to merge when
+all eight are green on its final commit. A count written into a PR body
+describes whichever commit was current when it was written — after a review
+round, usually not the last one. Run locally to find out before pushing; CI is
+how everyone else can tell.
+
+Each run must print exactly the pass counts in the workflow's `EXPECT_SCORES`
+and `EXPECT_BROWSER`, because a test that stops registering still exits 0. A
+PR that adds or removes a test updates them in the same commit.

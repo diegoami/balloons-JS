@@ -63,7 +63,9 @@ touches game logic, and read the pass COUNT rather than the absence of a FAIL
 line. A change that touches no file under `public/` or `netlify/` cannot move
 timing; one pass plus the diff is proportionate there — say which you did.
 
-CI (`.github/workflows/test.yml`) runs `npm test` eight times on each PR's head
-commit and re-runs on every push. That, not a count in the PR body, is the
-record a merge rests on: a body is written once, and the fixes a review asks
-for land after it.
+CI (`.github/workflows/test.yml`) runs `npm test` eight times on every PR —
+on GitHub's merge of it into `master`, filed under the head commit — and
+re-runs on every push. That, not a count in the PR body, is the record a merge
+rests on: a body is written once, and the fixes a review asks for land after
+it. Each run must print exactly the workflow's `EXPECT_SCORES` and
+`EXPECT_BROWSER` counts; a PR that adds or removes a test updates them.

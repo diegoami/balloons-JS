@@ -1,10 +1,16 @@
-# `npm test`, eight times, on the commit a pull request would merge.
+# `npm test`, eight times, on what a pull request would merge.
 #
 # CLAUDE.md asks for eight runs after the last edit, because the browser suite
 # has timing in it and three passes once let a one-in-eight flake through
 # twice. Written into a PR body, that record is taken at the first commit and
-# never updated, so the fixes a review asks for landed unrecorded. Here the
-# record is attached to the head commit, and a new push replaces it.
+# never updated, so the fixes a review asks for landed unrecorded. Here a new
+# push replaces it.
+#
+# What runs on a pull request is GitHub's merge of the head into master as
+# master stood when the run started (refs/pull/N/merge) -- the code that would
+# land -- and the checks are filed under the head commit. If master moves
+# before merging, re-run. The push to master afterwards runs it once more, on
+# what actually landed.
 #
 # The eight are separate jobs rather than a loop, so a flake shows up as one
 # red leg among seven green ones and its log stands on its own.
@@ -31,6 +37,12 @@ jobs:
     # should change when someone decides to, not on a label's schedule.
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    # What each suite must print, exactly and once. A PR that adds or removes
+    # a test changes these in the same commit, which puts the count change in
+    # the diff where a reviewer reads it.
+    env:
+      EXPECT_SCORES: "24 passed"
+      EXPECT_BROWSER: "142 passed, 0 failed"
     strategy:
       # Keep going when one fails: how many of the eight fail is the finding.
       fail-fast: false
@@ -46,15 +58,22 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm test 2>&1 | tee test.log
         shell: bash  # -o pipefail, so tee does not hide npm's exit code
-      # Green says nothing failed; the count says nothing went missing. A
-      # test that stops registering still exits 0, so put the numbers where
-      # they can be read against the last run. As annotations, because those
-      # show on the run page signed in or not and come back from the API; a
-      # step summary does neither. No count at all fails the step.
+      # Green says nothing failed; only the count says nothing went missing,
+      # because a test that stops registering still exits 0. So each summary
+      # must match its EXPECT_ line exactly, once. The counts are also posted
+      # as annotations, which show on the run page signed in or not and come
+      # back from the API; a step summary does neither.
       - name: Counts
         if: always()
         shell: bash
         run: |
           grep -E '^[0-9]+ passed' test.log | while read -r line; do
             echo "::notice title=npm test ${{ matrix.run }}/8::$line"
+          done || true
+          for want in "$EXPECT_SCORES" "$EXPECT_BROWSER"; do
+            n=$(grep -cxF "$want" test.log || true)
+            if [ "$n" != 1 ]; then
+              echo "::error title=npm test ${{ matrix.run }}/8::expected '$want' once, found it $n times"
+              exit 1
+            fi
           done
