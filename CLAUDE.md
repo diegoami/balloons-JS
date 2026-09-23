@@ -180,7 +180,7 @@ rather than implying the higher bar.
 CI runs `npm test` eight times on every pull request
 (`.github/workflows/test.yml`), against its head commit, and again after every
 push to it. That is the record that counts: a PR is ready to merge when all
-eight are green on its final commit, and each run's pass counts are on its
-summary page. A count written into a PR body describes whichever commit was
+eight are green on its final commit, and each run's pass counts are
+annotations on the run page. A count written into a PR body describes whichever commit was
 current when it was written — after a review round, usually not the last one.
 Run locally to find out before pushing; CI is how everyone else can tell.

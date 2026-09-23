@@ -26,7 +26,10 @@ permissions:
 jobs:
   test:
     name: npm test (${{ matrix.run }}/8)
-    runs-on: ubuntu-latest
+    # Pinned rather than ubuntu-latest, which moves to Ubuntu 26 on
+    # 2026-10-19. The browser suite has timing in it, so the machine under it
+    # should change when someone decides to, not on a label's schedule.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       # Keep going when one fails: how many of the eight fail is the finding.
@@ -34,8 +37,8 @@ jobs:
       matrix:
         run: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -45,7 +48,13 @@ jobs:
         shell: bash  # -o pipefail, so tee does not hide npm's exit code
       # Green says nothing failed; the count says nothing went missing. A
       # test that stops registering still exits 0, so put the numbers where
-      # they can be read against the last run.
+      # they can be read against the last run. As annotations, because those
+      # show on the run page signed in or not and come back from the API; a
+      # step summary does neither. No count at all fails the step.
       - name: Counts
         if: always()
-        run: grep -E '^[0-9]+ passed' test.log >> "$GITHUB_STEP_SUMMARY" || true
+        shell: bash
+        run: |
+          grep -E '^[0-9]+ passed' test.log | while read -r line; do
+            echo "::notice title=npm test ${{ matrix.run }}/8::$line"
+          done
