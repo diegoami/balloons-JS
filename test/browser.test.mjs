@@ -21,14 +21,18 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
   if (url.pathname === '/api/scores') {
-    apiHits.push({ method: req.method });
+    // Kept by reference, so the body lands on this request's own entry. It
+    // used to go on whichever entry was last when the body finished, which a
+    // GET arriving in between would have been.
+    const hit = { method: req.method };
+    apiHits.push(hit);
     const board = boards.get('all') || [];
     if (req.method === 'POST') {
       let body = '';
       req.on('data', c => { body += c; });
       req.on('end', () => {
         const sent = JSON.parse(body);
-        apiHits[apiHits.length - 1].body = sent;
+        hit.body = sent;
         const { name, score, level, won, pointer } = sent;
         const row = { name, score, score_day: '2026-09-15' };
         if (level !== undefined) { row.level = level; }
@@ -57,10 +61,26 @@ await new Promise(r => server.listen(8899, r));
 
 const browser = await launchBrowser();
 
+// Every context a test opens, until it is closed.
+//
+// Each test closes its own context on its last line, which a failing
+// assertion never reaches. Its game then went on running under every test
+// after it, and the suite has timing in it, so one real failure could bring
+// others with it. The runner closes whatever a test left open, pass or fail.
+const open = new Set();
+const newContext = browser.newContext.bind(browser);
+browser.newContext = async (...args) => {
+  const context = await newContext(...args);
+  open.add(context);
+  context.on('close', () => open.delete(context));
+  return context;
+};
+
 let pass = 0, failed = 0;
 const t = async (name, fn) => {
   try { await fn(); console.log('  ok  ' + name); pass++; }
   catch (e) { console.log('  FAIL ' + name + '\n       ' + e.message); failed++; }
+  finally { await Promise.all([...open].map(c => c.close().catch(() => {}))); }
 };
 
 /**
