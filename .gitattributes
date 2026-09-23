@@ -24,3 +24,15 @@
 # Generated, not written. Keeps the lockfile out of diffs and out of the
 # language stats; `git show` still has it if you actually want it.
 package-lock.json linguist-generated -diff
+
+# The game ships with LF line endings wherever it is checked out. The release
+# APK copies public/ from the working tree (copyGame), and core.autocrlf on
+# Windows made every text file in it CRLF, so the APK no longer matched the
+# tag byte for byte. text=auto, not text: git still detects the fonts and
+# images as binary and leaves them alone.
+#
+# A checkout made before this line keeps its CRLF files until they are
+# rewritten; git will not redo files it thinks are up to date, and
+# `git checkout-index -f` skips them too. Refresh once, with public/ clean:
+#   git ls-files -z public | xargs -0 rm -f && git checkout -- public
+public/** text=auto eol=lf
