@@ -246,6 +246,15 @@ describes whichever commit was current when it was written — after a review
 round, usually not the last one. Run locally to find out before pushing; CI is
 how everyone else can tell.
 
+GitHub enforces this. Since 2026-09-24, `master`'s branch protection requires
+all eight checks, `npm test (1/8)` to `npm test (8/8)`, from GitHub Actions,
+on a branch that is up to date with `master`. A PR whose checks are red or
+pending, or whose branch is behind, cannot be merged. The owner can override
+as an admin; do not use `gh pr merge --admin` unless they say so. A required
+check is matched by its **name**, so renaming the job or changing the matrix
+leaves every PR waiting forever for checks that no longer exist. Change the
+protection rule in the same step.
+
 Each run must print exactly the pass counts in the workflow's `EXPECT_SCORES`
 and `EXPECT_BROWSER`, because a test that stops registering still exits 0. A
 PR that adds or removes a test updates them in the same commit.
