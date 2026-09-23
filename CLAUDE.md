@@ -69,15 +69,16 @@ or `.woff2`. None of them answer a question about behaviour.
 
 ## Big files
 
-`test/browser.test.mjs` is 5,133 lines and holds the whole browser suite. Do
-not read it whole. Each test is registered as `t('name', ...)`, so grep the
-name and read a window around it. The largest modules, for the same reason:
+`test/browser.test.mjs` is about 5,400 lines and holds the whole browser suite.
+Do not read it whole. Each test is registered as `t('name', ...)`, so grep the
+name and read a window around it. The largest modules, for the same reason, as
+of 2.4 (`wc -l public/js/*.js | sort -rn` gives today's):
 
 ```
-public/js/game.js     1008    public/js/gameballoons.js   439
-public/js/layout.js    950    public/js/ladder.js         406
-public/js/paint.js     832    public/js/screens.js        395
-public/js/sky.js       502    public/js/input.js          345
+public/js/game.js     1043    public/js/gameballoons.js   445
+public/js/layout.js   1002    public/js/screens.js        436
+public/js/paint.js     936    public/js/ladder.js         413
+public/js/sky.js       502    public/js/input.js          384
 ```
 
 `public/js/ladder.js` is the exception: it is a twenty-row table and the prose

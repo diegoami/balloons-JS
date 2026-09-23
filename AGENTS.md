@@ -2,41 +2,48 @@
 
 # Working with a reviewer
 
-DeepSeek implements, Luna reviews. This file describes the review process; the
-product guidance — what to read, what to leave alone, what has already been
-decided, how to know a change works — is in `CLAUDE.md` and applies here too.
+DeepSeek implements. Review by another model is **non-blocking**: it runs when
+the owner has the chance, lives in a GitHub issue, and nothing waits for it.
+This file describes that process; the product guidance — what to read, what
+to leave alone, what has already been decided, how to know a change works — is
+in `CLAUDE.md` and applies here too.
 
 ## Roles
 
 - **Implementer:** DeepSeek (`opencode/deepseek-v4.1-flash`). Writes the
   design, the code and the tests; replies on GitHub signed
   `— Implementer (DeepSeek V4.1 Flash)`.
-- **Reviewer:** Luna (`opencode/gpt-5.6-luna`, `high` variant), invoked as a
-  subagent in a fresh context with that explicit model id. It verifies against
-  the real code rather than trusting the description, and posts its verdict on
-  GitHub.
-- Luna posts through the owner's GitHub account — there is no separate bot
-  identity — so its comments are signed `— Luna (GPT-5.6, high)`. That
-  signature line is the only marker of authorship.
-- A `BLOCK` is not overridden by the implementer. It goes back to the owner.
+- **Reviewer:** the owner's choice — Luna (`opencode/gpt-5.6-luna`, `high`
+  variant, invoked as a subagent in a fresh context with that explicit model
+  id), Codex, or another. It verifies against the real code rather than
+  trusting the description, and posts its findings on the review issue.
+- Reviewers post through the owner's GitHub account — there is no separate bot
+  identity — so each signs its comments on the last line, e.g.
+  `— Luna (GPT-5.6, high)`. That signature line is the only marker of
+  authorship.
 
-## The process — two stages
+## The process
 
-1. **Design as an issue.** Before any implementation, write the proposal as a
-   GitHub issue: the problem and why now; findings grounded in the code with
+1. **Design, when the change is big enough to need one.** Write it as a GitHub
+   issue: the problem and why now; findings grounded in the code with
    `file:line` references, each claim verifiable; the proposed design; and
-   explicit open questions. Have Luna review the issue and comment. Iterate —
-   reply, Luna re-reviews — until Luna posts an explicit `AGREE`. Do not start
-   implementation before that.
-2. **Implementation as a PR.** Implement the agreed design on a branch and open
-   a PR that references the issue. Have Luna review the PR against the agreed
-   design; fix and iterate until Luna posts an explicit `AGREE`. The `AGREE`
-   names the commit it reviewed. The owner merges when that is the PR's head
-   commit and CI is green on it.
+   explicit open questions. Owner decisions in it wait for the owner; nothing
+   else waits for a review.
+2. **Implementation as a PR** that references the issue, if there is one. The
+   owner merges when CI is green on the PR's final commit.
+3. **Review at milestones, in an issue.** At a milestone, open a `[Review]`
+   issue whose body is `docs/review-prompt.md` filled in and otherwise
+   unchanged. `CLAUDE.md` (Review) says what a milestone is, and how the range
+   and the one-waiting-at-a-time rule work; Claude Code opens the same issues,
+   so a review covers whatever landed on `master`, whoever wrote it.
+4. **Findings.** Reproduce each one before acting on it. Fix what holds up in a
+   PR that references the review issue, and reply on the issue to every
+   finding — what you fixed, or why not. A finding you think is wrong goes to
+   the owner with your repro. Close the issue when every finding is fixed or
+   answered.
 
-**Bootstrap.** A change to `AGENTS.md` or `CLAUDE.md` follows this same
-process: it is opened as a PR and reviewed to `AGREE` like any other change.
-The process reviews its own amendment.
+A change to `AGENTS.md` or `CLAUDE.md` is a milestone like any other: it merges
+on green CI, and its review comes after.
 
 ## Principles
 
