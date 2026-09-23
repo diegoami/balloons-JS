@@ -32,6 +32,9 @@ permissions:
 
 jobs:
   test:
+    # master's branch protection requires these eight names exactly. Rename the
+    # job or change the matrix, and change the rule with it, or every PR
+    # waits forever for checks that no longer exist.
     name: npm test (${{ matrix.run }}/8)
     # Pinned rather than ubuntu-latest, which moves to Ubuntu 26 on
     # 2026-10-19. The browser suite has timing in it, so the machine under it
