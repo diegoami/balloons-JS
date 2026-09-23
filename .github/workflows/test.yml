@@ -1,0 +1,51 @@
+# `npm test`, eight times, on the commit a pull request would merge.
+#
+# CLAUDE.md asks for eight runs after the last edit, because the browser suite
+# has timing in it and three passes once let a one-in-eight flake through
+# twice. Written into a PR body, that record is taken at the first commit and
+# never updated, so the fixes a review asks for landed unrecorded. Here the
+# record is attached to the head commit, and a new push replaces it.
+#
+# The eight are separate jobs rather than a loop, so a flake shows up as one
+# red leg among seven green ones and its log stands on its own.
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# A new push to the same branch makes the running set moot.
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: npm test (${{ matrix.run }}/8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      # Keep going when one fails: how many of the eight fail is the finding.
+      fail-fast: false
+      matrix:
+        run: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test 2>&1 | tee test.log
+        shell: bash  # -o pipefail, so tee does not hide npm's exit code
+      # Green says nothing failed; the count says nothing went missing. A
+      # test that stops registering still exits 0, so put the numbers where
+      # they can be read against the last run.
+      - name: Counts
+        if: always()
+        run: grep -E '^[0-9]+ passed' test.log >> "$GITHUB_STEP_SUMMARY" || true
