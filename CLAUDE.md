@@ -135,6 +135,27 @@ passing test alone. Treat a review as a real gate: it has caught defects that
 got past the author. The principles below apply whichever tool is reviewing;
 the OpenCode process lives in `AGENTS.md`.
 
+**Claude Code's process.** Claude works on its own — design, code, tests, PR —
+with no reviewer in the loop. At a milestone it stops and gives the owner a
+prompt for an independent model, which reviews the repository and posts its
+findings on the PR. The reviewer is the owner's choice (Codex, Luna or
+another), and is never Claude. A milestone is:
+
+- a PR touching `public/` or `netlify/`, once it is ready to merge;
+- a change to `CLAUDE.md`, `AGENTS.md`, `docs/review-prompt.md` or `.github/`;
+- a release, before the version bump.
+
+Small PRs may share one review; say which ones it covers. The prompt is
+`docs/review-prompt.md`, filled in and otherwise unchanged, handed over in one
+fenced block ready to paste. What you verified goes in as claims for the
+reviewer to check, not as evidence.
+
+When the review comes back, reproduce each finding before acting on it (below).
+Fix what holds up, push, and give a re-review prompt for the new head. Take a
+finding you think is wrong to the owner with your repro rather than dropping
+it. The owner merges when the reviewer's `AGREE` names the PR's head commit
+and CI is green on that commit.
+
 Reproduce every finding before acting on it, **and reproduce your own before
 publishing it**. On the round that produced this file, both sides published a
 findings table from a test that had never run the fault — one repro used
