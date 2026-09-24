@@ -6,12 +6,6 @@ work. Current as of 2.4.
 
 ## Loose ends
 
-**The About screen has no download link.** The Android app is published and
-nothing in the game points at it. Link
-`https://github.com/diegoami/balloons-js-releases/releases/latest` rather than
-a versioned APK URL, so it cannot go stale. `Layout.about()` builds the
-sections and `Screens.about` draws them.
-
 **Four junk rows on the production leaderboard.** Name "anonymous", score 0,
 level 1, posted from the emulator while verifying the app could reach the
 board. The board holds ten and sorts by score, so real games push them off

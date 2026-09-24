@@ -158,33 +158,51 @@ Input.menu = function (game, signal) {
  * with it". So it is the button, or the keys, or nothing.
  */
 /**
- * The About screen: one way out, by the chip or by Escape.
+ * The About screen: one way out, by the chip or by Escape, and on the web one
+ * way to the Android app.
  *
  * A tap anywhere does NOT leave, unlike the title screen it came from — this
  * is a page of text and half of reading it is putting a finger on the screen.
+ *
+ * Enter opens the download page when there is one, and leaves when there is
+ * not. Space still leaves: a new tab is a bigger surprise than the Scores
+ * screen's toggle, so it is kept to the one key.
  */
 Input.about = function (game, signal) {
     var leave = function () {
         game.pressed = null;
         game.enter("title");
     };
+    var download = function () {
+        game.pressed = null;
+        window.open(Layout.DOWNLOAD_URL, "_blank", "noopener");
+    };
 
     game.canvas.addEventListener("pointerdown", function (event) {
-        game.pressed = Layout.hitRect(game.layout.back, Input.point(game, event))
-            ? "about"
-            : null;
+        var at = Input.point(game, event);
+        var L = game.layout;
+        game.pressed = Layout.hitRect(L.back, at) ? "about"
+            : (L.download && Layout.hitRect(L.download, at) ? "aboutDownload" : null);
     }, { signal: signal });
 
     game.canvas.addEventListener("click", function (event) {
-        if (Layout.hitRect(game.layout.back, Input.point(game, event))) {
+        var at = Input.point(game, event);
+        var L = game.layout;
+        if (Layout.hitRect(L.back, at)) {
             leave();
+            return;
+        }
+        if (L.download && Layout.hitRect(L.download, at)) {
+            download();
             return;
         }
         game.pressed = null;
     }, { signal: signal });
 
     document.addEventListener("keydown", function (event) {
-        if (event.key === "Escape" || event.key === " " || event.key === "Enter") {
+        if (event.key === "Enter" && game.layout.download) {
+            download();
+        } else if (event.key === "Escape" || event.key === " " || event.key === "Enter") {
             leave();
         }
     }, { signal: signal });

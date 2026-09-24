@@ -46,7 +46,7 @@ jobs:
     # the diff where a reviewer reads it.
     env:
       EXPECT_SCORES: "24 passed"
-      EXPECT_BROWSER: "142 passed, 0 failed"
+      EXPECT_BROWSER: "145 passed, 0 failed"
     strategy:
       # Keep going when one fails: how many of the eight fail is the finding.
       fail-fast: false
