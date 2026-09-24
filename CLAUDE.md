@@ -150,10 +150,18 @@ may be built from a candidate. The APK is published in
 `diegoami/balloons-js-releases`, but the tag goes here, and the release notes
 name the tagged commit.
 
-The baseline is **`v2.4` on `2476864`**, the merge of #60. The 2.4 notes name
-no commit; `2476864` has the same files as the version bump `272270a` that
-#60 records the APK being built from. The owner confirmed it on 2026-09-23.
-The next milestone is `v2.5`.
+The first tag, **`v2.4` on `2476864`** (the merge of #60), was put on after
+the fact: the 2.4 notes name no commit, and `2476864` has the same files as the
+version bump `272270a` that #60 records the APK being built from. The owner
+confirmed it on 2026-09-23. Every release since has been tagged by the steps
+below.
+
+Read the version numbers from git, not from this file. The previous tag is
+`git describe --tags --abbrev=0 origin/master`, and the next milestone is the
+next minor version after it unless the owner names another. A number written
+here goes stale with the next release: "the next milestone is `v2.5`" outlived
+2.5, and the release steps in `android/README.md` said `v2.5` literally until
+#77 and #78.
 
 How a milestone happens:
 
