@@ -5382,6 +5382,148 @@ await t('the About screen says what the tables say, and there is a way back', as
   await context.close();
 });
 
+// window.open, recorded instead of followed: a test that opened GitHub would
+// be testing the network.
+const recordOpens = page => page.evaluate(() => {
+  window.__opened = [];
+  window.open = (...args) => { window.__opened.push(args); return null; };
+});
+
+await t('on the web, the About screen offers the Android app, by tap or by Enter', async () => {
+  const { context, page, errors } = await newGame();
+  await recordOpens(page);
+  const m = await page.evaluate(() => {
+    Game.enter('about');
+    Game.paint();
+    const r = Game.layout.download;
+    const grab = () => Array.from(Game.ctx.getImageData(
+      Math.round(r.x * Game.dpr), Math.round(r.y * Game.dpr),
+      Math.round(r.width * Game.dpr), Math.round(r.height * Game.dpr)).data);
+    // What a player would see, with the chip and without it.
+    const withChip = grab();
+    Game.layout.download = null;
+    Game.paint();
+    const without = grab();
+    Game.layout.download = r;
+    Game.paint();
+    let differ = 0;
+    for (let i = 0; i < withChip.length; i += 4) {
+      if (Math.abs(withChip[i] - without[i]) + Math.abs(withChip[i + 1] - without[i + 1]) +
+          Math.abs(withChip[i + 2] - without[i + 2]) > 30) { differ++; }
+    }
+    return {
+      rect: r,
+      share: differ / (withChip.length / 4),
+      said: document.getElementById('game_status').textContent
+    };
+  });
+  assert.ok(m.rect, 'there is no download chip on the web');
+  assert.ok(m.share > 0.3, `the chip barely shows: ${(m.share * 100).toFixed(0)}% of its pixels change`);
+  assert.match(m.said, /Android app/, 'the screen reader is not told about the app: ' + m.said);
+
+  const url = await page.evaluate(() => Layout.DOWNLOAD_URL);
+  assert.match(url, /\/releases\/latest$/, 'the link is not to the latest release: ' + url);
+
+  await page.mouse.click(m.rect.x + m.rect.width / 2, m.rect.y + m.rect.height / 2);
+  await page.waitForTimeout(120);
+  let opened = await page.evaluate(() => ({ calls: window.__opened, screen: Game.screen }));
+  assert.deepEqual(opened.calls, [[url, '_blank', 'noopener']], 'a tap did not open the download page');
+  assert.equal(opened.screen, 'about', 'opening the link left the About screen');
+
+  await page.keyboard.press('Enter');
+  opened = await page.evaluate(() => ({ calls: window.__opened.length, screen: Game.screen }));
+  assert.equal(opened.calls, 2, 'Enter did not open the download page');
+  assert.equal(opened.screen, 'about');
+
+  await page.keyboard.press(' ');
+  opened = await page.evaluate(() => ({ calls: window.__opened.length, screen: Game.screen }));
+  assert.equal(opened.screen, 'title', 'Space no longer leaves the About screen');
+  assert.equal(opened.calls, 2, 'Space opened the download page');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('inside the app, the About screen does not offer the app', async () => {
+  // Served from the origin the Android app really uses, so the check under
+  // test is the one that runs on a phone, not a flag set for the test.
+  const context = await browser.newContext({ viewport: { width: 412, height: 839 } });
+  await context.route('https://appassets.androidplatform.net/**', route => {
+    const at = new URL(route.request().url()).pathname.replace(/^\/assets\/www\//, '/');
+    const file = path.join(ROOT, at);
+    if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+      return route.fulfill({ status: 404, body: '' });
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: TYPES[path.extname(file)] || 'application/octet-stream',
+      body: fs.readFileSync(file)
+    });
+  });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  await page.addInitScript(() => { try { window.localStorage.setItem('name', 'App'); } catch (e) {} });
+  await page.goto('https://appassets.androidplatform.net/assets/www/index.html', { waitUntil: 'load' });
+  await page.waitForTimeout(400);
+  await recordOpens(page);
+
+  const m = await page.evaluate(() => {
+    Game.enter('about');
+    Game.paint();
+    return {
+      origin: window.location.origin,
+      offers: Layout.offersDownload(),
+      rect: Game.layout.download,
+      back: Game.layout.back,
+      left: Game.layout.intro.x,
+      said: document.getElementById('game_status').textContent
+    };
+  });
+  assert.equal(m.origin, 'https://appassets.androidplatform.net');
+  assert.equal(m.offers, false, 'the app offers itself for download');
+  assert.equal(m.rect, null, 'the app lays out a download chip');
+  assert.doesNotMatch(m.said, /Android app/, 'the app announces a download: ' + m.said);
+
+  // Where the chip would be on the web: nothing happens.
+  await page.mouse.click(m.left + 30, m.back.y + m.back.height / 2);
+  await page.waitForTimeout(120);
+  assert.equal(await page.evaluate(() => window.__opened.length), 0, 'a tap opened a link in the app');
+
+  await page.keyboard.press('Enter');
+  const after = await page.evaluate(() => ({ calls: window.__opened.length, screen: Game.screen }));
+  assert.equal(after.calls, 0, 'Enter opened a link in the app');
+  assert.equal(after.screen, 'title', 'Enter no longer leaves the About screen in the app');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the Android app chip is on screen, clear of Back and below the text, at any size', async () => {
+  for (const [w, h] of [[240, 600], [320, 568], [390, 664], [412, 839], [820, 1180], [1280, 720], [1920, 400]]) {
+    const { context, page, errors } = await newGame({ width: w, height: h });
+    const m = await page.evaluate(() => {
+      Game.enter('about');
+      const textEnd = Paint.about(Game);
+      return {
+        d: Game.layout.download, b: Game.layout.back, textEnd,
+        min: Layout.GRID.minTouchTarget, width: Game.width, height: Game.height
+      };
+    });
+    const { d, b } = m;
+    const at = `at ${w}x${h}`;
+    assert.ok(d, `no download chip ${at}`);
+    assert.ok(d.width >= m.min && d.height >= m.min,
+      `the chip is ${d.width.toFixed(0)}x${d.height.toFixed(0)} ${at}, needs ${m.min}`);
+    assert.ok(d.x >= 0 && d.y >= 0 && d.x + d.width <= m.width && d.y + d.height <= m.height,
+      `the chip runs off the screen ${at}`);
+    assert.ok(!(d.x < b.x + b.width && b.x < d.x + d.width && d.y < b.y + b.height && b.y < d.y + d.height),
+      `the chip overlaps Back ${at}`);
+    assert.ok(m.textEnd <= Math.min(d.y, b.y),
+      `the text runs to ${m.textEnd.toFixed(0)}, into the chips at ${Math.min(d.y, b.y).toFixed(0)} ${at}`);
+    assert.deepEqual(errors, [], errors.join(' | '));
+    await context.close();
+  }
+});
+
 
 await t('turning the phone mid-game keeps the sky where it was', async () => {
   // A rotation is not a resize, it is a different window. Measured before this

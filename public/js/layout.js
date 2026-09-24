@@ -68,6 +68,22 @@ Layout.ABOUT_TEXT = "?";
 Layout.ABOUT_TITLE = "About this game";
 Layout.BACK_TEXT = "Back";
 
+// Where the Android app is, and whether to offer it. The link is to the latest
+// release rather than to one APK, so it cannot go stale.
+//
+// Inside the app it is not offered. The page is served there from
+// WebViewAssetLoader's origin (MainActivity.kt), the player already has the
+// app, and the WebView has nowhere to open an outside page but over the game,
+// with Back then closing the app.
+Layout.DOWNLOAD_TEXT = "Android app";
+Layout.DOWNLOAD_URL =
+    "https://github.com/diegoami/balloons-js-releases/releases/latest";
+Layout.APP_ORIGIN = "https://appassets.androidplatform.net";
+
+Layout.offersDownload = function () {
+    return window.location.origin !== Layout.APP_ORIGIN;
+};
+
 Layout.about = function () {
     var top = Ladder.at(Ladder.MAX);
     var boss = Ladder.saucer(1);
@@ -704,6 +720,25 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
         radius: line * G.footer.radius
     };
 
+    // The About screen's way to the Android app, on Back's row at the left.
+    // Null inside the app. The two always fit side by side: the type scales
+    // with the width, so at 200px there is still 69px between them, and a
+    // fallback that stacked them was code no screen could reach.
+    var download = null;
+    if (Layout.offersDownload()) {
+        var downloadWidth = Math.max(
+            G.minTouchTarget,
+            ctx.measureText(Layout.DOWNLOAD_TEXT).width + line * G.footer.padX * 2
+        );
+        download = {
+            x: left,
+            y: back.y,
+            width: downloadWidth,
+            height: footerHeight,
+            radius: line * G.footer.radius
+        };
+    }
+
     targets.push({ id: "about", hit: about });
     targets.push({ id: "board", hit: board });
     targets.push({ id: "player", hit: player });
@@ -895,6 +930,7 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
 
         about: about,
         back: back,
+        download: download,
         board: board,
         boardScreen: boardScreen,
         targets: targets

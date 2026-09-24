@@ -73,6 +73,9 @@ Announce.about = function (game) {
         said.push(section.heading + ".");
         section.lines.forEach(function (line) { said.push(line); });
     });
+    if (Layout.offersDownload()) {
+        said.push("There is an Android app: Enter opens its download page.");
+    }
     said.push("Escape to go back.");
     Announce.say(said.join(" "));
 };

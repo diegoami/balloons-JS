@@ -172,6 +172,13 @@ Paint.about = function (game) {
     });
 
     Paint.chip(game, L.back, Layout.BACK_TEXT, true, game.pressed === "about");
+    if (L.download) {
+        Paint.chip(game, L.download, Layout.DOWNLOAD_TEXT, true,
+            game.pressed === "aboutDownload");
+    }
+
+    // Where the text ended, so a test can hold it above the chips.
+    return top + block.height;
 };
 
 /** The Scores chip, beside About. */
