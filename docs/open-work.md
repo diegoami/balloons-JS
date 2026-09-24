@@ -2,7 +2,7 @@
 
 Small unfinished jobs and one planned feature. None of these block anything;
 raise them when there is a lull rather than interrupting a bigger piece of
-work. Current as of 2.4.
+work. Current as of 2.6.
 
 ## Loose ends
 

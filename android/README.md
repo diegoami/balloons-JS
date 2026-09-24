@@ -70,8 +70,8 @@ process; these are its build steps.
 3. Tag exactly the reviewed commit, and push the tag:
 
    ```bash
-   git tag -a v2.5 <candidate SHA> -m "Baloncelli 2.5"
-   git push origin v2.5
+   git tag -a vX.Y <candidate SHA> -m "Baloncelli X.Y"
+   git push origin vX.Y
    ```
 
 4. Build from the tag, not from `master`, which may have moved on.
@@ -79,7 +79,7 @@ process; these are its build steps.
    the tagged game:
 
    ```bash
-   git checkout v2.5
+   git checkout vX.Y
    ./gradlew assembleRelease
    ```
 
@@ -87,8 +87,8 @@ process; these are its build steps.
    renamed `baloncelli-v<version>.apk`, with release notes that name the
    tagged commit: the tag and its full SHA.
 
-2.4 and earlier were built before this process existed. `v2.4` goes on
-`2476864`, the merge commit of #60.
+2.4 and earlier were built before this process existed; `v2.4` was tagged
+afterwards, on `2476864`, the merge commit of #60.
 
 **Installing a release build over a debug one fails on signature mismatch.**
 They are signed with different keys, and Android will not replace one with the
