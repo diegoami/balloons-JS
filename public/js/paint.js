@@ -182,6 +182,14 @@ Paint.about = function (game) {
 };
 
 /** The Scores chip, beside About. */
+/** The Exit chip, in the app only. */
+Paint.exitChip = function (game) {
+    if (game.layout.exit) {
+        Paint.chip(game, game.layout.exit, Layout.EXIT_TEXT,
+            game.isMenuLive(), game.pressed === "exit");
+    }
+};
+
 Paint.boardChip = function (game) {
     Paint.chip(game, game.layout.board, Layout.BOARD_TEXT,
         game.isMenuLive(), game.pressed === "board");

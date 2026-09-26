@@ -114,3 +114,13 @@ page"), and why the leaderboard URL is injected with
 `app/build.gradle.kts` explains `copyGame` and the `minSdk 26` floor. The
 manifest explains `configChanges`, which is what keeps a run alive when the
 phone is turned.
+
+**Back and Exit.** The system Back button is the page's to answer:
+`MainActivity` asks `Game.back()`, and each screen's `back` in
+`public/js/screens.js` says what it means there — usually what Escape does,
+and "Give up?" during a run. Only the title screen answers that there is
+nowhere to go back to, and then the app closes. The title screen's Exit chip
+posts `"exit"` on `window.BaloncelliApp`, a message channel `MainActivity`
+opens for the game's own origin only; the chip is offered only when that
+channel is there, so the website, which cannot close its own tab, never shows
+it.

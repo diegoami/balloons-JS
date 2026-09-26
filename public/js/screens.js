@@ -29,6 +29,11 @@
 var Screens = {};
 
 Screens.title = {
+    // Back from the first screen is out of the app, the Android convention.
+    back: function () {
+        return false;
+    },
+
     // The game plays itself here, so the loop runs — unless the viewer has
     // asked for less movement, in which case the footage holds on one frame.
     animated: !Attract.reducedMotion(),
@@ -67,6 +72,7 @@ Screens.title = {
         Paint.description(game);
         Paint.aboutChip(game);
         Paint.boardChip(game);
+        Paint.exitChip(game);
         Paint.playButton(game);
         Paint.menu(game);
         Paint.player(game);
@@ -85,6 +91,12 @@ Screens.title = {
  * which asked once over a blank page and then never again.
  */
 Screens.name = {
+    // Back is Escape here: the name stays as it was.
+    back: function (game) {
+        game.enter("title");
+        return true;
+    },
+
     animated: false,
 
     enter: function (game) {
@@ -118,6 +130,12 @@ Screens.name = {
  * nothing since.
  */
 Screens.starting = {
+    // Nothing is at stake in the countdown yet, so Back just goes home.
+    back: function (game) {
+        game.enter("title");
+        return true;
+    },
+
     animated: true,
 
     enter: function (game) {
@@ -148,6 +166,12 @@ Screens.starting = {
 };
 
 Screens.playing = {
+    // Back asks rather than throwing the run away, and costs no pause.
+    back: function (game) {
+        game.enter("confirmQuit");
+        return true;
+    },
+
     animated: true,
 
     /**
@@ -232,6 +256,11 @@ Screens.playing = {
  * reading and balloons drifting past text is the enemy of that.
  */
 Screens.about = {
+    back: function (game) {
+        game.enter("title");
+        return true;
+    },
+
     animated: false,
 
     enter: function (game) {
@@ -266,6 +295,11 @@ Screens.about = {
  * "just mine" is the local history, so it works offline.
  */
 Screens.board = {
+    back: function (game) {
+        game.enter("title");
+        return true;
+    },
+
     animated: false,
 
     enter: function (game) {
@@ -301,6 +335,12 @@ Screens.board = {
  * confirmation you can sit in while reading the sky is a free look at it.
  */
 Screens.confirmQuit = {
+    // Back again is No, as Escape is: the safe answer.
+    back: function (game) {
+        game.enter("playing");
+        return true;
+    },
+
     animated: false,
 
     enter: function (game) {
@@ -324,6 +364,12 @@ Screens.confirmQuit = {
 };
 
 Screens.paused = {
+    // The same question as from the game itself.
+    back: function (game) {
+        game.enter("confirmQuit");
+        return true;
+    },
+
     // Animated, unlike the pause that only ever came from looking away: a
     // pause the player asked for is counting down, and a clock that does not
     // move is not a clock.
@@ -364,6 +410,15 @@ Screens.paused = {
 };
 
 Screens.gameover = {
+    // Home, once the lockout that protects the score has passed; until
+    // then Back is swallowed rather than allowed to close the app.
+    back: function (game) {
+        if (game.isMenuLive()) {
+            game.enter("title");
+        }
+        return true;
+    },
+
     animated: true,
 
     enter: function (game) {

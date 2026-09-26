@@ -100,15 +100,51 @@ class MainActivity : AppCompatActivity() {
         goFullscreen()
 
         tellThePageWhereTheBoardIs()
+        letThePageExit()
         web.loadUrl(page)
 
-        // Back leaves the game rather than walking the history of a single
-        // page, because there is no history to walk.
+        // Back is the page's to answer, screen by screen: Game.back() says
+        // whether it went somewhere (About to the title, a run to "Quit this
+        // run?") or whether there is nowhere left, which is only the title
+        // screen. It used to finish() from every screen, so Back mid-game
+        // threw the run away without asking.
+        //
+        // A page that has not loaded, or throws, answers false, and Back
+        // closes the app as it always did.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                finish()
+                web.evaluateJavascript(askBack) { handled ->
+                    if (handled != "true") {
+                        finish()
+                    }
+                }
             }
         })
+    }
+
+    private val askBack =
+        "(function () { try { return !!(window.Game && Game.back && Game.back()); }" +
+            " catch (e) { return false; } })()"
+
+    /**
+     * The Exit chip's way out: window.BaloncelliApp, which posts "exit".
+     *
+     * A message listener rather than addJavascriptInterface, because it is
+     * given to the game's own origin only -- anything else the WebView ever
+     * loaded would not see it. The page offers the chip only when the object
+     * is there, so on a WebView too old for this there is no chip rather than
+     * a chip that does nothing.
+     */
+    private fun letThePageExit() {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            return
+        }
+        WebViewCompat.addWebMessageListener(web, "BaloncelliApp", setOf(origin)) {
+            _, message, _, _, _ ->
+            if (message.data == "exit") {
+                finish()
+            }
+        }
     }
 
     /**

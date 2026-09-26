@@ -134,6 +134,8 @@ Input.menu = function (game, signal) {
             game.enter("about");
         } else if (target && target.id === "board") {
             game.enter("board");
+        } else if (target && target.id === "exit") {
+            window.BaloncelliApp.postMessage("exit");
         } else if (target && target.id === "start") {
             game.cycleStartLevel();
         }
