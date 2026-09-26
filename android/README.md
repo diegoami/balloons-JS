@@ -24,9 +24,9 @@ wired up if `keystore.properties` exists.
 ### Two things about the environment
 
 **Android Studio's bundled JDK is Java 25, and Gradle 8.14.3 refuses it.**
-The JBR under `Android Studio/jbr` reports `openjdk 25.0.3`; Gradle fails
-before it does anything, complaining about an unsupported class file or JVM
-version. Point it at a 21:
+The JBR under `Android Studio/jbr` reports `openjdk 25.0.3`. `./gradlew
+-version` still starts on it, but the first real task fails ("What went wrong:
+25.0.3"). Point it at a 21:
 
 ```bash
 JAVA_HOME="$HOME/.jdks/jbr-21.0.11" ./gradlew assembleRelease
@@ -40,6 +40,15 @@ Gradle 8.14.3 on launcher JVM 21.0.11.
 
 `gradle.properties` deliberately does not pin `org.gradle.java.home`, since
 that path differs per machine.
+
+On the owner's machine both variables are set for the user, since
+2026-09-26: `JAVA_HOME` is `C:\Users\diego\.jdks\jbr-21.0.11` and
+`ANDROID_HOME` is `C:\Users\diego\AppData\Local\Android\Sdk`. Before that,
+`JAVA_HOME` pointed at Android Studio's JBR, which cannot build, and a program
+started before a variable is set never sees it: the v2.7 reviewer's `gradlew`
+said "JAVA_HOME is not set". `ANDROID_HOME` is what a checkout without
+`local.properties` needs, which includes every `git worktree`: without it
+Gradle stops at "SDK location not found".
 
 **`local.properties` is a Java properties file, so backslashes escape.** A
 Windows SDK path written with single backslashes silently becomes something
