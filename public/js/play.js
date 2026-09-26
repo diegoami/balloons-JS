@@ -112,7 +112,8 @@ Play.rect = function (game) {
         game.layout.player.y,
         game.layout.about.y,
         game.layout.board.y,
-        game.layout.start.y
+        game.layout.start.y,
+        game.layout.exit ? game.layout.exit.y : Infinity
     );
 
     // The band wanted: the whole bottom half, or below the panel where that is

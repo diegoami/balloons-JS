@@ -84,6 +84,17 @@ Layout.offersDownload = function () {
     return window.location.origin !== Layout.APP_ORIGIN;
 };
 
+// The way out of the Android app, and only there: a web page cannot close its
+// own tab. The app gives the page window.BaloncelliApp, a message channel it
+// opens for its own origin only (MainActivity.kt), so the chip is offered
+// exactly when there is something to send "exit" to.
+Layout.EXIT_TEXT = "Exit";
+
+Layout.offersExit = function () {
+    return !!(window.BaloncelliApp &&
+        typeof window.BaloncelliApp.postMessage === "function");
+};
+
 Layout.about = function () {
     var top = Ladder.at(Ladder.MAX);
     var boss = Ladder.saucer(1);
@@ -720,6 +731,30 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
         radius: line * G.footer.radius
     };
 
+    // The Exit chip, in the app only: left of Scores on the same row, or up in
+    // the right-hand column when that would reach the name chip. That does
+    // happen -- the name chip is as wide as the name, up to 24 characters.
+    var exit = null;
+    if (Layout.offersExit()) {
+        var exitWidth = Math.max(
+            G.minTouchTarget,
+            ctx.measureText(Layout.EXIT_TEXT).width + line * G.footer.padX * 2
+        );
+        exit = {
+            x: board.x - exitWidth - line * G.footer.padX,
+            y: board.y,
+            width: exitWidth,
+            height: player.height,
+            radius: player.radius
+        };
+        var reachesName = exit.x < player.x + player.width + line * G.footer.padX &&
+            exit.y < player.y + player.height && player.y < exit.y + exit.height;
+        if (reachesName) {
+            exit.x = width - width * G.columns.margin - exitWidth;
+            exit.y = Math.min(about.y, board.y) - footerHeight - line * G.footer.inset;
+        }
+    }
+
     // The About screen's way to the Android app, on Back's row at the left.
     // Null inside the app. The two always fit side by side: the type scales
     // with the width, so at 200px there is still 69px between them, and a
@@ -742,6 +777,9 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
     targets.push({ id: "about", hit: about });
     targets.push({ id: "board", hit: board });
     targets.push({ id: "player", hit: player });
+    if (exit) {
+        targets.push({ id: "exit", hit: exit });
+    }
 
     // The level chip is gone from the screen, so it is gone from the targets.
     // Game.startLevel and everything behind it stays: the playtest harness
@@ -931,6 +969,7 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
         about: about,
         back: back,
         download: download,
+        exit: exit,
         board: board,
         boardScreen: boardScreen,
         targets: targets

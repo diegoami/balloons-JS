@@ -5525,6 +5525,184 @@ await t('the Android app chip is on screen, clear of Back and below the text, at
 });
 
 
+await t('Back goes where Escape goes, and closes the app only from the title', async () => {
+  // Android's Back button reaches the page as Game.back(): true if the page
+  // went somewhere, false if the app should close. It used to close the app
+  // from every screen, a run in progress included.
+  const { context, page, errors } = await newGame();
+  const simple = await page.evaluate(() => {
+    const step = name => { Game.enter(name); const handled = Game.back(); return [name, handled, Game.screen]; };
+    return {
+      missing: Object.keys(Screens).filter(k => typeof Screens[k].back !== 'function'),
+      rows: ['title', 'name', 'about', 'board'].map(step)
+    };
+  });
+  assert.deepEqual(simple.missing, [], 'screens with no Back of their own: ' + simple.missing.join(', '));
+  assert.deepEqual(simple.rows, [
+    ['title', false, 'title'],
+    ['name', true, 'title'],
+    ['about', true, 'title'],
+    ['board', true, 'title']
+  ]);
+
+  // The countdown: nothing at stake yet, so home.
+  const countdown = await page.evaluate(() => {
+    Game.restart();
+    const from = Game.screen;
+    return [from, Game.back(), Game.screen];
+  });
+  assert.deepEqual(countdown, ['starting', true, 'title'], 'Back in the countdown');
+
+  // A run: Back asks, Back again answers No, and nothing was lost either way.
+  await page.evaluate(() => Game.restart());
+  await page.waitForFunction(() => Game.screen === 'playing', null, { timeout: 10000 });
+  const run = await page.evaluate(() => {
+    const before = { lives: Game.livesLost, score: Game.score };
+    const asked = [Game.back(), Game.screen];
+    const answered = [Game.back(), Game.screen];
+    Game.askPause();
+    const paused = Game.screen;
+    const fromPause = [Game.back(), Game.screen];
+    const backIn = [Game.back(), Game.screen];
+    return { before, after: { lives: Game.livesLost, score: Game.score }, asked, answered, paused, fromPause, backIn };
+  });
+  assert.deepEqual(run.asked, [true, 'confirmQuit'], 'Back mid-run did not ask to quit');
+  assert.deepEqual(run.answered, [true, 'playing'], 'Back on the question did not answer No');
+  assert.equal(run.paused, 'paused', 'the test could not pause');
+  assert.deepEqual(run.fromPause, [true, 'confirmQuit'], 'Back while paused did not ask to quit');
+  assert.deepEqual(run.backIn, [true, 'playing']);
+  assert.deepEqual(run.after, run.before, 'Back cost the run something');
+
+  // Game over: the lockout that protects the score swallows Back too, and
+  // then Back goes home.
+  await page.evaluate(() => { Game.livesLost = Game.allowance; });
+  await page.waitForFunction(() => Game.screen === 'gameover', null, { timeout: 20000 });
+  const locked = await page.evaluate(() => [Game.isMenuLive(), Game.back(), Game.screen]);
+  assert.deepEqual(locked, [false, true, 'gameover'], 'Back skipped the game-over lockout');
+  await page.waitForFunction(() => Game.isMenuLive(), null, { timeout: 10000 });
+  const home = await page.evaluate(() => [Game.back(), Game.screen]);
+  assert.deepEqual(home, [true, 'title'], 'Back did not leave the game-over screen');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+// The page as the Android app serves it: with the message channel MainActivity
+// opens for its own origin, recorded here instead of closing anything.
+async function newAppGame({ width = 412, height = 839, name = 'TestPlayer' } = {}) {
+  const context = await browser.newContext({ viewport: { width, height } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  await page.addInitScript(n => {
+    try { window.localStorage.setItem('name', n); } catch (e) {}
+    window.__sent = [];
+    window.BaloncelliApp = { postMessage: m => window.__sent.push(m) };
+  }, name);
+  await page.goto('http://localhost:8899/', { waitUntil: 'load' });
+  await page.waitForTimeout(400);
+  return { context, page, errors };
+}
+
+await t('the app has an Exit chip on the title that asks it to close; the web has none', async () => {
+  const web = await newGame();
+  const w = await web.page.evaluate(() => ({
+    exit: Game.layout.exit,
+    target: Game.layout.targets.some(t => t.id === 'exit'),
+    said: document.getElementById('game_status').textContent
+  }));
+  assert.equal(w.exit, null, 'the web lays out an Exit chip');
+  assert.equal(w.target, false, 'the web has an Exit target');
+  assert.doesNotMatch(w.said, /Exit/, 'the web announces Exit: ' + w.said);
+  await web.context.close();
+
+  const { context, page, errors } = await newAppGame();
+  const m = await page.evaluate(() => {
+    Game.stopLoop();
+    Game.paint();
+    const r = Game.layout.exit;
+    const grab = () => Array.from(Game.ctx.getImageData(
+      Math.round(r.x * Game.dpr), Math.round(r.y * Game.dpr),
+      Math.round(r.width * Game.dpr), Math.round(r.height * Game.dpr)).data);
+    const withChip = grab();
+    Game.layout.exit = null;
+    Game.paint();
+    const without = grab();
+    Game.layout.exit = r;
+    Game.paint();
+    let differ = 0;
+    for (let i = 0; i < withChip.length; i += 4) {
+      if (Math.abs(withChip[i] - without[i]) + Math.abs(withChip[i + 1] - without[i + 1]) +
+          Math.abs(withChip[i + 2] - without[i + 2]) > 30) { differ++; }
+    }
+    return {
+      rect: r, share: differ / (withChip.length / 4),
+      target: Game.layout.targets.some(t => t.id === 'exit'),
+      said: document.getElementById('game_status').textContent
+    };
+  });
+  assert.ok(m.rect && m.target, 'the app has no Exit chip');
+  assert.ok(m.share > 0.3, `the Exit chip barely shows: ${(m.share * 100).toFixed(0)}% of its pixels change`);
+  assert.match(m.said, /Exit closes the game/, 'Exit is not announced: ' + m.said);
+
+  await page.mouse.click(m.rect.x + m.rect.width / 2, m.rect.y + m.rect.height / 2);
+  await page.waitForTimeout(120);
+  assert.deepEqual(await page.evaluate(() => window.__sent), ['exit'], 'a tap on Exit sent nothing');
+  assert.deepEqual(errors, [], errors.join(' | '));
+  await context.close();
+});
+
+await t('the Exit chip fits the footer at any size and name, and Play never covers it', async () => {
+  // 24 is the name field's maxlength. A plausible long name is not the widest:
+  // measured over 168 layouts, Exit has to move off Scores' row at 200px with
+  // any name, and at 390-412px only with 24 wide letters -- which a first
+  // version of this test never tried, so its fallback went untested.
+  const cases = [
+    [200, 600, 'T'], [240, 600, 'T'], [240, 600, 'Maximilian Alexandersson'],
+    [320, 568, 'T'], [320, 568, 'Maximilian Alexandersson'], [390, 664, 'm'.repeat(24)],
+    [412, 839, 'T'], [412, 839, 'W'.repeat(24)], [820, 1180, 'Maximilian Alexandersson'],
+    [1280, 720, 'W'.repeat(24)], [1920, 400, 'T']
+  ];
+  const placements = new Set();
+  for (const [w, h, name] of cases) {
+    {
+      const { context, page, errors } = await newAppGame({ width: w, height: h, name });
+      const m = await page.evaluate(() => {
+        const L = Game.layout;
+        const plays = [[0, 0], [0, 1], [1, 0], [1, 1]].map(([x, y]) => {
+          Play.at = { x, y };
+          return Play.rect(Game);
+        });
+        return {
+          targets: L.targets.map(t => ({ id: t.id, ...t.hit })),
+          exit: L.exit, player: L.player, plays,
+          moved: L.exit.y < Math.min(L.about.y, L.board.y),
+          min: Layout.GRID.minTouchTarget, width: Game.width, height: Game.height
+        };
+      });
+      const at = `at ${w}x${h} with a ${name.length}-letter name`;
+      const hits = (a, z) => a.x < z.x + z.width && z.x < a.x + a.width && a.y < z.y + z.height && z.y < a.y + a.height;
+      assert.ok(m.exit, `no Exit chip ${at}`);
+      placements.add(m.moved ? 'moved' : 'beside');
+      m.targets.forEach(t => {
+        assert.ok(t.width >= m.min && t.height >= m.min, `${t.id} is under ${m.min}px ${at}`);
+        assert.ok(t.x >= 0 && t.y >= 0 && t.x + t.width <= m.width && t.y + t.height <= m.height,
+          `${t.id} runs off the screen ${at}`);
+      });
+      for (let i = 0; i < m.targets.length; i++) {
+        for (let j = i + 1; j < m.targets.length; j++) {
+          assert.ok(!hits(m.targets[i], m.targets[j]), `${m.targets[i].id} overlaps ${m.targets[j].id} ${at}`);
+        }
+      }
+      m.plays.forEach(p => assert.ok(!hits(p, m.exit), `the Play button covers Exit ${at}`));
+      assert.deepEqual(errors, [], errors.join(' | '));
+      await context.close();
+    }
+  }
+  // Both placements happen, so neither branch goes untested.
+  assert.deepEqual([...placements].sort(), ['beside', 'moved'],
+    'the Exit chip only ever sat ' + [...placements].join(', '));
+});
+
 await t('turning the phone mid-game keeps the sky where it was', async () => {
   // A rotation is not a resize, it is a different window. Measured before this
   // was handled: turning a phone upright mid-game put EVERY balloon in the sky

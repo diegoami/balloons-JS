@@ -238,6 +238,20 @@ Game.isMenuLive = function () {
 };
 
 /**
+ * The Android Back button, which MainActivity passes to the page.
+ *
+ * Each screen says what Back means on it -- usually what Escape already does.
+ * True means the page dealt with it; false means there is nowhere to go back
+ * to, which is only the title screen, and the app closes. A screen that says
+ * nothing keeps the app open: closing it by accident loses more than an
+ * unanswered Back does.
+ */
+Game.back = function () {
+    var screen = Screens[this.screen];
+    return screen && screen.back ? screen.back(this) : true;
+};
+
+/**
  * Starts the frame loop, if it is not already running.
  *
  * It was setInterval(frame, 1000 / 30). That asks the browser to run the game
