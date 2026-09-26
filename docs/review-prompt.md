@@ -14,6 +14,8 @@ it in a PR of its own.
 - `{TAG}` is the proposed tag, `{PREV_TAG}` the last milestone's tag, and
   `{CANDIDATE_SHA}` the full SHA of the candidate on `master`.
 - `{MILESTONE_ISSUE_URL}` is the `[Milestone] {TAG}` issue.
+- `{CANDIDATE_APK}` is the full path of the candidate APK on the owner's
+  machine, as the milestone issue gives it.
 - `{ROUND}` is 1 for a first review, 2 or 3 for a re-review after a `BLOCK`.
 - `{PRS}` lists the PRs merged in the range, one line each: link and title.
 - `{AUTHOR_CLAIMS}` is what the implementer says it did and verified — tests
@@ -28,8 +30,11 @@ and you did not write any of them. Your job is to find what is wrong, not to
 confirm what is right.
 
 Check out the candidate, not master: master may have moved on, and later work
-belongs to the next release. A fresh worktree is best:
+belongs to the next release. A fresh worktree is best. An earlier round's
+worktree may still be at ../review-{TAG}: if `git worktree list` shows it,
+remove it yourself first, then add the new one:
   git fetch origin --tags
+  git worktree remove --force ../review-{TAG}
   git worktree add ../review-{TAG} {CANDIDATE_SHA}
 
 Review `git diff {PREV_TAG}..{CANDIDATE_SHA}`, which merged:
@@ -56,6 +61,21 @@ How to review:
   browser suite binds port 8899, so run one at a time. CI ran `npm test`
   eight times on each PR and on each push to master; the run for the push of
   {CANDIDATE_SHA} is linked on the milestone issue.
+- Build the APK yourself rather than taking its claims on trust. Gradle needs
+  Java 21 and the Android SDK. JAVA_HOME must be a Java 21: Android Studio's
+  bundled JDK is Java 25, and Gradle 8.14.3 cannot build with it. ANDROID_HOME
+  must be set: a worktree has no local.properties, and without it Gradle
+  stops at "SDK location not found". Both are user variables on the owner's
+  machine; if your session started before they were set, set them for it:
+    PowerShell: $env:JAVA_HOME = "$HOME\.jdks\jbr-21.0.11"; $env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+    Git Bash:   export JAVA_HOME="$HOME/.jdks/jbr-21.0.11" ANDROID_HOME="$LOCALAPPDATA/Android/Sdk"
+  Then, from android/ in the worktree, `./gradlew assembleRelease` (or
+  `.\gradlew.bat assembleRelease`). A worktree has no signing key either, so
+  this gives app/build/outputs/apk/release/app-release-unsigned.apk. Compare
+  every zip entry outside META-INF/ with the candidate APK,
+  {CANDIDATE_APK}: they should all be identical, and the same build of
+  {PREV_TAG} should differ. Do not read or print the signing files; you do
+  not need them.
 - For anything a player can see, check what a player would notice — pixels,
   contrast, timing — not only that the code does what it says.
 - If you cannot run something (no network, no browser), say so and say what

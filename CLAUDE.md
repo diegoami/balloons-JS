@@ -172,7 +172,9 @@ How a milestone happens:
    carry its version. That merge commit on `master` is the **candidate**.
 3. Claude opens a milestone issue titled `[Milestone] vX.Y`: the proposed
    tag, the candidate's full SHA, the previous tag, the PRs merged between
-   them, and CI's results on the candidate (the push run on `master`).
+   them, CI's results on the candidate (the push run on `master`), and the
+   candidate APK's full path and SHA-256, so the reviewer can build its own
+   and compare.
 4. Claude gives the owner one prompt, `docs/review-prompt.md` filled in and
    otherwise unchanged, in one fenced block ready to paste. What you verified
    goes in as claims for the reviewer to check, not as evidence. The reviewer
