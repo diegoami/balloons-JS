@@ -68,7 +68,7 @@ The keystore is the app's identity. **Do not generate one, and do not read
 fill it in. If the key is lost, no update can ever be installed over an
 existing copy of the app.
 
-Releasing. A release is a milestone, and `CLAUDE.md` (Review) has the whole
+Releasing. A release is a milestone, and `AGENTS.md` (Releases) has the whole
 process; these are its build steps.
 
 1. Bump `versionCode` and `versionName` in `app/build.gradle.kts`, in a PR
