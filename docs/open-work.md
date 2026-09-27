@@ -27,6 +27,16 @@ failure turns up in another test, this was not it.
 `enableV3Signing` would allow rotating the key later; without it the current
 keystore is the app's permanent identity.
 
+**The review prompt's second worktree has no path.** `docs/review-prompt.md`
+now tells the reviewer where to put the candidate's worktree:
+`<main>/../<project>-work/review-{TAG}-<stamp>`, beside the main checkout and
+unique per run (#85). But "How to review" still asks for "a second worktree at
+{PREV_TAG}" to run old and new side by side, and gives no path for it. A
+reviewer standing in a subdirectory can put that one inside the main checkout,
+which is what the old candidate path did in #85's side-by-side repro. The fix
+is the same rule with `{PREV_TAG}` in place of `{TAG}`. It was left out of #85
+because that PR changed only the steps that reach the candidate.
+
 ## Planned: an ammunition mode
 
 A **second mode** for the version after 2.1, explicitly not a change to the
