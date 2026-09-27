@@ -2,30 +2,24 @@
 
 Small unfinished jobs and one planned feature. None of these block anything;
 raise them when there is a lull rather than interrupting a bigger piece of
-work. Current as of 2.6.
+work. Checked against 2.7 on 2026-09-27.
 
 ## Loose ends
 
-**Four junk rows on the production leaderboard.** Name "anonymous", score 0,
-level 1, posted from the emulator while verifying the app could reach the
-board. The board holds ten and sorts by score, so real games push them off
-eventually. There is no DELETE on the function by design, so clearing them
-early means either emptying the `highscores` blob (key `board`) from the
-Netlify UI, or adding a guarded DELETE — a sharper tool than a toy
-leaderboard needs.
-
-**A test flake seen once, probably found.** One run reported
-`132 passed, 1 failed` just after PR #40 merged, and the failing test was
-never identified. CI's first red leg, on #61, was the fading-balloon ceiling
-in `the level that announces fading balloons actually has them`: measured on
-the 2.2 table, it failed about one suite run in 38, and #61 widened it. That
-ceiling was already in the tree when #40 merged, so it is the likely culprit
-— likely rather than certain, because the rows were different then. If a
-failure turns up in another test, this was not it.
-
 **Release APKs are signed v2 only.** Fine for `minSdk 26`. Adding
 `enableV3Signing` would allow rotating the key later; without it the current
-keystore is the app's permanent identity.
+keystore is the app's permanent identity. Still true of the 2.7 APK:
+`apksigner verify --verbose` reports v2 and nothing else.
+
+**The review prompt's second worktree has no path.** `docs/review-prompt.md`
+now tells the reviewer where to put the candidate's worktree:
+`<main>/../<project>-work/review-{TAG}-<stamp>`, beside the main checkout and
+unique per run (#85). But "How to review" still asks for "a second worktree at
+{PREV_TAG}" to run old and new side by side, and gives no path for it. A
+reviewer standing in a subdirectory can put that one inside the main checkout,
+which is what the old candidate path did in #85's side-by-side repro. The fix
+is the same rule with `{PREV_TAG}` in place of `{TAG}`. It was left out of #85
+because that PR changed only the steps that reach the candidate.
 
 ## Planned: an ammunition mode
 

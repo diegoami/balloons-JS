@@ -30,12 +30,25 @@ and you did not write any of them. Your job is to find what is wrong, not to
 confirm what is right.
 
 Check out the candidate, not master: master may have moved on, and later work
-belongs to the next release. A fresh worktree is best. An earlier round's
-worktree may still be at ../review-{TAG}: if `git worktree list` shows it,
-remove it yourself first, then add the new one:
-  git fetch origin --tags
-  git worktree remove --force ../review-{TAG}
-  git worktree add ../review-{TAG} {CANDIDATE_SHA}
+belongs to the next release. Reach it in this order:
+1. Fetch first:
+     git fetch origin --tags
+   Not git pull, which would move the checkout you are in. The candidate is a
+   commit on master, not an open pull request, so there is no
+   pull/<N>/head to fetch; the PRs listed below are merged and come with it.
+2. A commit you cannot see is not missing until you have fetched. Stop and
+   say so only if, after the fetch, git cat-file -t {CANDIDATE_SHA} still
+   does not print "commit".
+3. Review in a fresh, detached worktree of your own at the candidate. This is
+   required: never review in the checkout you started in, whatever it holds.
+   <main> is the parent directory of
+   git rev-parse --path-format=absolute --git-common-dir, <project> is
+   <main>'s name, and <stamp> is the UTC time now as YYYYMMDDTHHMMSSZ. Make
+   the worktree beside the main checkout, at a path unique to this run:
+     git worktree add --detach <main>/../<project>-work/review-{TAG}-<stamp> {CANDIDATE_SHA}
+   Remove no worktree you did not make, an earlier round's included.
+4. In that worktree, git rev-parse HEAD must print {CANDIDATE_SHA}; if it
+   does not, stop and say so. Everything below runs there.
 
 Review `git diff {PREV_TAG}..{CANDIDATE_SHA}`, which merged:
 {PRS}
@@ -87,8 +100,10 @@ Report:
 1. One GitHub issue per finding you reproduced, titled `[{TAG}] <the finding>`:
    file:line, what is wrong, how you reproduced it (the command and what it
    printed), what would fix it, and a link to {MILESTONE_ISSUE_URL}.
-2. One comment on {MILESTONE_ISSUE_URL} with: the commit you reviewed; the
-   finding issues you opened; defects outside the diff, marked as such;
+2. One comment on {MILESTONE_ISSUE_URL} with: the commit you reviewed, by
+   its full SHA; the worktree you reviewed it in, as the relative path
+   ../<project>-work/review-{TAG}-<stamp>, never one machine's absolute
+   path; the finding issues you opened; defects outside the diff, marked as such;
    decisions that belong to the owner rather than the implementer, each with
    a recommended default; and, on its own line, the verdict —
    AGREE (tag {CANDIDATE_SHA} as {TAG}) or BLOCK (a finding must be fixed
