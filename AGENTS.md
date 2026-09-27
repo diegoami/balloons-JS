@@ -228,7 +228,9 @@ do not. That is the intended shape. The `ladder.js` comments now describe the
 - Reproduce every finding before acting on it, **and reproduce your own before
   publishing it**. When a check fails, suspect your harness first — run old and
   new side by side, because a broken harness shows up as both columns agreeing
-  when they should differ.
+  when they should differ. Both sides once published a findings table from a
+  test that had never run the fault, each testing the fault it thought of, so
+  the test set inherited the blind spot from the thing it was testing.
 - For each passing check, say what it would have caught had the code been
   wrong. Never let implementer and reviewer share a blind spot.
 - A passing test is not a working feature: assert what a person would notice —
@@ -272,9 +274,7 @@ rather than implying the higher bar.
 CI (`.github/workflows/test.yml`) runs `npm test` eight times on every PR — on
 GitHub's merge of it into `master`, filed under the head commit — and re-runs on
 every push. That, not a count in the PR body, is the record a merge rests on: a
-body is written once, and the fixes a review asks for land after it. Each run
-must print exactly the workflow's `EXPECT_SCORES` and `EXPECT_BROWSER` counts;
-a PR that adds or removes a test updates them.
+body is written once, and the fixes a review asks for land after it.
 
 What runs on a pull request is GitHub's merge of the head into `master` as
 `master` stood at the push that started it — the code that would land. If

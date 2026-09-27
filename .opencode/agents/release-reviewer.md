@@ -115,8 +115,11 @@ Aim at what the checks already run cannot see.
 1. One issue per finding you reproduced, titled `[<TAG>] <the finding>`:
 
    ```
-   gh issue create --label review --label <bug|robustness|tests|design|cleanup|documentation> --title "[<TAG>] <finding>" --body-file <file>
+   gh issue create --title "[<TAG>] <finding>" --body-file <file>
    ```
+
+   Do not pass `--label`: this repository has only GitHub's default labels, and
+   `gh` refuses a label it cannot find. The `[<TAG>]` title is the marker.
 
    Title the defect plainly. Body:
 

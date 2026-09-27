@@ -38,8 +38,6 @@ byte-order mark:
 - **Review**: `pending`, then `AGREE at <sha>`, `BLOCK at <sha>: #n` or
   `tagged without review (owner)`. Keep it current.
 
-Make sure the `review` label exists (`gh label list`).
-
 ## Give the owner the command
 
 Pick a reviewer model that implemented none of the release. Then, from the main
