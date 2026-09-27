@@ -2,7 +2,7 @@
 
 Simple JavaScript / HTML5 game. Pop the balloons before too many escape.
 
-Working on it with an AI assistant: see [CLAUDE.md](CLAUDE.md).
+Working on it with an AI assistant: see [AGENTS.md](AGENTS.md).
 The Android app is in [android/](android/README.md); what is still open is in
 [docs/open-work.md](docs/open-work.md).
 

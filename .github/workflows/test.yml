@@ -1,6 +1,6 @@
 # `npm test`, eight times, on what a pull request would merge.
 #
-# CLAUDE.md asks for eight runs after the last edit, because the browser suite
+# AGENTS.md asks for eight runs after the last edit, because the browser suite
 # has timing in it and three passes once let a one-in-eight flake through
 # twice. Written into a PR body, that record is taken at the first commit and
 # never updated, so the fixes a review asks for landed unrecorded. Here a new
