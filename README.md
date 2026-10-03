@@ -1,5 +1,7 @@
 # balloons
 
+**Android app:** download it from [balloons-js-releases](https://github.com/diegoami/balloons-js-releases) (Baloncelli).
+
 Simple JavaScript / HTML5 game. Pop the balloons before too many escape.
 
 Working on it with an AI assistant: see [AGENTS.md](AGENTS.md).
