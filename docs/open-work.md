@@ -1,8 +1,75 @@
 # Open work
 
-Small unfinished jobs and one planned feature. None of these block anything;
-raise them when there is a lull rather than interrupting a bigger piece of
-work. Current as of 2.6.
+Active release work comes first. The older loose ends below were last written
+for 2.6; recheck their status before acting on them.
+
+## Active: finish the v2.8 HUD revision
+
+The owner stopped work for the night on 2026-10-25 and explicitly chose
+**stop the tests now and save progress**. The test coordinator and its browser
+children were stopped; port 8899 was verified free. Do not resume unattended
+work just because this note is read; resume when the owner asks.
+
+The release is still untagged. PR #90 merged as
+`15bfbad5e55914ebb5f047e41b2a38bcd4789227` on master, and milestone
+[#91](https://github.com/diegoami/balloons-JS/issues/91) records that candidate.
+The owner's phone playtest then requested a separate HUD/playfield and smaller
+controls: design [#92](https://github.com/diegoami/balloons-JS/issues/92), also
+addressing the clock overlap in #89. A hold comment on #91 says not to tag the
+old candidate while this revision is pending. Read the issue/comments again
+before preparing a review; an approval of the old SHA cannot approve this fix.
+
+Implementation is committed on local branch `fix/separate-playfield-hud`.
+The code/test/documentation checkpoint is
+`8d8addc66eb91e6a327ddfde916c1ca1dabed356`; the later checkpoint commit only
+updates this open-work document. The branch has **not been pushed and has no
+PR**. README and #92 explain the change; the ladder is unchanged. The browser
+suite now registers **151** tests (previous HUD test replaced by four checks),
+and CI's `EXPECT_BROWSER` is updated in the implementation commit.
+
+Validation needs finishing before any push:
+
+- Six complete serial runs are in ignored local logs
+  `dist-itch/playfield-final-1.log` through `playfield-final-6.log`. Each was
+  verified to contain exactly **24 score**, **151 browser / 0 failed**, and
+  **3 packaging** passes. Run 7 is interrupted and must not count.
+- Only **runs 3–6** began after the final strengthened pixel checks and phone
+  documentation were committed. Runs 1–2 are preliminary: the helper was
+  strengthened to require actual visible score/level/clock/life ink, so a
+  blank HUD cannot pass merely by avoiding overlap. **Four more serial full
+  runs on unchanged code/test files are needed to reach eight final passes.**
+  Use new log names; preserve the interrupted run as such. Those runs also
+  cover this documentation-only checkpoint. If gameplay/test code changes,
+  restart the eight-pass count after the final edit.
+- The actual registered regression checks were run against the old candidate
+  and the new code. Old: **0 passed, 4 failed**, exercising actual balloon
+  pixels in the strip, a strip tap costing a life and the old escape location.
+  New plus related fading/lifetime/rotation checks: **7 passed, 0 failed**.
+  Scratch runner/logs: `dist-itch/run-playfield-regression.mjs`,
+  `playfield-old-final.log`, `playfield-related-final.log` (all ignored).
+- The packaged ZIP smoke passed on the implementation; the final checkpoint
+  ZIP has identical bytes. Android builds and its v2 signature verifies.
+  Staged ZIP/APK and source/checksum records for `8d8addc...` are under
+  `dist-itch/candidate-8d8addc66eb91e6a327ddfde916c1ca1dabed356/` (APK in
+  `android/`). Repackage from the eventual final PR/merge commit rather than
+  presenting these old source records as a later commit's build.
+- Phone/desktop previews are in `dist-itch/playfield-preview/`; the capture
+  script and draft PR body are also under ignored `dist-itch/`. **The draft
+  `playfield-pr-body.md` already contains planned eight-pass wording: do not
+  publish that claim until the remaining runs actually pass.**
+
+The owner confirmed <https://diegoami.itch.io/baloncelli> is a **private draft**.
+Its processed `html5` build is still the **old** candidate, version
+`2.8-candidate-15bfbad`, build `2204028`; the HUD revision has not been uploaded.
+After validation, open the implementation PR (intentionally addressing #92
+and #89) and arrange a new private phone preview. The owner merges on green
+CI; the earlier permission to merge #90 is not blanket permission for new PRs.
+After merge, rebuild on the new candidate, update #91's SHA/artifacts/CI and
+provide the fresh independent-review prompt. The owner said they will choose
+and launch the reviewer themselves; this session launched no external review.
+Monitor actual review outcomes per #87 when one is launched. The real-phone
+check and independent review must complete before tagging; GitHub APK
+publication stays with the owner. See ITCH.md and AGENTS.md for the process.
 
 ## Loose ends
 
