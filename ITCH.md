@@ -7,8 +7,7 @@ and git tags. This supplements the milestone process in AGENTS.md.
 ## Page setup
 
 The owner confirmed **diegoami/baloncelli**:
-<https://diegoami.itch.io/baloncelli>. Butler confirms the project exists;
-its first builds have not been uploaded yet. Set the project kind to HTML.
+<https://diegoami.itch.io/baloncelli>. Set the project kind to HTML.
 Butler uploads builds; it cannot create or edit the page.
 
 - Free; released; genre Action. Suggested tags: arcade, balloons, singleplayer,
@@ -74,7 +73,10 @@ and playing screenshots for visual inspection.
 Before tagging: inspect the screenshots, play the candidate, and upload its
 HTML5 ZIP to a private itch.io draft for a **real phone check**, as issue #88
 requires. Check orientation, name entry, Play, popping, pause/resume, and the
-leaderboard. Verify APK signing with the SDK's `apksigner verify --verbose`.
+leaderboard. During play, the top information/control strip is outside the
+balloon field: check that a balloon tapped just below it cannot activate pause
+or quit. The controls retain 44px tap targets inside the strip while looking
+smaller. Verify APK signing with the SDK's `apksigner verify --verbose`.
 Record the phone result and APK hash on the milestone issue. Complete the
 independent review and owner's merge steps in AGENTS.md before tagging.
 
