@@ -49,6 +49,15 @@ export async function playfieldTests(t, newGame) {
           Paint.sky(Game);
           Paint.hudGround(Game);
           const ground = ctx.getImageData(0, 0, Game.canvas.width, Game.canvas.height).data;
+          for (const box of boxes) {
+            box.painted = false;
+            for (let y = Math.max(0, Math.floor(box.y * Game.dpr)); y < Math.min(Game.canvas.height, (box.y + box.height) * Game.dpr); y++) {
+              for (let x = Math.max(0, Math.floor(box.x * Game.dpr)); x < Math.min(Game.canvas.width, (box.x + box.width) * Game.dpr); x++) {
+                const i = (y * Game.canvas.width + x) * 4;
+                if (stats[i] !== ground[i] || stats[i + 1] !== ground[i + 1] || stats[i + 2] !== ground[i + 2]) box.painted = true;
+              }
+            }
+          }
           let statsInControls = 0;
           const visibleControls = [];
           for (const [box, draw] of [[hud.pause, pause], [hud.quit, quit]]) {
@@ -74,7 +83,7 @@ export async function playfieldTests(t, newGame) {
           }
           const overlap = (a, b) => a.x < b.x + b.width && a.x + a.width > b.x &&
             a.y < b.y + b.height && a.y + a.height > b.y;
-          results.push({ field, boxes, controls: [hud.pause, hud.quit], statsInControls, visibleControls,
+          results.push({ level, field, boxes, controls: [hud.pause, hud.quit], statsInControls, visibleControls,
             overlaps: boxes.flatMap((a, i) => boxes.slice(i + 1).filter(b => overlap(a, b)).map(b => [a.label, b.label])) });
         }
         return results;
@@ -85,7 +94,12 @@ export async function playfieldTests(t, newGame) {
         assert.equal(result.field.y + result.field.height, height, 'the playable sky does not fill the space below the strip');
         assert.equal(result.statsInControls, 0, `HUD text/lives paint inside a control at ${width}x${height}`);
         assert.deepEqual(result.overlaps, [], `HUD stats overlap at ${width}x${height}`);
+        for (const label of ['1000000', `LEVEL ${result.level}`, '99999.00s']) {
+          assert.ok(result.boxes.some(box => box.label === label), `the HUD omits ${label}`);
+        }
+        assert.equal(result.boxes.filter(box => box.label === 'balloon').length, 9, 'the HUD omits lives');
         for (const box of result.boxes) {
+          assert.ok(box.painted, `${box.label} is measured but has no visible ink`);
           assert.ok(box.x >= 0 && box.x + box.width <= width && box.y >= 0 && box.y + box.height < result.field.y,
             `${box.label} clips or enters the playing area at ${width}x${height}`);
         }
