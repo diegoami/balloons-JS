@@ -11,7 +11,8 @@
   "scripts": {
     "dev": "netlify dev",
     "check": "node tools/check.mjs",
-    "test": "npm run check && npm run test:scores && npm run test:browser",
+    "test": "npm run check && npm run test:scores && npm run test:browser && npm run test:itch",
+    "test:itch": "node --test test/itch.test.mjs",
     "test:scores": "node --import ./test/helpers/hook.mjs test/scores.test.mjs",
     "test:browser": "node test/browser.test.mjs",
     "playtest": "node tools/playtest.mjs"
