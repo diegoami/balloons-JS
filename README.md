@@ -138,6 +138,8 @@ the size of the entire game.
 
 ## Deploying
 
+The itch.io browser and Android release workflow is in [ITCH.md](ITCH.md).
+
 The site is a Netlify project. `netlify.toml` publishes `public/` and picks up
 the function in `netlify/functions/`, so a push to the tracked branch deploys
 both the game and its score API together.
