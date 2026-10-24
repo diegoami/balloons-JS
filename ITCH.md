@@ -6,9 +6,10 @@ and git tags. This supplements the milestone process in AGENTS.md.
 
 ## Page setup
 
-Create an HTML game under the owner's diegoami account, using `baloncelli` if
-available. The project does not exist yet; confirm its actual owner/slug before
-running the uploader. Butler uploads builds; it cannot create or edit the page.
+The owner confirmed **diegoami/baloncelli**:
+<https://diegoami.itch.io/baloncelli>. Butler confirms the project exists;
+its first builds have not been uploaded yet. Set the project kind to HTML.
+Butler uploads builds; it cannot create or edit the page.
 
 - Free; released; genre Action. Suggested tags: arcade, balloons, singleplayer,
   browser, touch-friendly. Disclose AI-assisted code as on the other games.
@@ -83,8 +84,8 @@ After AGREE, on a clean checkout of the exact annotated release tag:
 node tools/package_itch.mjs --confirm
 node tools/package_android.mjs --confirm
 node tools/smoke_itch_zip.mjs dist-itch/v2.8
-node tools/publish_itch.mjs --project diegoami/<confirmed-slug>
-node tools/publish_itch.mjs --project diegoami/<confirmed-slug> --confirm
+node tools/publish_itch.mjs --project diegoami/baloncelli
+node tools/publish_itch.mjs --project diegoami/baloncelli --confirm
 ```
 
 The uploader checks both source records, checksums, release ZIP smoke result,
