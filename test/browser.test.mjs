@@ -1075,11 +1075,15 @@ await t('the whole composition stays on screen at every viewport', async () => {
     const { context, page } = await newGame({ width: w, height: h });
     const m = await page.evaluate(() => {
       const L = Game.layout;
+      Game.ctx.save();
+      Game.ctx.font = L.fonts.intro;
+      const introRight = Game.ctx.measureText(Layout.INTRO_TEXT).width + L.intro.x;
+      Game.ctx.restore();
       return {
         fontSize: Game.fontSize,
         deepest: L.boardScreen.rows[L.boardScreen.rows.length - 1],
         menuRight: Math.max(...L.menu.buttons.map(b => b.x + b.width)),
-        introRight: Game.ctx.measureText(Layout.INTRO_TEXT).width + L.intro.x,
+        introRight: introRight,
         scoreValueX: L.boardScreen.columns.value,
         hudTime: L.hud.time,
         scrollWidth: document.documentElement.scrollWidth,

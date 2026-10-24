@@ -75,11 +75,15 @@ try {
       await frame.waitForFunction(() => window.Game && Game.screen === 'title');
       const geometry = await frame.evaluate(() => {
         const button = Play.rect(Game);
+        Game.ctx.save();
+        Game.ctx.font = Game.layout.fonts.intro;
+        const introRight = Game.layout.intro.x + Game.ctx.measureText(Layout.INTRO_TEXT).width;
+        Game.ctx.restore();
         return { button, width: Game.width, height: Game.height,
           scroll: document.documentElement.scrollHeight > innerHeight || document.documentElement.scrollWidth > innerWidth,
           document: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
           viewport: [innerWidth, innerHeight],
-          introRight: Game.layout.intro.x + Game.ctx.measureText(Layout.INTRO_TEXT).width };
+          introRight };
       });
       const r = geometry.button;
       assert.ok(r.width >= 44 && r.height >= 44, 'Play target is too small');
