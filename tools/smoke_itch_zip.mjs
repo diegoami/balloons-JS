@@ -6,9 +6,9 @@ import { tmpdir } from 'node:os';
 import { createServer } from 'node:http';
 import path from 'node:path';
 import { launchBrowser } from '../test/helpers/browser.mjs';
-import { root, readStage, publicEntries } from './itch.mjs';
+import { root, readStage, publicEntries, sourceAt } from './itch.mjs';
 
-const directory = path.resolve(process.argv[2] || path.join(root, 'dist-itch', 'v2.8'));
+const directory = path.resolve(process.argv[2] || path.join(root, 'dist-itch', `v${sourceAt().version}`));
 const source = readStage(directory);
 const site = mkdtempSync(path.join(tmpdir(), 'baloncelli-itch-'));
 const zip = path.join(directory, source.name);
@@ -51,7 +51,7 @@ const shots = path.join(directory, 'screenshots');
 mkdirSync(shots, { recursive: true });
 try {
   // Baseline candidates plus itch's canonical and alternate embed sizes.
-  for (const [width, height] of [[240, 320], [320, 240], [320, 480], [480, 320], [480, 720], [640, 480]]) {
+  for (const [width, height] of [[320, 240], [320, 480], [480, 320], [480, 720], [640, 480]]) {
     const context = await browser.newContext({ viewport: { width, height } });
     try {
       const errors = [];
@@ -78,12 +78,14 @@ try {
         return { button, width: Game.width, height: Game.height,
           scroll: document.documentElement.scrollHeight > innerHeight || document.documentElement.scrollWidth > innerWidth,
           document: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
-          viewport: [innerWidth, innerHeight] };
+          viewport: [innerWidth, innerHeight],
+          introRight: Game.layout.intro.x + Game.ctx.measureText(Layout.INTRO_TEXT).width };
       });
       const r = geometry.button;
       assert.ok(r.width >= 44 && r.height >= 44, 'Play target is too small');
       assert.ok(r.x >= 0 && r.y >= 0 && r.x + r.width <= width && r.y + r.height <= height, 'Play is clipped');
       assert.equal(geometry.scroll, false, `First screen scrolls: ${JSON.stringify(geometry)}`);
+      assert.ok(geometry.introRight <= width, 'Title instruction is clipped');
       await page.screenshot({ path: path.join(shots, `${width}x${height}-title.png`) });
       // Freeze the moving button just for clicking its actual painted position.
       await frame.evaluate(() => { Play.step = function () {}; });
@@ -99,6 +101,7 @@ try {
       });
       await page.mouse.click(balloon.x, balloon.y);
       assert.ok(await frame.evaluate(score => Game.score > score, balloon.score), 'Pointer did not pop a balloon');
+      await frame.evaluate(() => Game.paint());
       await page.screenshot({ path: path.join(shots, `${width}x${height}-playing.png`) });
       await frame.evaluate(async () => {
         Scores.submit(Game, Game.score);

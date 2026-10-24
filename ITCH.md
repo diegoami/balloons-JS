@@ -16,6 +16,10 @@ running the uploader. Butler uploads builds; it cannot create or edit the page.
 - Embed **480×720**, portrait. Enable the player's fullscreen option. The game
   must never force fullscreen or an orientation lock (issue #88).
 - Keep the Android channel a downloadable APK, marked Android.
+- Smallest validated windows: **320×480 portrait** and **320×240 landscape**.
+  The 480×720 canonical embed and 640×480 alternate both pass. At 240×320 the
+  first instruction is clipped, so that width is below the supported baseline.
+  These are tested windows, not a claim about every possible minimum size.
 - Use screenshots of the packaged build, saved by the ZIP smoke under its
   `screenshots/` directory. Capture/choose a cover from real gameplay.
 - Title: **Baloncelli**.
