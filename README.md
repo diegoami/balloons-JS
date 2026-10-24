@@ -14,6 +14,12 @@ play, up to 20 — a winning run is 6:40 — and everything gets faster, denser
 and smaller as it does. Five balloons may escape to begin with, and three more
 lives are earned on the way up, at 12, 15 and 18.
 
+During play, scores and controls occupy a separate strip above the sky. Balloons
+escape at the top of the playfield, below that strip, so popping one near the
+edge never requires tapping pause or quit. The controls look compact but retain
+44px touch targets inside the strip. Reserving this space preserves balloon
+crossing time; the ladder is unchanged.
+
 From level 4 some balloons are reinforced and take two taps; from level 10
 some are armoured and take three. They are bigger, slower and worth more, and
 they thin visibly as the skins come off. The sky climbs with the ladder too —

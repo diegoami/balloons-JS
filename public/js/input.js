@@ -47,8 +47,7 @@ Input.popping = function (game, signal) {
     game.canvas.addEventListener("click", function (event) {
         var at = Input.point(game, event);
 
-        // The two controls first: they sit over the sky, so a tap on one is
-        // not a tap on whatever happens to be behind it.
+        // Controls belong to the reserved strip, never to the playable sky.
         if (Layout.hitRect(game.layout.hud.pause, at)) {
             game.pressed = null;
             game.askPause();
@@ -60,6 +59,9 @@ Input.popping = function (game, signal) {
             return;
         }
 
+        if (!Layout.hitRect(game.layout.playfield, at)) {
+            return;
+        }
         var hit = Entities.pick(game.entities, at);
         if (!hit) {
             return;

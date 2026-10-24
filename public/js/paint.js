@@ -677,82 +677,67 @@ Paint.nameScreen = function (game) {
 
 /** Everything in the sky, in the order the list keeps: lowest layer first. */
 Paint.entities = function (game) {
+    var ctx = game.ctx;
+    var field = game.layout.playfield;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(field.x, field.y, field.width, field.height);
+    ctx.clip();
     for (var i = 0; i < game.entities.length; i++) {
         game.entities[i].draw(game);
     }
+    ctx.restore();
 };
 
 /**
- * The score, the level and the clock, each on a ground of its own.
- *
- * Measured rather than eyeballed: the clock is drawn in the accent colour,
- * which came out at 3.2:1 against a bright morning sky. Everything else in the
- * game got a ground; so does this.
- *
- * What it does NOT get is a ground across the whole width. The HUD is drawn
- * over the play area, so a bar of scrim along the top of the screen is a lid
- * over the top of the game: balloons rose behind it at about 1.4:1 against the
- * sky and escaped through a strip nobody could see into. Three chips the size
- * of the words leave the rest of the row as clear sky.
+ * Scores and controls occupy their own strip. The playable sky begins below
+ * it, so neither their background nor their tap targets cover a balloon.
  */
 Paint.hudRuns = function (game) {
     return [
         // The lives are drawn beside this rather than spelled out in it: see
         // Paint.hudLives. What is left is the score, which is the only thing
         // here that needs words at all.
-        { text: String(game.score), x: game.layout.hud.caught,
+        { text: String(game.score), x: game.layout.hud.caught, y: game.layout.hud.y,
           ink: game.palette.ink, lives: true },
-        { text: "LEVEL " + game.level, x: game.layout.hud.level,
+        { text: "LEVEL " + game.level, x: game.layout.hud.level, y: game.layout.hud.levelY,
           ink: game.palette.inkSoft },
-        { text: game.elapsed() + "s", x: game.layout.hud.time,
+        { text: game.elapsed() + "s", x: game.layout.hud.time, y: game.layout.hud.timeY,
           ink: game.palette.accent }
     ];
 };
 
 /**
- * The chips the HUD text stands on, and nothing else.
+ * The reserved strip behind the HUD text and controls.
  *
  * Its own routine so the contrast test can measure the ground the game really
  * draws rather than a copy of it kept in step by hand — the old test rebuilt
  * the band itself, which is a test of the test.
  */
 Paint.hudGround = function (game) {
-    var plate = game.layout.hud.plate;
     var ctx = game.ctx;
-    var grounds = [];
-
-    ctx.font = game.layout.fonts.hud;
-
-    // Chips that touch become one chip. On a narrow screen the three runs
-    // crowd together, and three overlapping rounded rectangles read as a
-    // mistake where one bar reads as a decision — so a phone gets the old bar
-    // back, arrived at rather than special-cased.
-    Paint.hudRuns(game).forEach(function (run) {
-        // A run that carries the lives needs ground under them too.
-        var lives = run.lives
-            ? game.layout.hud.life * (2.1 * game.allowance + 1)
-            : 0;
-        var box = {
-            x: run.x - plate.padX,
-            y: plate.y,
-            width: ctx.measureText(run.text).width + lives + plate.padX * 2,
-            height: plate.height
-        };
-        var last = grounds[grounds.length - 1];
-        if (last && box.x <= last.x + last.width + plate.padX) {
-            last.width = Math.max(last.x + last.width, box.x + box.width) - last.x;
-            return;
-        }
-        grounds.push(box);
-    });
-
+    var box = { x: 0, y: 0, width: game.width, height: game.layout.playfield.y };
+    ctx.save();
+    // Own background: even decorative stars/clouds stop at the strip.
+    ctx.fillStyle = game.palette.top;
+    ctx.fillRect(box.x, box.y, box.width, box.height);
     ctx.fillStyle = game.palette.panel;
-    grounds.forEach(function (box) {
-        Layout.roundedRect(ctx, box, plate.radius);
-        ctx.fill();
-    });
+    ctx.fillRect(box.x, box.y, box.width, box.height);
+    ctx.fillStyle = game.palette.inkSoft;
+    ctx.globalAlpha = 0.35;
+    ctx.fillRect(0, box.height - 1, box.width, 1);
+    ctx.restore();
+    return [box];
+};
 
-    return grounds;
+/** Small visual controls inside larger, reserved touch targets. */
+Paint.hudControl = function (game, box, pressed) {
+    var ctx = game.ctx;
+    var inset = 6;
+    Layout.roundedRect(ctx, { x: box.x + inset, y: box.y + inset,
+        width: box.width - inset * 2, height: box.height - inset * 2, radius: 4 });
+    ctx.fillStyle = pressed ? game.palette.buttonPressOverlay : game.palette.panel;
+    ctx.fill();
 };
 
 /**
@@ -783,7 +768,7 @@ Paint.hudLives = function (game, from) {
 };
 
 /**
- * The pause button: two bars, or a triangle once there are none left.
+ * The pause button: two compact bars and the remaining-pause pips.
  *
  * Drawn rather than set, like the legend's ticks and crosses — a glyph is only
  * there if the face has one, and the whole point of bundling a font was that
@@ -797,17 +782,13 @@ Paint.pauseButton = function (game) {
     var box = game.layout.hud.pause;
     var ctx = game.ctx;
     var spent = game.pausesLeft <= 0;
-    var bar = box.width * 0.13;
-    var tall = box.height * 0.34;
+    var bar = box.width * 0.075;
+    var tall = box.height * 0.17;
     var cx = box.x + box.width / 2;
     var cy = box.y + box.height / 2;
 
     ctx.save();
-    Layout.roundedRect(ctx, box, box.radius);
-    ctx.fillStyle = game.pressed === "pause"
-        ? game.palette.buttonPressOverlay
-        : game.palette.panel;
-    ctx.fill();
+    Paint.hudControl(game, box, game.pressed === "pause");
 
     ctx.fillStyle = spent ? game.palette.inkDisabled : game.palette.ink;
     ctx.fillRect(cx - bar * 1.8, cy - tall, bar, tall * 2);
@@ -815,7 +796,7 @@ Paint.pauseButton = function (game) {
 
     // How many are left, as pips under the bars. Small, because it is a thing
     // to notice rather than a thing to read.
-    var pip = box.width * 0.07;
+    var pip = box.width * 0.045;
     var from = cx - (Game.PAUSES - 1) * pip * 1.6 / 2;
     for (var i = 0; i < Game.PAUSES; i++) {
         ctx.globalAlpha = i < game.pausesLeft ? 1 : 0.25;
@@ -836,19 +817,15 @@ Paint.pauseButton = function (game) {
 Paint.quitButton = function (game) {
     var box = game.layout.hud.quit;
     var ctx = game.ctx;
-    var r = Math.min(box.width, box.height) * 0.22;
+    var r = Math.min(box.width, box.height) * 0.15;
     var cx = box.x + box.width / 2;
     var cy = box.y + box.height / 2;
 
     ctx.save();
-    Layout.roundedRect(ctx, box, box.radius);
-    ctx.fillStyle = game.pressed === "quit"
-        ? game.palette.buttonPressOverlay
-        : game.palette.panel;
-    ctx.fill();
+    Paint.hudControl(game, box, game.pressed === "quit");
 
     ctx.strokeStyle = game.palette.ink;
-    ctx.lineWidth = Math.max(2, box.width * 0.1);
+    ctx.lineWidth = 2;
     ctx.lineCap = "round";
     ctx.beginPath();
     ctx.moveTo(cx - r, cy - r);
@@ -939,13 +916,17 @@ Paint.hud = function (game) {
     Paint.quitButton(game);
 
     var ctx = game.ctx;
+    ctx.save();
     ctx.font = game.layout.fonts.hud;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
     Paint.hudRuns(game).forEach(function (run) {
         ctx.fillStyle = run.ink;
-        ctx.fillText(run.text, run.x, game.layout.hud.y);
+        ctx.fillText(run.text, run.x, run.y);
         if (run.lives) {
             Paint.hudLives(game,
                 run.x + ctx.measureText(run.text).width + game.layout.hud.life);
         }
     });
+    ctx.restore();
 };

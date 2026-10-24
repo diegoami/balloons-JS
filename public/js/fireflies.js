@@ -72,7 +72,7 @@ var FIREFLY_DRIFT = 0.55;
 /** Steps between changes of heading. A straight line does not read as alive. */
 var FIREFLY_TURN_STEPS = 45;
 
-var fireflyConstructor = function (xcoord, ycoord, radius, drift, xmax, ymax) {
+var fireflyConstructor = function (xcoord, ycoord, radius, drift, xmax, ymax, ymin) {
     var that = {};
     that.kind = "firefly";
     that.layer = Entities.LAYERS.firefly;
@@ -81,6 +81,7 @@ var fireflyConstructor = function (xcoord, ycoord, radius, drift, xmax, ymax) {
     that.radius = Math.max(FIREFLY_MIN_RADIUS, radius);
     that.xmax = xmax;
     that.ymax = ymax;
+    that.ymin = ymin || 0;
 
     var speed = drift;
     var heading = Math.random() * Math.PI * 2;
@@ -132,9 +133,9 @@ var fireflyConstructor = function (xcoord, ycoord, radius, drift, xmax, ymax) {
             heading = Math.PI - heading;
             that.xcoord = Math.min(Math.max(that.xcoord, edge), that.xmax - edge);
         }
-        if (that.ycoord < edge || that.ycoord > that.ymax - edge) {
+        if (that.ycoord < that.ymin + edge || that.ycoord > that.ymax - edge) {
             heading = -heading;
-            that.ycoord = Math.min(Math.max(that.ycoord, edge), that.ymax - edge);
+            that.ycoord = Math.min(Math.max(that.ycoord, that.ymin + edge), that.ymax - edge);
         }
     };
 
@@ -218,24 +219,26 @@ var fireflyConstructor = function (xcoord, ycoord, radius, drift, xmax, ymax) {
 
     /** Only when the round is over. Otherwise it is here to stay. */
     that.gone = function (game) {
-        return that.ycoord < -that.radius * FIREFLY_GLOW * 2 ? "left" : null;
+        return that.ycoord < game.layout.playfield.y - that.radius * FIREFLY_GLOW * 2 ? "left" : null;
     };
 
     that.resized = function (game, scale) {
         that.xmax = game.width;
         that.ymax = game.height;
+        that.ymin = game.layout.playfield.y;
 
         // Scaled first, then clamped. Clamping alone piled every firefly onto
         // the new edge when a window got narrower, which is the one place they
         // are least use as an obstacle.
         if (scale) {
             that.xcoord *= scale.x;
-            that.ycoord *= scale.y;
+            that.ycoord = that.ycoord * scale.y + (scale.yOffset || 0);
         }
 
         var edge = that.radius * FIREFLY_GLOW;
         that.xcoord = Math.min(that.xcoord, Math.max(edge, game.width - edge));
-        that.ycoord = Math.min(that.ycoord, Math.max(edge, game.height - edge));
+        that.ycoord = Math.min(Math.max(that.ycoord, that.ymin + edge),
+            Math.max(that.ymin + edge, game.height - edge));
     };
 
     return that;

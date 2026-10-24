@@ -316,7 +316,7 @@ var bossConstructor = function (xcoord, ycoord, radius, xmax, mark, ceiling) {
         // "left", never "escaped": a boss that fired has already taken its
         // life, and one that was destroyed cost nothing. Neither should be
         // charged again by the reaper.
-        return that.ycoord < -that.radius * 8 ? "left" : null;
+        return that.ycoord < game.layout.playfield.y - that.radius * 8 ? "left" : null;
     };
 
     that.resized = function (game, scale) {
@@ -326,12 +326,17 @@ var bossConstructor = function (xcoord, ycoord, radius, xmax, mark, ceiling) {
             // It patrols a band around where it arrived, and the band is in
             // pixels of a window that has just changed shape.
             that.xcoord *= scale.x;
-            that.ycoord *= scale.y;
-            home *= scale.y;
+            that.ycoord = that.ycoord * scale.y + (scale.yOffset || 0);
+            home = home * scale.y + (scale.yOffset || 0);
             band *= scale.y;
         }
 
         that.xcoord = Math.min(that.xcoord, Math.max(that.radius, game.width - that.radius));
+        var ceiling = game.layout.playfield.y + band + that.radius * RING_RADII;
+        if (home < ceiling) {
+            that.ycoord += ceiling - home;
+            home = ceiling;
+        }
     };
 
     return that;
