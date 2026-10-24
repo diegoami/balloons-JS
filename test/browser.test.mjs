@@ -1071,7 +1071,7 @@ await t('there are no buttons left, and the name line is the only exception', as
 });
 
 await t('the whole composition stays on screen at every viewport', async () => {
-  for (const [w, h] of VIEWPORTS) {
+  for (const [w, h] of [...VIEWPORTS, [480, 720], [640, 480]]) {
     const { context, page } = await newGame({ width: w, height: h });
     const m = await page.evaluate(() => {
       const L = Game.layout;
@@ -1081,7 +1081,9 @@ await t('the whole composition stays on screen at every viewport', async () => {
         menuRight: Math.max(...L.menu.buttons.map(b => b.x + b.width)),
         introRight: Game.ctx.measureText(Layout.INTRO_TEXT).width + L.intro.x,
         scoreValueX: L.boardScreen.columns.value,
-        hudTime: L.hud.time
+        hudTime: L.hud.time,
+        scrollWidth: document.documentElement.scrollWidth,
+        scrollHeight: document.documentElement.scrollHeight
       };
     });
     assert.ok(m.deepest < h, `bottom board row ${m.deepest.toFixed(0)} below ${h}px screen at ${w}x${h}`);
@@ -1089,6 +1091,8 @@ await t('the whole composition stays on screen at every viewport', async () => {
     assert.ok(m.introRight <= w, `intro text runs to ${m.introRight.toFixed(0)} past ${w}px at ${w}x${h}`);
     assert.ok(m.scoreValueX < w && m.hudTime < w, `right-hand columns off screen at ${w}x${h}`);
     assert.ok(m.fontSize >= 1, `font collapsed to ${m.fontSize} at ${w}x${h}`);
+    assert.equal(m.scrollWidth, w, `page scrolls horizontally at ${w}x${h}`);
+    assert.equal(m.scrollHeight, h, `page scrolls vertically at ${w}x${h}`);
     await context.close();
   }
 });

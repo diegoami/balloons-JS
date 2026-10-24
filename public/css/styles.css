@@ -74,6 +74,10 @@ body {
 /* Present to screen readers, invisible on the drawn screen. */
 .visually-hidden {
     position: absolute;
+    /* Keep hidden labels inside the viewport. Their static position after
+       the full-height canvas otherwise adds one pixel of page scrolling. */
+    top: 0;
+    left: 0;
     width: 1px;
     height: 1px;
     overflow: hidden;

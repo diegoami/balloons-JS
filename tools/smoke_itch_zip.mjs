@@ -76,12 +76,14 @@ try {
       const geometry = await frame.evaluate(() => {
         const button = Play.rect(Game);
         return { button, width: Game.width, height: Game.height,
-          scroll: document.documentElement.scrollHeight > innerHeight || document.documentElement.scrollWidth > innerWidth };
+          scroll: document.documentElement.scrollHeight > innerHeight || document.documentElement.scrollWidth > innerWidth,
+          document: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
+          viewport: [innerWidth, innerHeight] };
       });
       const r = geometry.button;
       assert.ok(r.width >= 44 && r.height >= 44, 'Play target is too small');
       assert.ok(r.x >= 0 && r.y >= 0 && r.x + r.width <= width && r.y + r.height <= height, 'Play is clipped');
-      assert.equal(geometry.scroll, false, 'First screen scrolls');
+      assert.equal(geometry.scroll, false, `First screen scrolls: ${JSON.stringify(geometry)}`);
       await page.screenshot({ path: path.join(shots, `${width}x${height}-title.png`) });
       // Freeze the moving button just for clicking its actual painted position.
       await frame.evaluate(() => { Play.step = function () {}; });
