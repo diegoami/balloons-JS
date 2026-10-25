@@ -10,6 +10,10 @@ The owner confirmed **diegoami/baloncelli**:
 <https://diegoami.itch.io/baloncelli>. Set the project kind to HTML.
 Butler uploads builds; it cannot create or edit the page.
 
+Check the actual browser build with `butler status diegoami/baloncelli:html5`
+(`:android` for the APK). Include the channel: this Butler installation can
+report “No channel” for the bare project even when its HTML5 build exists.
+
 - Free; released; genre Action. Suggested tags: arcade, balloons, singleplayer,
   browser, touch-friendly. Disclose AI-assisted code as on the other games.
 - Set the HTML5 upload to **This file will be played in the browser**.

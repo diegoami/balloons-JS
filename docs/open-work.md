@@ -5,10 +5,10 @@ for 2.6; recheck their status before acting on them.
 
 ## Active: finish the v2.8 HUD revision
 
-The owner stopped work for the night on 2026-10-25 and explicitly chose
-**stop the tests now and save progress**. The test coordinator and its browser
-children were stopped; port 8899 was verified free. Do not resume unattended
-work just because this note is read; resume when the owner asks.
+The owner resumed this work after the 2026-10-25 pause. Current implementation
+and release decisions are in [#92](https://github.com/diegoami/balloons-JS/issues/92)
+and milestone [#91](https://github.com/diegoami/balloons-JS/issues/91); check their
+latest comments and the implementation PR's CI before acting.
 
 The release is still untagged. PR #90 merged as
 `15bfbad5e55914ebb5f047e41b2a38bcd4789227` on master, and milestone
@@ -20,10 +20,9 @@ old candidate while this revision is pending. Read the issue/comments again
 before preparing a review; an approval of the old SHA cannot approve this fix.
 
 Implementation is committed on local branch `fix/separate-playfield-hud`.
-The code/test/documentation checkpoint is
-`8d8addc66eb91e6a327ddfde916c1ca1dabed356`; the later checkpoint commit only
-updates this open-work document. The branch has **not been pushed and has no
-PR**. README and #92 explain the change; the ladder is unchanged. The browser
+The code/test checkpoint is `8d8addc66eb91e6a327ddfde916c1ca1dabed356`;
+subsequent resume/checkpoint edits only change documentation. README and #92
+explain the change; the ladder is unchanged. The browser
 suite now registers **151** tests (previous HUD test replaced by four checks),
 and CI's `EXPECT_BROWSER` is updated in the implementation commit.
 
@@ -36,11 +35,12 @@ Validation needs finishing before any push:
 - Only **runs 3–6** began after the final strengthened pixel checks and phone
   documentation were committed. Runs 1–2 are preliminary: the helper was
   strengthened to require actual visible score/level/clock/life ink, so a
-  blank HUD cannot pass merely by avoiding overlap. **Four more serial full
-  runs on unchanged code/test files are needed to reach eight final passes.**
-  Use new log names; preserve the interrupted run as such. Those runs also
-  cover this documentation-only checkpoint. If gameplay/test code changes,
-  restart the eight-pass count after the final edit.
+  blank HUD cannot pass merely by avoiding overlap. Continuation runs use
+  `dist-itch/playfield-resume-*.log`. Before pushing, verify a combined total
+  of eight full final passes with the exact counts above; do not count the
+  interrupted run. Documentation-only resume edits are covered by the
+  continuation runs. If gameplay/test code changes, restart the eight-pass
+  count after the final edit.
 - The actual registered regression checks were run against the old candidate
   and the new code. Old: **0 passed, 4 failed**, exercising actual balloon
   pixels in the strip, a strip tap costing a life and the old escape location.
@@ -59,8 +59,9 @@ Validation needs finishing before any push:
   publish that claim until the remaining runs actually pass.**
 
 The owner confirmed <https://diegoami.itch.io/baloncelli> is a **private draft**.
-Its processed `html5` build is still the **old** candidate, version
-`2.8-candidate-15bfbad`, build `2204028`; the HUD revision has not been uploaded.
+Its first processed `html5` build was the **old** candidate, version
+`2.8-candidate-15bfbad`, build `2204028`. Check the actual channel for the
+current version (ITCH.md), rather than assuming this first build is current.
 After validation, open the implementation PR (intentionally addressing #92
 and #89) and arrange a new private phone preview. The owner merges on green
 CI; the earlier permission to merge #90 is not blanket permission for new PRs.
