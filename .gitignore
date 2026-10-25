@@ -176,6 +176,7 @@ node_modules/
 npm-debug.log*
 dist-itch/
 desktop/src-tauri/target/
+desktop/src-tauri/gen/
 
 # Android: the SDK path is this machine's, and the signing key is yours.
 android/local.properties
