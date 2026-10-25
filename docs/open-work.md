@@ -10,23 +10,24 @@ and release decisions are in [#92](https://github.com/diegoami/balloons-JS/issue
 and milestone [#91](https://github.com/diegoami/balloons-JS/issues/91); check their
 latest comments and the implementation PR's CI before acting.
 
-The release is still untagged. PR #90 merged as
-`15bfbad5e55914ebb5f047e41b2a38bcd4789227` on master, and milestone
-[#91](https://github.com/diegoami/balloons-JS/issues/91) records that candidate.
+PR #90 introduced candidate `15bfbad5e55914ebb5f047e41b2a38bcd4789227`
+on master. Milestone [#91](https://github.com/diegoami/balloons-JS/issues/91)
+is the authority for the currently selected candidate and review state.
 The owner's phone playtest then requested a separate HUD/playfield and smaller
 controls: design [#92](https://github.com/diegoami/balloons-JS/issues/92), also
 addressing the clock overlap in #89. A hold comment on #91 says not to tag the
 old candidate while this revision is pending. Read the issue/comments again
 before preparing a review; an approval of the old SHA cannot approve this fix.
 
-Implementation is committed on local branch `fix/separate-playfield-hud`.
+The implementation was prepared on branch `fix/separate-playfield-hud`;
+check #92's linked PR for its current publication/merge status.
 The code/test checkpoint is `8d8addc66eb91e6a327ddfde916c1ca1dabed356`;
 subsequent resume/checkpoint edits only change documentation. README and #92
 explain the change; the ladder is unchanged. The browser
 suite now registers **151** tests (previous HUD test replaced by four checks),
 and CI's `EXPECT_BROWSER` is updated in the implementation commit.
 
-Validation needs finishing before any push:
+Validation evidence and the push gate:
 
 - Six complete serial runs are in ignored local logs
   `dist-itch/playfield-final-1.log` through `playfield-final-6.log`. Each was
