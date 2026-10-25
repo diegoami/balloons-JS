@@ -1,12 +1,18 @@
 # balloons
 
-**Android app:** download it from [balloons-js-releases](https://github.com/diegoami/balloons-js-releases) (Baloncelli).
+**Android app:** download it from the [latest release](https://github.com/diegoami/balloons-JS/releases/latest).
+
+**Play:** [Netlify](https://baloncelli.netlify.app) · [itch.io](https://diegoami.itch.io/baloncelli).
+See [downloads, installation and credits](DOWNLOADS.md), and the
+[release migration record](RELEASE-MIGRATION.md).
 
 Simple JavaScript / HTML5 game. Pop the balloons before too many escape.
 
 Working on it with an AI assistant: see [AGENTS.md](AGENTS.md).
 The Android app is in [android/](android/README.md); what is still open is in
 [docs/open-work.md](docs/open-work.md).
+The new Windows wrapper and its build/provenance checks are in
+[DESKTOP.md](DESKTOP.md); it is separate from the originally reviewed v2.8 tag.
 
 Play by clicking or tapping balloons. There is one game: press space, or the
 Play button, and you start at level 1. The level climbs every 20 seconds of

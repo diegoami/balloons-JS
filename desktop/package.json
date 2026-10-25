@@ -1,0 +1,13 @@
+{
+  "name": "baloncelli-desktop",
+  "version": "2.8.0",
+  "private": true,
+  "description": "Portable Tauri wrapper for Baloncelli",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build --no-bundle"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.5"
+  }
+}

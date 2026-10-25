@@ -77,7 +77,7 @@ Layout.BACK_TEXT = "Back";
 // with Back then closing the app.
 Layout.DOWNLOAD_TEXT = "Android app";
 Layout.DOWNLOAD_URL =
-    "https://github.com/diegoami/balloons-js-releases/releases/latest";
+    "https://github.com/diegoami/balloons-JS/releases/latest";
 Layout.APP_ORIGIN = "https://appassets.androidplatform.net";
 
 Layout.offersDownload = function () {

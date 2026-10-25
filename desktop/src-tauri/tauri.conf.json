@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Baloncelli",
+  "version": "2.8.0",
+  "identifier": "com.diegoami.baloncelli.desktop",
+  "build": {
+    "frontendDist": "../../public"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "icon": ["icons/icon.ico"]
+  }
+}

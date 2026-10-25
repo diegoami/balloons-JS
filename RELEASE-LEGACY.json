@@ -1,0 +1,152 @@
+{
+  "originalRepository": "diegoami/balloons-js-releases",
+  "canonicalRepository": "diegoami/balloons-JS",
+  "originalReadme": "# Baloncelli\n\nPop the balloons before they get away. Twenty levels, twenty seconds each,\nfive lives. It can be won.\n\n**[Play it in a browser](https://baloncelli.netlify.app)** · **[Download the Android app](../../releases/latest)**\n\n**Source code:** [balloons-JS](https://github.com/diegoami/balloons-JS).\n\n---\n\n## What it is\n\nA canvas game, first written in December 2012 as an experiment: balloons, four\ndifficulty settings and a photograph of a sky. Rebuilt in 2026 — the sky is\ndrawn rather than photographed and runs from morning to night as you climb, and\nthe four difficulties became one ladder of twenty levels, so that every score on\nthe board was earned the same way.\n\n| | |\n| --- | --- |\n| **Pop** | balloons, and the saucers that come to shoot you |\n| **Leave alone** | birds and fireflies — both cost a life |\n| **A run** | 20 levels × 20 seconds. 5 lives, plus one at levels 12, 15 and 18 |\n| **New things arrive** | every other level, from 4 to 18 |\n\nBest played on a tablet. The difficulty is calibrated against about 2.3 taps a\nsecond from **one** pointer, and a touchscreen lets you use two thumbs — which\nis, measured, the difference between dying around level 8 and finishing every\nrun.\n\n## Installing the Android app\n\nThe app is about 2.7 MB and **plays with the radio off**. The whole game is on\nthe device; it only reaches the network to fetch and post high scores, and it\nworks perfectly well without that.\n\n1. Download `baloncelli-v2.0.apk` from [the latest release](../../releases/latest).\n2. Open it. Android will say it cannot install apps from this source — that is\n   the normal warning for anything not from the Play Store.\n3. Tap **Settings** on that prompt, allow installs from whichever app you\n   downloaded with (usually your browser), and go back.\n4. Install.\n\nIt needs **Android 8.0 or newer** and one permission, `INTERNET`, used only for\nthe leaderboard.\n\n### If you have an older copy installed\n\nAndroid refuses to install an update signed with a different key than the one\nalready on the device. If the install fails with a signature error, uninstall\nthe old copy first — your high scores live on the server, not in the app, so\nnothing is lost but the name you typed.\n\n## Why it is not on the Play Store\n\nNo particular reason beyond effort. Sideloading is the honest option for a game\nnobody is being charged for.\n\n---\n\n## Licence\n\nBaloncelli is by [Diego Amicabile](https://github.com/diegoami). The typeface is\n[Fredoka](https://fonts.google.com/specimen/Fredoka), used under the SIL Open\nFont License.\n",
+  "notesTransformation": "Relative README installation links in copied notes are made absolute to the original repository, whose archived README retains that anchor and points to canonical downloads.",
+  "releases": [
+    {
+      "tag": "v2.0",
+      "name": "Baloncelli 2.0",
+      "originalPublishedAt": "2026-09-19T18:29:33Z",
+      "prerelease": false,
+      "originalNotes": "Twenty levels, twenty seconds each, five lives. It can be won.\n\n**[Play it in a browser](https://baloncelli.netlify.app)** — or install the Android app below.\n\n### The Android app\n\nAbout 2.7 MB, and it **plays with the radio off**. The whole game is on the device; it only reaches the network to fetch and post high scores, and it works perfectly well without that.\n\nAndroid 8.0 or newer. See the [README](../../blob/main/README.md#installing-the-android-app) if the install is refused — that prompt is normal for anything outside the Play Store.\n\n### What is in this version\n\n- Twenty levels climbed on time rather than score, so every score on the board was earned the same way\n- A sky drawn rather than photographed, running from morning to night as you climb\n- Balloons that take two and three taps, saucers that shoot back, birds and fireflies to leave alone\n- From level 12 some balloons wander as they rise; from 14 some thin out — never so far that you cannot find them\n- Three pauses a run, and the sky hidden while one is up\n\nIt survives being turned mid-game, which took fixing on both sides: the app keeps the activity alive through a rotation, and the game re-anchors everything in the sky to the new shape rather than leaving balloons off the edge.",
+      "originalTag": {
+        "sha": "7e592ac0e54c23c7717ea87544f04522ac8e458d",
+        "type": "commit",
+        "url": "https://api.github.com/repos/diegoami/balloons-js-releases/git/commits/7e592ac0e54c23c7717ea87544f04522ac8e458d"
+      },
+      "canonicalTag": {
+        "tag": "v2.0",
+        "treatment": "original legacy README tag imported unchanged",
+        "object": "7e592ac0e54c23c7717ea87544f04522ac8e458d",
+        "commit": "7e592ac0e54c23c7717ea87544f04522ac8e458d"
+      }
+    },
+    {
+      "tag": "v2.1",
+      "name": "Baloncelli 2.1",
+      "originalPublishedAt": "2026-09-19T20:55:36Z",
+      "prerelease": false,
+      "originalNotes": "Four things from playing it, none of which any test had noticed.\n\n- **A Play button** — big, drifting about the sky, changing colour. Tapping anywhere still works.\n- **A way to give up** — a cross beside the pause, which asks first. Your score still goes to the board.\n- **A score you get to read** — a run used to end and the next begin before you had seen it. Three seconds, then an OK button that takes you home.\n- **The level chip is gone** from the title screen.\n\nAlso in here since 2.0: it survives being turned mid-game, on both sides — the app keeps the activity alive through a rotation and the game re-anchors everything in the sky to the new shape.\n\n### Installing\n\nAndroid 8.0 or newer, about 2.7 MB, and it plays with the radio off. See the [README](../../blob/main/README.md#installing-the-android-app) if the install is refused — that prompt is normal for anything outside the Play Store.\n\nIf you have 2.0 installed this will update over it.",
+      "originalTag": {
+        "sha": "133cc66fa9c8d430f26ed56be3c235131da51c97",
+        "type": "commit",
+        "url": "https://api.github.com/repos/diegoami/balloons-js-releases/git/commits/133cc66fa9c8d430f26ed56be3c235131da51c97"
+      },
+      "canonicalTag": {
+        "tag": "v2.1",
+        "treatment": "original legacy README tag imported unchanged",
+        "object": "133cc66fa9c8d430f26ed56be3c235131da51c97",
+        "commit": "133cc66fa9c8d430f26ed56be3c235131da51c97"
+      }
+    },
+    {
+      "tag": "v2.2",
+      "name": "Baloncelli 2.2",
+      "originalPublishedAt": "2026-09-22T08:19:06Z",
+      "prerelease": false,
+      "originalNotes": "Baloncelli 2.2 — a rebalance, from playing it.\n\n- **A livelier start.** Levels 1 to 4 release more balloons, so there is a game on screen before the tutorial is over.\n- **Level 6 no longer spikes.** The first saucer arrives into a calmer sky.\n- **A gentler back half.** Balloons rise slower and stay bigger, and fewer of them take two or three taps: at level 20 a balloon costs about 1.5 taps instead of 1.7.\n- **Measured, not guessed.** The occupancy behind the ladder was re-measured over ten full runs, and the playtest tool's taps-per-second figure was fixed — it had been printing a raw tap count for any run that reached the time cap.\n\nBirds are unchanged in this release.\n\n### Installing\n\nAndroid 8.0 or newer, about 2.6 MB, and it plays with the radio off. See the [README](../../blob/main/README.md#installing-the-android-app) if the install is refused — that prompt is normal for anything outside the Play Store.\n\nIf you have 2.1 installed this will update over it.\n",
+      "originalTag": {
+        "sha": "133cc66fa9c8d430f26ed56be3c235131da51c97",
+        "type": "commit",
+        "url": "https://api.github.com/repos/diegoami/balloons-js-releases/git/commits/133cc66fa9c8d430f26ed56be3c235131da51c97"
+      },
+      "canonicalTag": {
+        "tag": "v2.2",
+        "treatment": "original legacy README tag imported unchanged",
+        "object": "133cc66fa9c8d430f26ed56be3c235131da51c97",
+        "commit": "133cc66fa9c8d430f26ed56be3c235131da51c97"
+      }
+    },
+    {
+      "tag": "v2.3",
+      "name": "Baloncelli 2.3",
+      "originalPublishedAt": "2026-09-22T22:19:41Z",
+      "prerelease": false,
+      "originalNotes": "Baloncelli 2.3 — the score gets a screen, and a breakdown.\n\n- **A Scores screen**, reached from a star chip beside About: everyone's board, with where each run's points came from and how its lives were lost. A toggle shows just your own runs, kept on the device so they work offline.\n- **The end of a run** now shows how that run went — points by source, lives by cause, level and device — with a \"new personal best\" when you beat your own best. The board lives on its own screen now.\n- **The opening screen**: tapping anywhere no longer starts a game — the Play button does, and it roams the whole bottom half of the screen so it is easy to find. The name chip shows just your name.\n- Smaller, tighter type on the board.\n\n### Installing\n\nAndroid 8.0 or newer, about 2.6 MB, and it plays with the radio off. See the [README](../../blob/main/README.md#installing-the-android-app) if the install is refused — that prompt is normal for anything outside the Play Store.\n\nIf you have 2.2 installed this will update over it.\n",
+      "originalTag": {
+        "sha": "133cc66fa9c8d430f26ed56be3c235131da51c97",
+        "type": "commit",
+        "url": "https://api.github.com/repos/diegoami/balloons-js-releases/git/commits/133cc66fa9c8d430f26ed56be3c235131da51c97"
+      },
+      "canonicalTag": {
+        "tag": "v2.3",
+        "treatment": "original legacy README tag imported unchanged",
+        "object": "133cc66fa9c8d430f26ed56be3c235131da51c97",
+        "commit": "133cc66fa9c8d430f26ed56be3c235131da51c97"
+      }
+    },
+    {
+      "tag": "v2.4",
+      "name": "Baloncelli 2.4",
+      "originalPublishedAt": "2026-09-22T23:57:17Z",
+      "prerelease": false,
+      "originalNotes": "Baloncelli 2.4 — a small fix.\n\n- On the end-of-run screen the **OK button no longer overlaps the breakdown**: it sits above the name chip, and the points/lives columns fit the space between it and the title.\n\nEverything from 2.3 is here too — the Scores screen with its \"just mine\" toggle, and the per-run breakdown at the end.\n\n### Installing\n\nAndroid 8.0 or newer, about 2.6 MB, and it plays with the radio off. See the [README](../../blob/main/README.md#installing-the-android-app) if the install is refused — that prompt is normal for anything outside the Play Store.\n\nIf you have 2.3 installed this will update over it.\n",
+      "originalTag": {
+        "sha": "133cc66fa9c8d430f26ed56be3c235131da51c97",
+        "type": "commit",
+        "url": "https://api.github.com/repos/diegoami/balloons-js-releases/git/commits/133cc66fa9c8d430f26ed56be3c235131da51c97"
+      },
+      "canonicalTag": {
+        "tag": "v2.4",
+        "treatment": "existing source tag reused unchanged",
+        "object": "38ce1f7f01f6fec778d455b9ddb3730c54e045fc",
+        "commit": "2476864a26b50bf8c72b0ae5a8ad1f6581bafa36"
+      }
+    },
+    {
+      "tag": "v2.5",
+      "name": "Baloncelli 2.5",
+      "originalPublishedAt": "2026-09-23T20:03:47Z",
+      "prerelease": false,
+      "originalNotes": "Baloncelli 2.5 — the same game, made a new way.\n\nNothing new to play: the game is exactly as in 2.4. This is the first release made under the new process. It was reviewed independently before release, and then built from a tagged commit in the game's repository: [`v2.5`](https://github.com/diegoami/balloons-JS/tree/v2.5), commit `bb46247a3a69c84e92a3c7b5dd695a78c0f7b1ee`.\n\n### Installing\n\nAndroid 8.0 or newer, about 2.7 MB, and it plays with the radio off. See the [README](../../blob/main/README.md#installing-the-android-app) if the install is refused — that prompt is normal for anything outside the Play Store.\n\nIf you have 2.4 installed, this will update over it.\n",
+      "originalTag": {
+        "sha": "133cc66fa9c8d430f26ed56be3c235131da51c97",
+        "type": "commit",
+        "url": "https://api.github.com/repos/diegoami/balloons-js-releases/git/commits/133cc66fa9c8d430f26ed56be3c235131da51c97"
+      },
+      "canonicalTag": {
+        "tag": "v2.5",
+        "treatment": "existing source tag reused unchanged",
+        "object": "93ec4a9e228c99ff9295913387530789283cd3f7",
+        "commit": "bb46247a3a69c84e92a3c7b5dd695a78c0f7b1ee"
+      }
+    },
+    {
+      "tag": "v2.6",
+      "name": "Baloncelli 2.6",
+      "originalPublishedAt": "2026-09-24T19:06:05Z",
+      "prerelease": false,
+      "originalNotes": "Baloncelli 2.6 — built from [`v2.6`](https://github.com/diegoami/balloons-JS/tree/v2.6), commit `0c1868eebea146fa3edceec409029a2202409926`.\n\nOn the website, the About screen now links to this Android app. In the app itself nothing changes: you already have it.\n\n### Installing\n\nAndroid 8.0 or newer, about 2.7 MB, and it plays with the radio off. See the [README](../../blob/main/README.md#installing-the-android-app) if the install is refused — that prompt is normal for anything outside the Play Store.\n\nIf you have 2.5 installed, this will update over it.\n",
+      "originalTag": {
+        "sha": "133cc66fa9c8d430f26ed56be3c235131da51c97",
+        "type": "commit",
+        "url": "https://api.github.com/repos/diegoami/balloons-js-releases/git/commits/133cc66fa9c8d430f26ed56be3c235131da51c97"
+      },
+      "canonicalTag": {
+        "tag": "v2.6",
+        "treatment": "existing source tag reused unchanged",
+        "object": "be9e35d0df4ddaa3b413bfe042481e65ecb95817",
+        "commit": "0c1868eebea146fa3edceec409029a2202409926"
+      }
+    },
+    {
+      "tag": "v2.7",
+      "name": "Baloncelli 2.7",
+      "originalPublishedAt": "2026-09-26T20:42:53Z",
+      "prerelease": false,
+      "originalNotes": "Baloncelli 2.7 — built from [`v2.7`](https://github.com/diegoami/balloons-JS/tree/v2.7), commit `eea8eb0b762a7ac440a337e1f102afb5b4865bdd`.\n\n- **Back goes back.** The phone's Back button used to close the game from any screen, even in the middle of a run. Now it goes back a step, and during a run it asks \"Give up?\" first. Back on the opening screen still closes the game.\n- **An Exit button** on the opening screen.\n\n### Installing\n\nAndroid 8.0 or newer, about 2.7 MB, and it plays with the radio off. See the [README](../../blob/main/README.md#installing-the-android-app) if the install is refused — that prompt is normal for anything outside the Play Store.\n\nIf you have 2.6 installed, this will update over it.\n",
+      "originalTag": {
+        "sha": "133cc66fa9c8d430f26ed56be3c235131da51c97",
+        "type": "commit",
+        "url": "https://api.github.com/repos/diegoami/balloons-js-releases/git/commits/133cc66fa9c8d430f26ed56be3c235131da51c97"
+      },
+      "canonicalTag": {
+        "tag": "v2.7",
+        "treatment": "existing source tag reused unchanged",
+        "object": "371742fcf261bf83c2f72e2a1bd188b993b49a8b",
+        "commit": "eea8eb0b762a7ac440a337e1f102afb5b4865bdd"
+      }
+    }
+  ]
+}

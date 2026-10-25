@@ -2,7 +2,7 @@
 
 The game in a WebView, with `public/` bundled so it plays offline. The APK is
 published at
-[diegoami/balloons-js-releases](https://github.com/diegoami/balloons-js-releases/releases);
+[diegoami/balloons-JS releases](https://github.com/diegoami/balloons-JS/releases);
 this directory is the project that builds it.
 
 There is no second copy of the game. `copyGame`
@@ -92,9 +92,17 @@ process; these are its build steps.
    ./gradlew assembleRelease
    ```
 
-5. The owner uploads `app-release.apk` to a release in the releases repo,
+5. The owner (or the implementer on an explicit publishing request) uploads
+   `app-release.apk` to a release in this source repository,
    renamed `baloncelli-v<version>.apk`, with release notes that name the
    tagged commit: the tag and its full SHA.
+
+The old `balloons-js-releases` repository is an archived compatibility pointer.
+All eight historical APK releases were copied byte for byte. See
+[RELEASE-MIGRATION.md](../RELEASE-MIGRATION.md) for hashes and legacy tag
+exceptions. New releases must use an existing annotated source tag; use
+`gh release create --repo diegoami/balloons-JS --verify-tag` so GitHub cannot
+silently create a tag on an unrelated commit.
 
 2.4 and earlier were built before this process existed; `v2.4` was tagged
 afterwards, on `2476864`, the merge commit of #60.

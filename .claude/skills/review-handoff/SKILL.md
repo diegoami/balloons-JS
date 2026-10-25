@@ -74,5 +74,6 @@ again, in a fresh session.
   being asked. If a third round does not end in AGREE, the milestone goes to
   the owner.
 - **AGREE**: tag exactly the reviewed SHA and push the tag; the APK is built
-  from the tag. Publishing to `diegoami/balloons-js-releases` stays with the
-  owner.
+  from the tag. Publishing to `diegoami/balloons-JS` stays with the owner,
+  or the implementer on an explicit publishing request. Record any explicit
+  owner deferral of a physical check without representing it as passed.
