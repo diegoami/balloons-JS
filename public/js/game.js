@@ -401,10 +401,10 @@ Game.handleResize = function () {
 
     // What the sky was, before it changed shape. Everything in it is placed
     // and moving in pixels, and pixels are the one thing a rotation does not
-    // preserve -- so each entity is handed how much the window stretched in
-    // each direction and can keep its SHARE of the sky instead of its
-    // coordinates.
-    var was = { width: this.width, height: this.height };
+    // preserve -- so each entity is handed how much the playable sky stretched
+    // and where its new top is. It keeps its share of that sky, not its old
+    // screen coordinates or its distance from the top of the control strip.
+    var was = { width: this.width, field: this.layout.playfield };
 
     window.requestAnimationFrame(function () {
         that.resizePending = false;
@@ -413,8 +413,9 @@ Game.handleResize = function () {
 
         var scale = {
             x: was.width > 0 ? that.width / was.width : 1,
-            y: was.height > 0 ? that.height / was.height : 1
+            y: that.layout.playfield.height / was.field.height
         };
+        scale.yOffset = that.layout.playfield.y - was.field.y * scale.y;
 
         // Entities that care about the shape of the window are told.
         for (var i = 0; i < that.entities.length; i++) {
@@ -712,9 +713,11 @@ Game.randomBalloon = function () {
     var randomColor = randomBalloonColour();
     var balloonSpeed = rung.speed;
 
-    // Scaling the rise by height keeps the time to cross the screen the same
-    // whatever shape the window is.
-    var heightScale = this.height / REFERENCE_HEIGHT;
+    // Reserve the HUD without shortening the time available to pop a balloon.
+    // Include the existing off-screen escape margin in both travel distances.
+    var field = this.layout.playfield;
+    var heightScale = this.height / REFERENCE_HEIGHT *
+        (field.height - ESCAPE_COORDS) / (this.height - ESCAPE_COORDS);
 
     // What is actually behind a point in the sky, so a fading balloon can work
     // out how faint it may get without asking the screen mid-flight. Read off
@@ -724,7 +727,7 @@ Game.randomBalloon = function () {
         return Sky.down(
             Sky.column(game.width, game.height, game.dpr, game.level,
                 x / Math.max(1, game.width)),
-            yFraction
+            (field.y + yFraction * field.height) / game.height
         );
     };
 
@@ -732,7 +735,8 @@ Game.randomBalloon = function () {
         xcoord, ycoord, randomSize, randomColor, max_width, balloonSpeed, heightScale,
         Ladder.rollSkin(rung),
         Ladder.rollQuirk(rung),
-        skyAt
+        skyAt,
+        field.y
     );
 };
 
@@ -781,11 +785,13 @@ Game.spawnFireflies = function () {
     while (this.countOf("firefly") < wanted) {
         this.add(fireflyConstructor(
             edge + Math.random() * Math.max(1, this.width - edge * 2),
-            this.height * 0.2 + Math.random() * Math.max(1, this.height * 0.55),
+            this.layout.playfield.y + this.layout.playfield.height *
+                (0.2 + Math.random() * 0.55),
             radius,
             FIREFLY_DRIFT * this.ratio,
             this.width,
-            this.height
+            this.height,
+            this.layout.playfield.y
         ));
     }
 };
@@ -809,18 +815,18 @@ Game.spawnBoss = function () {
         return;
     }
 
-    var plate = this.layout.hud.plate;
+    var field = this.layout.playfield;
     this.add(bossConstructor(
         this.width / 2,
         // High, so the fight happens over the balloons rather than in them.
-        this.height * 0.26,
+        field.y + field.height * 0.26,
         BOSS_BASE_SIZE * this.ratio,
         this.width,
         rung.bossMark,
         // ...but under the HUD, because the fuse ring is the only clock the
         // player gets and half of it behind a chip is half a clock. One that
         // wanders pushes itself down until its whole band clears this.
-        plate.y + plate.height
+        field.y
     ));
     Announce.bossArrived(this);
 };
@@ -856,8 +862,9 @@ Game.spawnBird = function () {
     var radius = Math.max(BIRD_MIN_RADIUS, BIRD_BASE_SIZE * this.ratio);
     var span = radius * BIRD_SPAN;
     var fromLeft = Math.random() < 0.5;
-    var band = this.height * 0.55;
-    var top = this.height * 0.18;
+    var field = this.layout.playfield;
+    var band = field.height * 0.55;
+    var top = field.y + field.height * 0.18;
     var height = top + Math.random() * band;
 
     // Most of the time, cross where somebody is about to be tapping. It still
@@ -865,18 +872,17 @@ Game.spawnBird = function () {
     // way in — the fairness rule this file is built on is that a bird is never
     // somewhere you had already committed to before you could see it.
     var climbing = this.entities.filter(function (e) {
-        return e.kind === "balloon" && e.ycoord < this.height * 0.65;
+        return e.kind === "balloon" && e.ycoord < field.y + field.height * 0.65;
     }, this);
 
     if (climbing.length && Math.random() < BIRD_INTERCEPT) {
-        var plate = this.layout.hud.plate;
         height = Math.min(
             Math.max(
                 climbing[Math.floor(Math.random() * climbing.length)].ycoord,
                 // Clear of the HUD, or it is a hazard drawn behind a chip.
-                plate.y + plate.height + radius * 1.5
+                field.y + radius * 1.5
             ),
-            this.height * 0.85
+            field.y + field.height * 0.85
         );
     }
 

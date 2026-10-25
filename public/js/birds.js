@@ -184,7 +184,7 @@ var birdConstructor = function (xcoord, ycoord, radius, speed, fromLeft) {
      */
     that.gone = function (game) {
         var span = that.radius * BIRD_SPAN;
-        if (that.ycoord < -span) {
+        if (that.ycoord < game.layout.playfield.y - span) {
             return "left";
         }
         return (that.xcoord < -span * 1.5 || that.xcoord > game.width + span * 1.5)
@@ -205,7 +205,8 @@ var birdConstructor = function (xcoord, ycoord, radius, speed, fromLeft) {
         // to. Keeping its share of the window is the smaller lie.
         if (scale) {
             that.xcoord *= scale.x;
-            that.ycoord *= scale.y;
+            that.ycoord = that.ycoord * scale.y + (scale.yOffset || 0);
+            baseY = baseY * scale.y + (scale.yOffset || 0);
         }
     };
 

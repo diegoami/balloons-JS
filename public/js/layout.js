@@ -224,15 +224,11 @@ Layout.GRID = {
         scoreDate: 0.05,
         scoreName: 0.38,
         scoreLevel: 0.62,
-        scoreValue: 0.8,
-        hudCaught: 0.1,
-        hudLevel: 0.45,
-        hudTime: 0.8
+        scoreValue: 0.8
     },
 
     /** Baselines, in line heights from the top of the canvas. */
     rows: {
-        hud: 1.5,
         intro: 1.5,
         menu: 3.5,
         scoresHeading: 6,
@@ -283,19 +279,6 @@ Layout.GRID = {
      * tick" has to read as one thing and not as "tick, saucer".
      */
     legend: { icon: 1.15, gap: 0.5, pair: 1.25 },
-
-    /**
-     * The ground under each run of HUD text, in line heights.
-     *
-     * It used to be one bar across the whole width, and the whole width is the
-     * problem: the HUD is drawn OVER the play area, so a lid of scrim across
-     * the top of the screen is a lid across the top of the game. A balloon
-     * behind it sat at about 1.4:1 against the sky -- under the 3:1 anything
-     * you have to find is meant to clear -- so balloons were escaping through
-     * a strip nobody could see into. The text needs a ground; the empty space
-     * either side of it does not.
-     */
-    hudPlate: { padX: 0.5, top: 0.78, height: 1.15, radius: 0.28 },
 
     /** A line height, as a multiple of the advance width of a capital M. */
     lineRatio: 1.3,
@@ -439,6 +422,34 @@ Layout.startLabel = function (level) {
         : Layout.START_FROM_ONE;
 };
 
+/** A compact control strip, reserved before the playable sky begins. */
+Layout.hud = function (width, height, fontSize) {
+    var size = Math.max(12, Math.min(16, Math.round(fontSize * Layout.GRID.type.hud)));
+    var narrow = width < 600;
+    var stripHeight = narrow ? 64 : 52;
+    var target = Layout.GRID.minTouchTarget;
+    var pad = Math.min(12, width * 0.04);
+    var quitX = width - 8 - target;
+    var pauseX = quitX - target - 4;
+    var statsWidth = Math.max(1, pauseX - 8 - pad);
+    var baseline = narrow ? 23 : stripHeight / 2 + size * 0.35;
+    var row = narrow ? 48 : baseline;
+    return {
+        font: size + "px " + Layout.FONT,
+        y: baseline,
+        levelY: row,
+        timeY: row,
+        life: size * 0.3,
+        plate: { padX: size * 0.5, y: 0, height: stripHeight, radius: 4 },
+        pause: { x: pauseX, y: (stripHeight - target) / 2, width: target, height: target, radius: 4 },
+        quit: { x: quitX, y: (stripHeight - target) / 2, width: target, height: target, radius: 4 },
+        caught: pad,
+        level: narrow ? pad : pad + statsWidth * 0.46,
+        time: pad + statsWidth * (narrow ? 0.62 : 0.73),
+        playfield: { x: 0, y: stripHeight, width: width, height: Math.max(1, height - stripHeight) }
+    };
+};
+
 Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel) {
     var G = Layout.GRID;
     var line = ctx.measureText("M").width * G.lineRatio;
@@ -452,6 +463,8 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
                 "px " + Layout.FONT;
         }
     }
+    var hud = Layout.hud(width, height, fontSize);
+    fonts.hud = hud.font;
 
     // --- menu buttons, flowed left to right and wrapped if they overrun
 
@@ -915,51 +928,8 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
             radius: resume.radius
         },
 
-        hud: {
-            y: line * G.rows.hud,
-
-            // The HUD is the only text drawn during play, and it is drawn over
-            // whatever the sky is doing. Each run of it gets a chip of ground
-            // the size of the words, rather than the whole row getting a lid.
-            plate: {
-                padX: line * G.hudPlate.padX,
-                y: line * G.rows.hud - line * G.hudPlate.top,
-                height: line * G.hudPlate.height,
-                radius: line * G.hudPlate.radius
-            },
-
-            // Small enough to sit inside the chip, big enough to read as a
-            // balloon rather than a dot.
-            life: line * 0.3,
-
-            // Pause and quit, on the right of the row where the clock is.
-            // Touch targets rather than glyphs: they are the only things in
-            // the game you press while playing that are not a balloon.
-            //
-            // Quit is the OUTER one, furthest from the middle of the screen
-            // and hardest to hit by accident, because pausing costs you a
-            // pause and quitting costs you the run.
-            pause: {
-                x: width - width * G.columns.margin -
-                    Math.max(G.minTouchTarget, line * 1.5) * 2 - line * 0.3,
-                y: line * G.rows.hud - line * G.hudPlate.top,
-                width: Math.max(G.minTouchTarget, line * 1.5),
-                height: Math.max(G.minTouchTarget, line * G.hudPlate.height),
-                radius: line * G.hudPlate.radius
-            },
-
-            quit: {
-                x: width - width * G.columns.margin - Math.max(G.minTouchTarget, line * 1.5),
-                y: line * G.rows.hud - line * G.hudPlate.top,
-                width: Math.max(G.minTouchTarget, line * 1.5),
-                height: Math.max(G.minTouchTarget, line * G.hudPlate.height),
-                radius: line * G.hudPlate.radius
-            },
-
-            caught: width * G.columns.hudCaught,
-            level: width * G.columns.hudLevel,
-            time: width * G.columns.hudTime
-        },
+        hud: hud,
+        playfield: hud.playfield,
 
         spawn: {
             min: width * G.spawn.inset,

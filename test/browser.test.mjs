@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { devices } from 'playwright';
 import { launchBrowser } from './helpers/browser.mjs';
+import { playfieldTests } from './helpers/playfield-tests.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const TYPES = {
@@ -1664,7 +1665,8 @@ await t('a balloon takes the same time to cross any shaped screen', async () => 
       const n = 3000;
       for (let i = 0; i < n; i++) {
         const b = Game.randomBalloon();
-        total += Game.height / (Math.abs(b.delta) * (1000 / Game.STEP_MS));
+        const distance = Game.height - Game.layout.playfield.y - ESCAPE_COORDS;
+        total += distance / (Math.abs(b.delta) * (1000 / Game.STEP_MS));
       }
       return total / n;
     });
@@ -4646,7 +4648,8 @@ await t('a fading balloon never drops under 3:1 against the sky it is drawn on',
         // game failing its own bound.
         Game.entities = [b];
 
-        while (b.ycoord > Game.height * (1 - FADE_HOLD)) {
+        const field = Game.layout.playfield;
+        while (b.ycoord > field.y + field.height * (1 - FADE_HOLD)) {
           b.step(Game, false);
         }
 
@@ -4654,7 +4657,7 @@ await t('a fading balloon never drops under 3:1 against the sky it is drawn on',
           for (let i = 0; i < 8; i++) { b.step(Game, false); }
           // Past the top it stops being drawn at all, and comparing a sky
           // against itself is a perfect 1:1 that looks just like a failure.
-          if (b.ycoord <= 0) { break; }
+          if (b.ycoord <= field.y) { break; }
           const r = b.size;
           // The two ends of the gradient: its centre, and a point past the
           // 70% stop that is still inside the balloon's shape.
@@ -4665,7 +4668,7 @@ await t('a fading balloon never drops under 3:1 against the sky it is drawn on',
           // failure. Rounded to device pixels, because x = 1279.6 on a
           // 1280-wide canvas is off it.
           const on = (x, y) => Math.round(x * Game.dpr) >= 4 &&
-            Math.round(y * Game.dpr) >= 4 &&
+            Math.round((y - field.y) * Game.dpr) >= 4 &&
             Math.round(x * Game.dpr) < Game.canvas.width - 4 &&
             Math.round(y * Game.dpr) < Game.canvas.height - 4;
           const spots = [
@@ -4716,7 +4719,7 @@ await t('the fade holds, then falls, and only ever on a fading balloon', async (
     const climb = (b) => {
       const out = [];
       for (let i = 0; i <= 20; i++) {
-        b.ycoord = Game.height * (1 - i / 20);
+        b.ycoord = Game.layout.playfield.y + Game.layout.playfield.height * (1 - i / 20);
         out.push(b.alpha());
       }
       return out;
@@ -4763,101 +4766,7 @@ await t('the fade holds, then falls, and only ever on a fading balloon', async (
 });
 
 
-await t('the HUD stands on the words rather than lying across the sky', async () => {
-  // It used to be one bar the full width of the screen, and the HUD is drawn
-  // OVER the play area — so that was a lid on the top of the game. A balloon
-  // behind it sat at about 1.4:1 against the sky, under the 3:1 anything you
-  // have to find is meant to clear, and balloons escaped through a strip
-  // nobody could see into.
-  const { context, page, errors } = await newGame();
-  const m = await page.evaluate(() => {
-    Game.stopLoop();
-    const out = [];
-
-    // A fresh run, a long one, and a phone-sized window, because the widest
-    // the score ever gets is what decides how much sky this costs.
-    [[1420, 2, 7], [99999, 9, 9]].forEach(state => {
-      [1, 14, 20].forEach(level => {
-        Game.applyLevel(level);
-        Game.measureLayout();
-        Game.score = state[0];
-        Game.livesLost = state[1];
-        Game.allowance = state[2];
-
-        Paint.sky(Game);
-        const grounds = Paint.hudGround(Game);
-        const plate = Game.layout.hud.plate;
-        out.push({
-          level,
-          score: state[0],
-          grounds: grounds.map(g => ({ x: g.x, right: g.x + g.width })),
-          covered: grounds.reduce((a, g) => a + g.width, 0) / Game.width,
-          clearAbove: plate.y,
-          height: plate.height,
-          row: Game.layout.hud.y,
-          width: Game.width
-        });
-      });
-    });
-    return out;
-  });
-
-  m.forEach(row => {
-    // Sky either side of the words. Not most of the width: the score is the
-    // long one and it is allowed to be long, but not to be a lid.
-    assert.ok(row.covered <= 0.75,
-      `the HUD covers ${(row.covered * 100).toFixed(0)}% of the width at level ` +
-      `${row.level} with ${row.score} points`);
-
-    // Clear sky ABOVE the chips, which the old bar did not leave: a balloon
-    // escapes through the very top, and that is where it must be visible.
-    assert.ok(row.clearAbove > row.height * 0.4,
-      `only ${row.clearAbove.toFixed(0)}px of clear sky above the HUD`);
-
-    // Two chips that touch are merged into one, so they can never overlap and
-    // show their seams.
-    row.grounds.forEach((g, i) => {
-      if (i > 0) {
-        assert.ok(g.x > row.grounds[i - 1].right,
-          `HUD chips overlap at level ${row.level}`);
-      }
-    });
-  });
-
-  // And the narrowest window the game supports, where the runs crowd together
-  // and become a bar again.
-  //
-  // The narrowest window, with the longest score and the most lives it can
-  // hold. WHICH width crowds depends on the face and on how wide the runs are
-  // — this asserted 390 with Verdana and a spelled-out life count, and both of
-  // those have since changed. The behaviour is the thing: runs that would
-  // overlap get merged instead. So it is driven to the case that must crowd.
-  const narrow = await page.evaluate(() => {
-    const was = { w: Game.width, h: Game.height };
-    Object.defineProperty(window, 'innerWidth', { value: 320, configurable: true });
-    Object.defineProperty(window, 'innerHeight', { value: 568, configurable: true });
-    Game.applyCanvasSize();
-    Game.score = 99999; Game.livesLost = 9; Game.allowance = 9;
-    Paint.sky(Game);
-    const grounds = Paint.hudGround(Game);
-    const got = {
-      chips: grounds.length,
-      covered: grounds.reduce((a, g) => a + g.width, 0) / Game.width,
-      overlap: grounds.some((g, i) => i > 0 && g.x <= grounds[i - 1].x + grounds[i - 1].width)
-    };
-    Object.defineProperty(window, 'innerWidth', { value: was.w, configurable: true });
-    Object.defineProperty(window, 'innerHeight', { value: was.h, configurable: true });
-    Game.applyCanvasSize();
-    return got;
-  });
-
-  assert.ok(narrow.chips < 3, 'the crowded runs on a phone did not merge');
-  assert.ok(!narrow.overlap, 'merged HUD chips still overlap');
-  assert.ok(narrow.covered <= 0.8,
-    `the HUD covers ${(narrow.covered * 100).toFixed(0)}% of a phone's width`);
-  assert.deepEqual(errors, [], errors.join(' | '));
-  await context.close();
-});
+await playfieldTests(t, newGame);
 
 
 await t('the mark II saucer arrives at 18, and asks no more per second than the first', async () => {
@@ -5210,7 +5119,8 @@ await t('no balloon outlives the level it was born in', async () => {
         // Skin 1 only: a reinforced balloon is deliberately slower still, and
         // it is allowed to be — it is paying for the taps it costs.
         if (b.skin !== 1) { continue; }
-        const secs = Game.height / Math.abs(b.delta) / 30;
+        const distance = Game.height - Game.layout.playfield.y - ESCAPE_COORDS;
+        const secs = distance / Math.abs(b.delta) / 30;
         slowest = Math.max(slowest, secs);
         fastest = Math.min(fastest, secs);
       }
@@ -5725,11 +5635,12 @@ await t('turning the phone mid-game keeps the sky where it was', async () => {
     null, { timeout: SKY_FILLS });
 
   const read = () => page.evaluate(() => {
+    const field = Game.layout.playfield;
     const share = e => ({
       kind: e.kind,
       x: +(e.xcoord / Game.width).toFixed(3),
-      y: +(e.ycoord / Game.height).toFixed(3),
-      cross: +(Game.height / Math.abs(e.delta || 1) / 30).toFixed(1)
+      y: +((e.ycoord - field.y) / field.height).toFixed(3),
+      cross: +(field.height / Math.abs(e.delta || 1) / 30).toFixed(1)
     });
     return {
       width: Game.width,
@@ -5752,7 +5663,7 @@ await t('turning the phone mid-game keeps the sky where it was', async () => {
   assert.equal(after.offScreen, 0,
     `${after.offScreen} things were left outside the window by the turn`);
 
-  // Same share of the sky, and the same time left to reach the top. Rounding
+  // Same share of the playable sky, and the same time to cross it. Rounding
   // to three places is the width of the check: this is proportional, not
   // approximate.
   assert.deepEqual(after.balloons.map(b => [b.x, b.y]),

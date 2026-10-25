@@ -201,13 +201,14 @@ var fadeableColour = function (colour, skyFor) {
  * some arrive reinforced and from rung seven armoured, and those take two or
  * three taps, thinning visibly as the skins come off.
  */
-var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, speedScale, skin, quirk, skyAt) {
+var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, speedScale, skin, quirk, skyAt, flightTop) {
     var that;
     that = {};
     that.kind = "balloon";
     that.layer = Entities.LAYERS.balloon;
     that.xcoord = xcoord ;
     that.ycoord = ycoord ;
+    flightTop = flightTop || 0;
     that.skin = Math.max(1, skin || 1);
     // The class it was born as, for the run breakdown: `skin` is spent as it
     // is tapped, so by the time it pops the class would otherwise be gone.
@@ -226,8 +227,8 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
     // A moving target and a small target are the same tax charged twice, so a
     // janky balloon is bigger for the same reason a thick one is.
     that.size = size * Ladder.skin(that.skin).size * (that.janky ? JANKY_SIZE : 1);
-    // speedScale makes the rise proportional to screen height, so the time a
-    // balloon takes to cross does not depend on how tall the window is. A
+    // speedScale accounts for the playable height, so reserving a HUD strip
+    // does not shorten the time available to pop the balloon. A
     // thicker balloon rises more slowly: the taps it costs have to fit
     // somewhere, and that somewhere is the time it is on screen.
     that.delta = -1 * speed * (BALLOON_SLOWEST + (1 - BALLOON_SLOWEST) * Math.random())
@@ -247,7 +248,7 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
 
     /** The sky this one will have behind it a given way up its climb. */
     var skyFor = function (climbed) {
-        var steps = climbed * ycoord / Math.max(0.0001, Math.abs(that.delta));
+        var steps = climbed * (ycoord - flightTop) / Math.max(0.0001, Math.abs(that.delta));
         return skyAt(bounced(xcoord + that.xdelta * steps, xmax), 1 - climbed);
     };
 
@@ -282,8 +283,8 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
     /**
      * How faint this one is right now: 1 everywhere, unless it fades.
      *
-     * The height it spawned at is its own zero, which is why nothing has to
-     * tell a balloon how tall the window is.
+     * Progress is measured between its spawn point and the playable top,
+     * rather than between its spawn point and the top of the whole canvas.
      */
     var spawnY = ycoord;
 
@@ -291,7 +292,7 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
         if (!that.fading) {
             return 1;
         }
-        var climbed = (spawnY - that.ycoord) / Math.max(1, spawnY);
+        var climbed = (spawnY - that.ycoord) / Math.max(1, spawnY - flightTop);
         var through = (climbed - FADE_HOLD) / (1 - FADE_HOLD);
         var gone = Math.max(0, Math.min(1, through));
         return 1 - gone * (1 - that.alphaFloor);
@@ -350,7 +351,7 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
     };
 
     that.draw = function(game) {
-        if (that.ycoord <= ESCAPE_COORDS) {
+        if (that.ycoord <= flightTop + ESCAPE_COORDS) {
             return;
         }
         var drawn = place();
@@ -372,7 +373,7 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
     };
 
     that.hits = function (point) {
-        return place().check_hit(point.x, point.y);
+        return point.y >= flightTop && place().check_hit(point.x, point.y);
     };
 
     /**
@@ -403,9 +404,9 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
         return true;
     };
 
-    /** Off the top of the screen is an escape, and escapes cost the player. */
+    /** Off the top of the playable sky is an escape, costing one life. */
     that.gone = function () {
-        return that.ycoord <= ESCAPE_COORDS ? "escaped" : null;
+        return that.ycoord <= flightTop + ESCAPE_COORDS ? "escaped" : null;
     };
 
     /**
@@ -417,7 +418,7 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
      * rise was worked out for the old height, a balloon that crossed in 15.8
      * seconds took 41.2 after the turn.
      *
-     * So the position scales with the window and so does the rise. A balloon
+     * So the position scales with the playfield and so does the rise. A balloon
      * that was a third of the way up and a third of the way across is still
      * exactly that, and still takes the same time to reach the top -- which is
      * the promise `speedScale` makes at spawn and had no way of keeping
@@ -431,14 +432,15 @@ var balloonConstructor = function(xcoord, ycoord, size, color, xmax, speed, spee
         }
 
         that.xcoord *= scale.x;
-        that.ycoord *= scale.y;
+        that.ycoord = that.ycoord * scale.y + (scale.yOffset || 0);
         that.delta *= scale.y;
         that.xdelta *= scale.x;
 
         // The height it spawned at is what the fade measures from, so it has
         // to travel with everything else or a balloon halfway up reads as
         // having barely started.
-        spawnY *= scale.y;
+        spawnY = spawnY * scale.y + (scale.yOffset || 0);
+        flightTop = flightTop * scale.y + (scale.yOffset || 0);
     };
 
     return that;

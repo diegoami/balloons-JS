@@ -111,7 +111,7 @@ Attract.fill = function (game, count) {
         // screen in use, but a balloon placed a fifth from the top has under a
         // second before it leaves — so a cut was followed by the sky visibly
         // draining, and the clip was thinnest exactly when it was newest.
-        balloon.ycoord -= Math.random() * game.height * Attract.FILL_DEPTH;
+        balloon.ycoord -= Math.random() * game.layout.playfield.height * Attract.FILL_DEPTH;
         game.add(balloon);
     }
 };
