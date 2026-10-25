@@ -1,6 +1,6 @@
 # balloons
 
-**Android app:** download it from the [latest release](https://github.com/diegoami/balloons-JS/releases/latest).
+**Apps:** [Android and Windows preview downloads, with installation instructions](DOWNLOADS.md).
 
 **Play:** [Netlify](https://baloncelli.netlify.app) · [itch.io](https://diegoami.itch.io/baloncelli).
 See [downloads, installation and credits](DOWNLOADS.md), and the

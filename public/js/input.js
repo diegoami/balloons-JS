@@ -163,7 +163,7 @@ Input.menu = function (game, signal) {
  */
 /**
  * The About screen: one way out, by the chip or by Escape, and on the web one
- * way to the Android app.
+ * way to the shared Android and Windows downloads directory.
  *
  * A tap anywhere does NOT leave, unlike the title screen it came from — this
  * is a page of text and half of reading it is putting a finger on the screen.

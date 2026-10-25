@@ -2,6 +2,15 @@
 
 use tauri::{webview::NewWindowResponse, WebviewUrl, WebviewWindowBuilder};
 
+fn allowed_download_url(url: &tauri::Url) -> bool {
+    let release_path = "/diegoami/balloons-JS/releases";
+    url.scheme() == "https"
+        && url.host_str() == Some("github.com")
+        && (url.path() == "/diegoami/balloons-JS/blob/master/DOWNLOADS.md"
+            || url.path() == release_path
+            || url.path().starts_with(&format!("{release_path}/")))
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
@@ -22,11 +31,8 @@ fn main() {
                 })
                 .on_new_window(|url, _| {
                     // No shell capability is exposed to the game. Only its
-                    // known release download destination opens externally.
-                    if url.scheme() == "https"
-                        && url.host_str() == Some("github.com")
-                        && url.path().starts_with("/diegoami/balloons-JS/releases")
-                    {
+                    // known downloads directory/release destinations open externally.
+                    if allowed_download_url(&url) {
                         #[cfg(windows)]
                         {
                             use std::os::windows::process::CommandExt;
@@ -43,4 +49,34 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running Baloncelli");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::allowed_download_url;
+    use tauri::Url;
+
+    #[test]
+    fn opens_the_directory_and_release_downloads() {
+        for url in [
+            "https://github.com/diegoami/balloons-JS/blob/master/DOWNLOADS.md",
+            "https://github.com/diegoami/balloons-JS/releases/latest",
+            "https://github.com/diegoami/balloons-JS/releases/download/v2.8/baloncelli-v2.8.apk",
+        ] {
+            assert!(allowed_download_url(&Url::parse(url).unwrap()));
+        }
+    }
+
+    #[test]
+    fn rejects_other_hosts_schemes_and_unrelated_paths() {
+        for url in [
+            "http://github.com/diegoami/balloons-JS/blob/master/DOWNLOADS.md",
+            "https://github.com.example/diegoami/balloons-JS/releases/latest",
+            "https://github.com/diegoami/balloons-JS/releases-unrelated",
+            "https://github.com/diegoami/balloons-JS/blob/master/README.md",
+            "file:///C:/Windows/System32/cmd.exe",
+        ] {
+            assert!(!allowed_download_url(&Url::parse(url).unwrap()));
+        }
+    }
 }

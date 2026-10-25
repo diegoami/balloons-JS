@@ -68,16 +68,14 @@ Layout.ABOUT_TEXT = "?";
 Layout.ABOUT_TITLE = "About this game";
 Layout.BACK_TEXT = "Back";
 
-// Where the Android app is, and whether to offer it. The link is to the latest
-// release rather than to one APK, so it cannot go stale.
+// One directory explains both Android and Windows downloads, their status and
+// installation requirements. It is not a link to one platform's binary.
 //
-// Inside the app it is not offered. The page is served there from
-// WebViewAssetLoader's origin (MainActivity.kt), the player already has the
-// app, and the WebView has nowhere to open an outside page but over the game,
-// with Back then closing the app.
-Layout.DOWNLOAD_TEXT = "Android app";
+// Inside the Android app it is not offered: its WebView would open an outside
+// page over the game, with Back then closing the app (MainActivity.kt).
+Layout.DOWNLOAD_TEXT = "Downloads";
 Layout.DOWNLOAD_URL =
-    "https://github.com/diegoami/balloons-JS/releases/latest";
+    "https://github.com/diegoami/balloons-JS/blob/master/DOWNLOADS.md";
 Layout.APP_ORIGIN = "https://appassets.androidplatform.net";
 
 Layout.offersDownload = function () {
@@ -768,10 +766,9 @@ Layout.compute = function (ctx, width, height, fontSize, playerLabel, startLevel
         }
     }
 
-    // The About screen's way to the Android app, on Back's row at the left.
-    // Null inside the app. The two always fit side by side: the type scales
-    // with the width, so at 200px there is still 69px between them, and a
-    // fallback that stacked them was code no screen could reach.
+    // The About screen's downloads directory, on Back's row at the left.
+    // Null inside Android. The two fit side by side; the geometry checks cover
+    // narrow windows as well as the normal phone/desktop viewports.
     var download = null;
     if (Layout.offersDownload()) {
         var downloadWidth = Math.max(

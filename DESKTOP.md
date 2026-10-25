@@ -15,7 +15,7 @@ separate players from their existing name/history profile.
 `desktop/src-tauri/src/main.rs` initializes the scores endpoint before the
 game scripts run. Local name/history remain in the native app profile, while
 the online board is shared. The app exposes no native shell API to JavaScript;
-only the known HTTPS GitHub release URL is allowed to open externally.
+only the known HTTPS GitHub downloads-directory and release URLs may open externally.
 
 ## Build and check
 

@@ -5307,7 +5307,7 @@ const recordOpens = page => page.evaluate(() => {
   window.open = (...args) => { window.__opened.push(args); return null; };
 });
 
-await t('on the web, the About screen offers the Android app, by tap or by Enter', async () => {
+await t('on the web, About opens the Android and Windows downloads directory by tap or Enter', async () => {
   const { context, page, errors } = await newGame();
   await recordOpens(page);
   const m = await page.evaluate(() => {
@@ -5331,16 +5331,19 @@ await t('on the web, the About screen offers the Android app, by tap or by Enter
     }
     return {
       rect: r,
+      caption: Layout.DOWNLOAD_TEXT,
       share: differ / (withChip.length / 4),
       said: document.getElementById('game_status').textContent
     };
   });
   assert.ok(m.rect, 'there is no download chip on the web');
   assert.ok(m.share > 0.3, `the chip barely shows: ${(m.share * 100).toFixed(0)}% of its pixels change`);
-  assert.match(m.said, /Android app/, 'the screen reader is not told about the app: ' + m.said);
+  assert.equal(m.caption, 'Downloads', 'the chip still names only one platform');
+  assert.match(m.said, /Android and Windows downloads/, 'the screen reader is not told about both platforms: ' + m.said);
 
   const url = await page.evaluate(() => Layout.DOWNLOAD_URL);
-  assert.match(url, /\/releases\/latest$/, 'the link is not to the latest release: ' + url);
+  assert.equal(url, 'https://github.com/diegoami/balloons-JS/blob/master/DOWNLOADS.md',
+    'the link does not point to the shared downloads directory');
 
   await page.mouse.click(m.rect.x + m.rect.width / 2, m.rect.y + m.rect.height / 2);
   await page.waitForTimeout(120);
@@ -5400,7 +5403,7 @@ await t('inside the app, the About screen does not offer the app', async () => {
   assert.equal(m.origin, 'https://appassets.androidplatform.net');
   assert.equal(m.offers, false, 'the app offers itself for download');
   assert.equal(m.rect, null, 'the app lays out a download chip');
-  assert.doesNotMatch(m.said, /Android app/, 'the app announces a download: ' + m.said);
+  assert.doesNotMatch(m.said, /Enter opens the downloads directory/, 'the app announces an unavailable download link: ' + m.said);
 
   // Where the chip would be on the web: nothing happens.
   await page.mouse.click(m.left + 30, m.back.y + m.back.height / 2);
@@ -5415,7 +5418,7 @@ await t('inside the app, the About screen does not offer the app', async () => {
   await context.close();
 });
 
-await t('the Android app chip is on screen, clear of Back and below the text, at any size', async () => {
+await t('the Downloads chip is on screen, clear of Back and below the text, at any size', async () => {
   for (const [w, h] of [[240, 600], [320, 568], [390, 664], [412, 839], [820, 1180], [1280, 720], [1920, 400]]) {
     const { context, page, errors } = await newGame({ width: w, height: h });
     const m = await page.evaluate(() => {

@@ -8,7 +8,7 @@ tag as the source of the Windows executable.
 The wrapper embeds `public/` directly, opens a resizable 1280×800 window, and
 initializes the existing scores URL override before the game loads. It exposes
 no native shell commands to JavaScript; external navigation is limited to the
-known GitHub release destination. Profile identifier
+known GitHub downloads directory and release destinations. Profile identifier
 `com.diegoami.baloncelli.desktop` is permanent once distributed.
 
 Build on Windows with Rust/MSVC tools and WebView2 installed:

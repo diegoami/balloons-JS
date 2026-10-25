@@ -53,7 +53,7 @@ report “No channel” for the bare project even when its HTML5 build exists.
   `screenshots/` directory. Capture/choose a cover from real gameplay.
 - Title: **Baloncelli**.
 - Short description: **Pop balloons through twenty levels as the sky turns
-  from morning to night. Play in your browser or on Android.**
+  from morning to night. Play in your browser, on Android, or try the Windows preview.**
 
 Long description:
 
@@ -69,28 +69,21 @@ Long description:
 > leaderboard. Your recent runs and personal best stay in this browser or app.
 > The Android app bundles the game so it can also be played offline.
 >
+> Windows preview: download the portable x64 executable and open it. It needs
+> the Microsoft Edge WebView2 runtime and is unsigned, so Windows may show its
+> standard unknown-publisher prompt. Your name and completed-run history stay
+> in the app's local profile.
+>
 > Controls: click or tap balloons. Use Play or space to start; pause and quit
 > are in their own strip above the sky.
 >
 > Source: https://github.com/diegoami/balloons-JS
-> Android releases: https://github.com/diegoami/balloons-JS/releases
+> Downloads and installation: https://github.com/diegoami/balloons-JS/blob/master/DOWNLOADS.md
 
-**Windows download copy:** add this only once the new Windows build is tested
-and uploaded. State its actual version/preview status; the existing screenshots
-show the released browser game, not proof of an already-reviewed Windows app.
-If the portable executable is unsigned, say that Windows may show its usual
-unknown-publisher prompt. No Windows binary existed in the old release history.
-
-After an explicitly authorized preview upload, use this paragraph:
-
-> Windows preview: download the portable x64 executable and open it. It needs
-> the Microsoft Edge WebView2 runtime and is unsigned, so Windows may show an
-> unknown-publisher prompt. This is the first Windows wrapper; the browser and
-> Android releases are also available above.
-
-Short description with Windows available:
-**Pop balloons through twenty levels as the sky turns from morning to night.
-Play in your browser, on Android, or try the Windows preview.**
+**Current Windows upload:** `2.8.0-preview-247ff52`, also attached to the v2.8
+GitHub release. The screenshots show the released browser game and do not
+claim an independent review of the new native wrapper. No Windows binary
+existed in the old release history.
 
 See [DESKTOP.md](DESKTOP.md) for native build/source provenance. Do not label
 the new native code as independently reviewed with the earlier v2.8 game tag.
