@@ -1,6 +1,10 @@
 # balloons
 
-**Android app:** download it from [balloons-js-releases](https://github.com/diegoami/balloons-js-releases) (Baloncelli).
+**Android app:** download it from the [latest release](https://github.com/diegoami/balloons-JS/releases/latest).
+
+**Play:** [Netlify](https://baloncelli.netlify.app) · [itch.io](https://diegoami.itch.io/baloncelli).
+See [downloads, installation and credits](DOWNLOADS.md), and the
+[release migration record](RELEASE-MIGRATION.md).
 
 Simple JavaScript / HTML5 game. Pop the balloons before too many escape.
 

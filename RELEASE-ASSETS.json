@@ -1,0 +1,74 @@
+[
+  {
+    "tag": "v2.0",
+    "name": "baloncelli-v2.0.apk",
+    "label": "baloncelli-v2.0.apk",
+    "size": 2698588,
+    "sha256": "ab0af7a05a73891b742bb86b0df6a242bdb58b22078aa4638aa9752da59db231",
+    "originalDownloadUrl": "https://github.com/diegoami/balloons-js-releases/releases/download/v2.0/baloncelli-v2.0.apk",
+    "downloadUrl": "https://github.com/diegoami/balloons-JS/releases/download/v2.0/baloncelli-v2.0.apk"
+  },
+  {
+    "tag": "v2.1",
+    "name": "baloncelli-v2.1.apk",
+    "label": "baloncelli-v2.1.apk",
+    "size": 2703139,
+    "sha256": "4f8372fd9f602bf1288d8dc3c9e9cdd6cf9da3638f8c59b779cb18b65134ff2d",
+    "originalDownloadUrl": "https://github.com/diegoami/balloons-js-releases/releases/download/v2.1/baloncelli-v2.1.apk",
+    "downloadUrl": "https://github.com/diegoami/balloons-JS/releases/download/v2.1/baloncelli-v2.1.apk"
+  },
+  {
+    "tag": "v2.2",
+    "name": "baloncelli-v2.2.apk",
+    "label": "baloncelli-v2.2.apk",
+    "size": 2703411,
+    "sha256": "915b8bdeabdd916f35fbb1ef180c64dfdc72e67737c91f3f1e8c138bd54849ad",
+    "originalDownloadUrl": "https://github.com/diegoami/balloons-js-releases/releases/download/v2.2/baloncelli-v2.2.apk",
+    "downloadUrl": "https://github.com/diegoami/balloons-JS/releases/download/v2.2/baloncelli-v2.2.apk"
+  },
+  {
+    "tag": "v2.3",
+    "name": "baloncelli-v2.3.apk",
+    "label": "baloncelli-v2.3.apk",
+    "size": 2707487,
+    "sha256": "a067d14e30799a61f20bce2af33acccfc3fb7ece9bf71b1be38eef7f4f624fec",
+    "originalDownloadUrl": "https://github.com/diegoami/balloons-js-releases/releases/download/v2.3/baloncelli-v2.3.apk",
+    "downloadUrl": "https://github.com/diegoami/balloons-JS/releases/download/v2.3/baloncelli-v2.3.apk"
+  },
+  {
+    "tag": "v2.4",
+    "name": "baloncelli-v2.4.apk",
+    "label": "baloncelli-v2.4.apk",
+    "size": 2707555,
+    "sha256": "4c1a904bf73441eba6ee595858ec780bb239b51499d25776a1545fb5f9762df5",
+    "originalDownloadUrl": "https://github.com/diegoami/balloons-js-releases/releases/download/v2.4/baloncelli-v2.4.apk",
+    "downloadUrl": "https://github.com/diegoami/balloons-JS/releases/download/v2.4/baloncelli-v2.4.apk"
+  },
+  {
+    "tag": "v2.5",
+    "name": "baloncelli-v2.5.apk",
+    "label": null,
+    "size": 2707559,
+    "sha256": "ff83c12be05445edd28930dcb54eb92bd145d356a4e0d7f9b197dcdccfd17b40",
+    "originalDownloadUrl": "https://github.com/diegoami/balloons-js-releases/releases/download/v2.5/baloncelli-v2.5.apk",
+    "downloadUrl": "https://github.com/diegoami/balloons-JS/releases/download/v2.5/baloncelli-v2.5.apk"
+  },
+  {
+    "tag": "v2.6",
+    "name": "baloncelli-v2.6.apk",
+    "label": null,
+    "size": 2707751,
+    "sha256": "49e2c1caee68d107e58e0655b036c06e2254239023e80736a565f04e414cdf47",
+    "originalDownloadUrl": "https://github.com/diegoami/balloons-js-releases/releases/download/v2.6/baloncelli-v2.6.apk",
+    "downloadUrl": "https://github.com/diegoami/balloons-JS/releases/download/v2.6/baloncelli-v2.6.apk"
+  },
+  {
+    "tag": "v2.7",
+    "name": "baloncelli-v2.7.apk",
+    "label": null,
+    "size": 2709631,
+    "sha256": "75c74dda91a63a30663636d1dbf52282ff7344c3a2909914414b4f435eb951d5",
+    "originalDownloadUrl": "https://github.com/diegoami/balloons-js-releases/releases/download/v2.7/baloncelli-v2.7.apk",
+    "downloadUrl": "https://github.com/diegoami/balloons-JS/releases/download/v2.7/baloncelli-v2.7.apk"
+  }
+]

@@ -45,7 +45,7 @@ Long description:
 > The Android app bundles the game so it can also be played offline.
 >
 > Source: https://github.com/diegoami/balloons-JS
-> Android releases: https://github.com/diegoami/balloons-js-releases/releases
+> Android releases: https://github.com/diegoami/balloons-JS/releases
 
 ## Package and verify
 
@@ -98,5 +98,7 @@ The uploader checks both source records, checksums, release ZIP smoke result,
 annotated tag on the live origin, and ancestry on origin/master. It uploads
 exactly one file each to `html5` and `android`, with the same version. Set
 `BUTLER` to butler's executable if it is not on PATH; butler manages its own
-stored login. No credentials are read or printed by these tools. Publishing
-the APK to the GitHub releases repository remains the owner's step.
+stored login. No credentials are read or printed by these tools. GitHub releases
+also live in `diegoami/balloons-JS`; the owner publishes the APK or explicitly
+asks the implementer to do it. The former release repository is archived with
+its old assets retained (RELEASE-MIGRATION.md).

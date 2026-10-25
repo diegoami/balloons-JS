@@ -50,18 +50,25 @@ A change to `AGENTS.md` or `CLAUDE.md` is an ordinary PR: it merges on green CI.
 
 ## Releases
 
-A release is a milestone: an annotated `vX.Y` tag — the scheme the releases
-repository already uses — on `master`, on the exact commit the published APK is
+A release is a milestone: an annotated `vX.Y` tag — the existing stable scheme
+— on `master`, on the exact commit the published APK is
 built from. Not a PR, a run of PRs, or a change to a particular file. Only
 stable releases, unless the owner says otherwise; a beta may be built from a
-candidate. The APK is published in `diegoami/balloons-js-releases`, but the tag
-goes here, and the release notes name the tagged commit.
+candidate. Source, tags and downloadable releases live together in the public
+`diegoami/balloons-JS` repository. Release notes name the tagged commit; use
+`gh release create --verify-tag` to prohibit an implicit tag.
 
-The first tag, **`v2.4` on `2476864`** (the merge of #60), was put on after the
+The first source release tag, **`v2.4` on `2476864`** (the merge of #60), was put on after the
 fact: the 2.4 notes name no commit, and `2476864` has the same files as the
 version bump `272270a` that #60 records the APK being built from. The owner
 confirmed it on 2026-09-23. Every release since has been tagged by the steps
 below.
+
+The old `balloons-js-releases` repository is archived with its releases intact
+for old links. Its eight historical APKs were copied without rebuilding them.
+Imported `v2.0`–`v2.3` tags retain the original legacy README-snapshot commits;
+they are historical anchors, not verified source provenance. Existing source
+tags were not moved. `RELEASE-MIGRATION.md` records the exception and asset hashes.
 
 Read the version numbers from git, not from this file. The previous tag is
 `git describe --tags --abbrev=0 origin/master`, and the next milestone is the
@@ -100,8 +107,9 @@ How a milestone happens:
 6. On `AGREE`, the implementer tags exactly the reviewed SHA — never a later
    commit — and pushes the tag; the APK is built from the tag. Work merged after
    the candidate belongs to the next milestone. Anything that has to be played
-   or installed to be checked is done before tagging. Publishing the APK stays
-   with the owner.
+   or installed to be checked is done before tagging unless the owner explicitly
+   defers it; record the exception without claiming the check passed. Publishing
+   the APK stays with the owner, or the implementer on an explicit publishing request.
 7. The owner may tag without a review; the milestone issue records that.
 
 When the review is in, read it from GitHub and reproduce each finding before
