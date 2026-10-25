@@ -69,11 +69,14 @@ async function quit() {
 try {
   let page = await launch();
   const first = await page.evaluate(() => ({ origin: location.origin, screen: Game.screen,
-    width: innerWidth, height: innerHeight, url: Scores.URL, fonts: document.fonts.check('16px Fredoka') }));
+    width: innerWidth, height: innerHeight, url: Scores.URL, fonts: document.fonts.check('16px Fredoka'),
+    downloadUrl: Layout.DOWNLOAD_URL, downloadLabel: Layout.DOWNLOAD_TEXT }));
   check(first.origin === 'http://tauri.localhost', 'game assets use the packaged app origin');
   check(first.width === 1280 && first.height === 800, 'native viewport opens at 1280x800');
   check(first.url === 'https://baloncelli.netlify.app/api/scores', 'scores URL is initialized before scripts load');
   check(first.fonts, 'bundled Fredoka font loads');
+  check(first.downloadLabel === 'Downloads' && first.downloadUrl === 'https://github.com/diegoami/balloons-JS/blob/master/DOWNLOADS.md',
+    'packaged download link names and targets the shared directory');
   check(first.screen === 'name', 'fresh temporary profile asks for a name');
   const field = await page.evaluate(() => {
     const r = document.getElementById('player_name').getBoundingClientRect();

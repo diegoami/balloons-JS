@@ -75,7 +75,7 @@ Announce.about = function (game) {
         section.lines.forEach(function (line) { said.push(line); });
     });
     if (Layout.offersDownload()) {
-        said.push("There is an Android app: Enter opens its download page.");
+        said.push("Android and Windows downloads are available: Enter opens the downloads directory.");
     }
     said.push("Escape to go back.");
     Announce.say(said.join(" "));
