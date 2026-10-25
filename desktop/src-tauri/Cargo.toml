@@ -1,0 +1,13 @@
+[package]
+name = "baloncelli"
+version = "2.8.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "=2.11.6", features = [] }
+
+[profile.release]
+strip = true

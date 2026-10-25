@@ -1,0 +1,58 @@
+{
+  "tag": "v2.8",
+  "commit": "46785cfa2d6d7a68fbb976a5f276b70723e07a9e",
+  "zipSha256": "6ca146ae60a7a5eca47d85bf71b673292a317f9ddf7c8249e92d0a4302f5fc57",
+  "note": "Gameplay scenes are posed using released entities/painters; cover adds promotional type. No game assets or code were modified. Score traffic was intercepted.",
+  "images": [
+    {
+      "file": "cover-630x500.png",
+      "width": 630,
+      "height": 500,
+      "level": 6,
+      "cover": true,
+      "caption": "Cover image: released game artwork with a promotional title overlay.",
+      "sha256": "e0f09ca6e1e19208788a64e2f6a5136312ce551bd030495746be6ae320f4685f"
+    },
+    {
+      "file": "01-title-1280x720.png",
+      "width": 1280,
+      "height": 720,
+      "title": true,
+      "caption": "Opening screen and Play button.",
+      "sha256": "e7a026d10ca7abf6a54bff0f3bbf116a6ef258ae8ad08e53c7bf9b78cf0a6116"
+    },
+    {
+      "file": "02-morning-1280x720.png",
+      "width": 1280,
+      "height": 720,
+      "level": 1,
+      "caption": "Early-level balloons, with a separate information and control strip.",
+      "sha256": "c9986fbb7ef07ea8b298a10fb0eff51a9e1a2f62be09b6024f3696f29daab0eb"
+    },
+    {
+      "file": "03-saucer-1280x720.png",
+      "width": 1280,
+      "height": 720,
+      "level": 6,
+      "caption": "The first saucer and reinforced balloons in the afternoon sky.",
+      "sha256": "d1d9fcac1257904dc6613659d882230d54082a127312598271e2445487dd53fc"
+    },
+    {
+      "file": "04-night-1280x720.png",
+      "width": 1280,
+      "height": 720,
+      "level": 20,
+      "caption": "Night-time play with the mark II saucer, birds and fireflies.",
+      "sha256": "3d444610d6bbd6b81151609631da2ee528a819c606e0f45c60e1523b1146a0f9"
+    },
+    {
+      "file": "05-phone-960x1440.png",
+      "width": 480,
+      "height": 720,
+      "dpr": 2,
+      "level": 12,
+      "caption": "Portrait play at the canonical 480×720 embed, captured at 2× density.",
+      "sha256": "6062c8b682191c2b3b9850aec906e75fe5ddc82346f460b8b63f935a98825fca"
+    }
+  ]
+}
