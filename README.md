@@ -2,7 +2,7 @@
 
 **Apps:** [Android and Windows preview downloads, with installation instructions](DOWNLOADS.md).
 
-**Play:** [Netlify](https://baloncelli.netlify.app) · [itch.io](https://diegoami.itch.io/baloncelli).
+**Play:** [GitHub Pages](https://diegoami.github.io/balloons-JS/) · [Netlify](https://baloncelli.netlify.app) · [itch.io](https://diegoami.itch.io/baloncelli).
 See [downloads, installation and credits](DOWNLOADS.md), and the
 [release migration record](RELEASE-MIGRATION.md).
 
@@ -181,3 +181,15 @@ touches the real leaderboard.
 This replaces the Redis + Node scoreboard service that used to run in a sibling
 Docker container on port 5000. That service, the `Dockerfile`, the `nginx.conf`
 and the `docker-compose.yml` are no longer part of this project.
+
+## GitHub Pages
+
+[Play Baloncelli on GitHub Pages](https://diegoami.github.io/balloons-JS/).
+The Pages workflow publishes only `public/` from `master`, with no build step
+or scoring backend. Gameplay, settings and personal run history work in the
+browser. On the Scores screen, choose **Just mine** to see runs saved on this
+device. The shared **Everyone** leaderboard is unavailable on this deployment;
+use the Netlify version for shared scores.
+
+In Settings → Pages, select **GitHub Actions** as the source. The workflow
+deploys game changes automatically and also supports a manual run.
